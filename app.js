@@ -823,15 +823,13 @@ Syndromes.load();
 
 /* ============================= Diagnostic par signes (pourcentage) ============================= */
 function dsSplitSigns(rawText) {
-  // A single "symptome" field in the source is often a comma-separated bundle of
-  // several distinct clinical signs (e.g. "Insomnies, réveils nocturnes, cauchemars").
-  // Split into atomic signs so each is independently clickable/matchable.
-  // Uses splitTopLevel so commas *inside* parentheses (e.g. "saignements externes
-  // (des yeux, des gencives, aphtes...)") are NOT treated as top-level separators —
-  // otherwise the parenthetical examples get shredded into meaningless bare fragments.
-  return splitTopLevel(rawText, ";").flatMap(part => splitTopLevel(part, ","))
-    .map(s => s.trim().replace(/^[-•]\s*/, "").replace(/[.\s]+$/, "").replace(/\.{2,}$/, ""))
-    .filter(s => s.length > 1);
+  // Tried splitting on commas/semicolons to get atomic signs, but French clinical prose
+  // uses commas both to separate distinct signs AND to list adjectives modifying one
+  // shared noun ("selles molles, pâteuses") — no reliable mechanical rule tells these
+  // apart, and the false splits (orphan adjectives) weren't worth it. Each documented
+  // "symptome" entry is now kept whole, exactly as written in the source.
+  const s = rawText.trim().replace(/^[-•]\s*/, "").replace(/[.\s]+$/, "").replace(/\.{2,}$/, "");
+  return s.length > 1 ? [s] : [];
 }
 
 function dsNormalizeKey(s) {

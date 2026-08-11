@@ -106,9 +106,14 @@ main { padding: 1.5rem; max-width: 1280px; margin: 0 auto; }
 
 /* --- Formules --- */
 .formules-layout { display: grid; grid-template-columns: 320px 1fr; gap: 1.5rem; align-items: start; }
-@media (max-width: 800px) { .formules-layout { grid-template-columns: 1fr; } }
-
 .formules-sidebar { background: var(--panel); border: 1.5px solid var(--line); padding: 1rem; position: sticky; top: 1rem; max-height: 85vh; overflow: auto; }
+@media (max-width: 800px) {
+  .formules-layout { grid-template-columns: 1fr; }
+  /* La barre latérale "sticky" + haute (pensée pour le bureau, colonne à côté du détail)
+     domine tout l'écran une fois empilée en colonne unique sur mobile et cache le détail
+     en dessous — on repasse en flux normal, avec un plafond de hauteur plus raisonnable. */
+  .formules-sidebar { position: static; max-height: 50vh; }
+}
 #formule-search, #cas-formule-search, #psy-search, #syn-search, #casp-search, #pts-search {
   width: 100%; padding: 0.6rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
   margin-bottom: 0.8rem; font-family: inherit; font-size: 0.9rem;
