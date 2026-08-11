@@ -1,4 +1,4 @@
-const CACHE_NAME = "mtc-assistant-v1";
+const CACHE_NAME = "mtc-assistant-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
