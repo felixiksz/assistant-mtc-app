@@ -151,6 +151,7 @@ main { padding: 1.5rem; max-width: 1280px; margin: 0 auto; }
 
 /* Mise en forme des textes MTC denses (voir formatTcmText dans app.js) */
 .tcm-text { line-height: 1.6; }
+.tcm-text p { white-space: pre-line; }
 .tcm-text ul.tcm-list { margin: 0; padding-left: 1.3em; }
 .tcm-text ul.tcm-list li { margin-bottom: 0.6em; }
 .tcm-label { display: block; margin-top: 0.8em; color: var(--bg); background: var(--ink); padding: 0.15em 0.4em; width: fit-content; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.03em; }
