@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assistant Diagnostic MTC</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=17">
+</head>
+<body>
+<header class="topbar">
+  <h1>Assistant Diagnostic &amp; Pharmacopée MTC</h1>
+  <div class="global-search-wrap">
+    <input type="search" id="global-search" placeholder="Recherche globale : formules, syndromes, points, cas cliniques, Farrell...">
+    <div id="global-search-results"></div>
+  </div>
+  <button type="button" id="sync-settings-btn" class="sync-btn">⚙ Synchronisation</button>
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="formules">Formules</button>
+    <button class="tab-btn" data-tab="cas">Fiche de cas</button>
+    <button class="tab-btn" data-tab="psy">Réf. Psy (Farrell)</button>
+    <button class="tab-btn" data-tab="tuteur">Tuteur Farrell</button>
+    <button class="tab-btn" data-tab="syndromes">Syndromes</button>
+    <button class="tab-btn" data-tab="diag-signes">Diagnostic par signes</button>
+    <button class="tab-btn" data-tab="cas-pratique">Exemples de cas cliniques</button>
+    <button class="tab-btn" data-tab="tdah">TDAH</button>
+    <button class="tab-btn" data-tab="points">Points</button>
+    <button class="tab-btn" data-tab="ajouter">Ajouter une formule dans la base de données</button>
+  </nav>
+</header>
+
+<div id="sync-settings-panel" class="sync-panel" style="display:none;">
+  <h2>Synchronisation des données</h2>
+  <p class="muted">Choisis où l'app lit et écrit ses fichiers de données (formules, syndromes, points, etc.). Les images restent toujours sur ton disque, quel que soit le mode.</p>
+  <div class="sync-mode-row">
+    <label><input type="radio" name="sync-mode" id="sync-mode-local" value="local"> Dossier local (File System Access API) — un seul appareil</label>
+    <label><input type="radio" name="sync-mode" id="sync-mode-github" value="github"> Dépôt GitHub privé — accessible depuis plusieurs appareils</label>
+  </div>
+  <div id="sync-github-fields" style="display:none;">
+    <label>Propriétaire du dépôt (ton nom d'utilisateur GitHub)<input type="text" id="sync-gh-owner" placeholder="ex : papemesedorottya"></label>
+    <label>Nom du dépôt<input type="text" id="sync-gh-repo" placeholder="ex : mtc-assistant-data"></label>
+    <label>Branche<input type="text" id="sync-gh-branch" placeholder="main"></label>
+    <label>Token d'accès personnel (fine-grained, ce dépôt seulement, permission Contents read/write)<input type="password" id="sync-gh-token" placeholder="github_pat_..." autocomplete="off"></label>
+    <p class="muted sync-warning">⚠ Ce token est stocké uniquement dans le navigateur de cet appareil (localStorage) et n'est envoyé qu'à l'API GitHub. Ne le partage avec personne d'autre que toi-même, et crée-le avec la portée la plus limitée possible (un seul dépôt privé, permission Contents uniquement).</p>
+  </div>
+  <div class="sync-actions">
+    <button type="button" id="sync-test-btn">Tester la connexion</button>
+    <button type="button" id="sync-save-btn">Enregistrer</button>
+    <button type="button" id="sync-close-btn">Fermer</button>
+  </div>
+  <p id="sync-status" class="muted"></p>
+</div>
+
+<main>
+
+  <!-- ===================== ONGLET FORMULES ===================== -->
+  <section id="tab-formules" class="tab-panel active">
+    <div class="formules-layout">
+      <aside class="formules-sidebar">
+        <input type="search" id="formule-search" placeholder="Rechercher : pinyin, syndrome, substance...">
+        <div id="formule-categories"></div>
+        <ul id="formule-list"></ul>
+        <p id="formule-count" class="muted"></p>
+      </aside>
+      <article id="formule-detail" class="formule-detail">
+        <p class="muted">Sélectionne une formule à gauche pour voir sa fiche complète.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== ONGLET FICHE DE CAS ===================== -->
+  <section id="tab-cas" class="tab-panel">
+    <div class="cas-toolbar">
+      <select id="cas-saved-select"><option value="">— Cas sauvegardés (cette machine) —</option></select>
+      <button id="cas-new">Nouveau cas</button>
+      <button id="cas-export">Exporter ce cas (JSON)</button>
+      <label class="file-btn">Importer un cas
+        <input type="file" id="cas-import" accept="application/json" hidden>
+      </label>
+      <button id="cas-delete" class="danger">Supprimer ce cas</button>
+    </div>
+
+    <form id="cas-form" class="cas-form">
+      <fieldset>
+        <legend>1. Anamnèse</legend>
+        <label>Identifiant du cas (nom/initiales, date)
+          <input type="text" name="identifiant" placeholder="ex: Patiente 36 ans, 2026-08-06">
+        </label>
+        <label>Motif de consultation
+          <textarea name="motif" rows="2"></textarea>
+        </label>
+        <label>Antécédents (médicaux, gynéco, psy, traitements en cours...)
+          <textarea name="antecedents" rows="3"></textarea>
+        </label>
+        <label>Symptômes actuels détaillés
+          <textarea name="symptomes" rows="4"></textarea>
+        </label>
+        <label>Langue (couleur, enduit, forme)
+          <input type="text" name="langue">
+        </label>
+        <label>Pouls
+          <input type="text" name="pouls">
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>2. Différenciation par les huit règles (Ba Gang)</legend>
+        <div class="bagang-grid">
+          <label>Yin / Yang
+            <select name="bagang_yinyang"><option></option><option>Yang</option><option>Yin</option></select>
+          </label>
+          <label>Extérieur / Intérieur
+            <select name="bagang_extint"><option></option><option>Extérieur</option><option>Intérieur</option><option>Mixte</option></select>
+          </label>
+          <label>Froid / Chaleur
+            <select name="bagang_froidchaleur"><option></option><option>Froid</option><option>Chaleur</option><option>Mixte</option></select>
+          </label>
+          <label>Vide / Plénitude
+            <select name="bagang_videplenitude"><option></option><option>Vide</option><option>Plénitude</option><option>Mixte</option></select>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>3. Différenciation Zang-Fu / étiologie</legend>
+        <textarea name="zangfu" rows="4" placeholder="Organes/entités impliqués, mécanisme physiopathologique, facteur étiologique..."></textarea>
+      </fieldset>
+
+      <fieldset>
+        <legend>3bis. Différenciation psycho-émotionnelle (Farrell) — si pertinent</legend>
+        <p class="muted">Cadre distinct de Zang-Fu : à quel niveau se situe la latence, et faut-il la libérer ou la maintenir selon les ressources du patient.</p>
+        <div class="bagang-grid">
+          <label>Niveau de latence identifié
+            <select name="psy_niveau">
+              <option value=""></option>
+              <option value="tendino_musculaire">Tendino-musculaire (Sinew)</option>
+              <option value="luo">Luo</option>
+              <option value="meridiens_distincts">Méridiens Distincts (Jing Bie)</option>
+              <option value="merveilleux_vaisseaux">Merveilleux Vaisseaux (8 EV)</option>
+              <option value="non_applicable">Non applicable</option>
+            </select>
+          </label>
+          <label>Décision : ressources du patient
+            <select name="psy_decision">
+              <option value=""></option>
+              <option value="maintenir">Maintenir la latence (P-S-P)</option>
+              <option value="liberer">Libérer la latence (S-P-S)</option>
+              <option value="non_determine">Non déterminé / à réévaluer</option>
+            </select>
+          </label>
+        </div>
+        <label>Vaisseau / confluence / structure retenue
+          <input type="text" name="psy_vaisseau" placeholder="ex: Yin Wei Mai, Dai Mai + Ren Mai, 2e confluence VB/Foie...">
+        </label>
+        <label>Justification (signes qui orientent ce niveau et ce vaisseau)
+          <textarea name="psy_justification" rows="3"></textarea>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>4. Syndrome retenu</legend>
+        <textarea name="syndrome" rows="2"></textarea>
+      </fieldset>
+
+      <fieldset>
+        <legend>5. Principe de traitement (Fa)</legend>
+        <textarea name="principe_traitement" rows="2"></textarea>
+      </fieldset>
+
+      <fieldset>
+        <legend>6. Formule(s) envisagée(s)</legend>
+        <input type="search" id="cas-formule-search" placeholder="Chercher dans la base de formules...">
+        <ul id="cas-formule-results"></ul>
+        <div id="cas-formules-choisies"></div>
+        <p class="muted">Seules les formules déjà présentes dans ta base vérifiée apparaissent ici. Si rien ne correspond, c'est que ce chapitre n'est pas encore dans la base — ne pas inventer, marquer "à revoir avec le cours".</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>7. Acupuncture / autres pistes</legend>
+        <textarea name="points_notes" rows="3" placeholder="Points envisagés, diététique, etc. (base points/substances à intégrer plus tard)"></textarea>
+      </fieldset>
+
+      <fieldset>
+        <legend>8. Notes libres / suivi</legend>
+        <textarea name="notes" rows="3"></textarea>
+      </fieldset>
+    </form>
+  </section>
+
+  <!-- ===================== ONGLET REF PSY (FARRELL) ===================== -->
+  <section id="tab-psy" class="tab-panel">
+    <p class="muted psy-status"></p>
+    <div class="formules-layout">
+      <aside class="formules-sidebar">
+        <input type="search" id="psy-search" placeholder="Rechercher : niveau, vaisseau, signe, point...">
+        <div id="psy-groups"></div>
+        <ul id="psy-list"></ul>
+        <p id="psy-count" class="muted"></p>
+      </aside>
+      <article id="psy-detail" class="formule-detail">
+        <p class="muted">Sélectionne un niveau ou un vaisseau à gauche.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== ONGLET TUTEUR FARRELL (quiz) ===================== -->
+  <section id="tab-tuteur" class="tab-panel">
+    <p class="muted">Quiz généré à partir de ta base vérifiée (niveaux de latence + vaisseaux/confluences) — jamais inventé : les questions et les corrigés viennent directement des fiches Réf. Psy.</p>
+    <div class="cas-toolbar">
+      <button type="button" id="tut-next">Nouvelle question</button>
+      <span id="tut-score" class="muted"></span>
+    </div>
+    <div id="tut-quiz" class="formule-detail" style="max-width:800px;">
+      <p class="muted">Clique sur « Nouvelle question » pour commencer.</p>
+    </div>
+  </section>
+
+  <!-- ===================== ONGLET SYNDROMES ===================== -->
+  <section id="tab-syndromes" class="tab-panel">
+    <p class="muted">Dictionnaire des syndromes extrait de tes aide-mémoires (organes, syndromes externes, qi/sang/liquides). Quand un traitement (réseau, points, pharmacopée) est documenté dans la source, il est affiché.</p>
+    <div class="formules-layout">
+      <aside class="formules-sidebar">
+        <input type="search" id="syn-search" placeholder="Rechercher un syndrome, un organe, un signe...">
+        <div id="syn-groups"></div>
+        <ul id="syn-list"></ul>
+        <p id="syn-count" class="muted"></p>
+      </aside>
+      <article id="syn-detail" class="formule-detail">
+        <p class="muted">Sélectionne un syndrome à gauche.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== ONGLET DIAGNOSTIC PAR SIGNES (pourcentage) ===================== -->
+  <section id="tab-diag-signes" class="tab-panel">
+    <p class="muted">Clique sur les signes cliniques que tu observes ; les syndromes de ta base vérifiée sont classés par pourcentage de signes correspondants. <strong>Ce pourcentage n'est pas une statistique clinique</strong> — c'est un simple ratio (signes que tu as cochés ÷ nombre total de signes documentés pour ce syndrome dans la source). Deux formulations différentes du même signe dans deux syndromes ne seront pas reconnues comme identiques (comparaison sur le texte exact extrait des sources) : c'est un outil de révision, pas un outil de diagnostic clinique autonome.</p>
+    <div id="diag-signes-loading" class="muted">Chargement de la base de syndromes...</div>
+    <div id="diag-signes-body" style="display:none;">
+      <div class="ds-selected" id="ds-selected"></div>
+      <input type="search" id="ds-search" placeholder="Rechercher un signe (ex : insomnie, langue rouge, pouls fin...)">
+      <div id="ds-available" class="ds-chips"></div>
+      <h3 class="sec-sub" style="margin-top:1.5rem;">Syndromes correspondants</h3>
+      <div id="ds-results"></div>
+    </div>
+  </section>
+
+  <!-- ===================== ONGLET CAS PRATIQUE ===================== -->
+  <section id="tab-cas-pratique" class="tab-panel">
+    <p class="muted">Cas réels tirés des livres de référence. Lis l'énoncé, pose ton diagnostic (sur papier ou dans l'onglet Fiche de cas), puis révèle le corrigé de l'auteur pour comparer.</p>
+    <div class="formules-layout">
+      <aside class="formules-sidebar">
+        <input type="search" id="casp-search" placeholder="Rechercher (sans spoiler)...">
+        <ul id="casp-list"></ul>
+        <p id="casp-count" class="muted"></p>
+      </aside>
+      <article id="casp-detail" class="formule-detail">
+        <p class="muted">Sélectionne un cas à gauche.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== ONGLET TDAH (transversal) ===================== -->
+  <section id="tab-tdah" class="tab-panel">
+    <article id="tdah-detail" class="formule-detail">
+      <p class="muted">Chargement...</p>
+    </article>
+  </section>
+
+  <!-- ===================== ONGLET POINTS (base Jeu) ===================== -->
+  <section id="tab-points" class="tab-panel">
+    <p class="muted">Base de points par canal (localisation, méthode de travail, indications, actions, images), importée depuis le projet Jeu.</p>
+    <div class="pts-view-toggle">
+      <button type="button" id="pts-view-fiches" class="cat-chip active">Fiches par point</button>
+      <button type="button" id="pts-view-croisements" class="cat-chip">Tableau des croisements de canaux</button>
+    </div>
+    <div id="pts-view-fiches-panel">
+      <div class="formules-layout">
+        <aside class="formules-sidebar">
+          <input type="search" id="pts-search" placeholder="Rechercher un point, une indication...">
+          <div id="pts-groups"></div>
+          <ul id="pts-list"></ul>
+          <p id="pts-count" class="muted"></p>
+        </aside>
+        <article id="pts-detail" class="formule-detail">
+          <p class="muted">Sélectionne un canal puis un point.</p>
+        </article>
+      </div>
+    </div>
+    <div id="pts-view-croisements-panel" style="display:none;">
+      <p class="muted">Points où plusieurs canaux (et/ou vaisseaux extraordinaires) se rencontrent — transcrit du tableau des pages 37-40 de l'aide-mémoire acu. Les cases grisées dans la source n'ont pas de légende textuelle explicite (recoupement secondaire probable, à vérifier).</p>
+      <div id="croise-edit-zone"></div>
+      <input type="search" id="croise-search" placeholder="Rechercher un point ou un canal (ex : DM 14, VB, chōng mài)...">
+      <div id="croise-table-wrap"></div>
+    </div>
+  </section>
+
+  <!-- ===================== ONGLET AJOUTER UNE FORMULE (sans IA) ===================== -->
+  <section id="tab-ajouter" class="tab-panel">
+    <div class="apropos" style="max-width:900px;">
+      <h2>Ajouter une formule dans la base de données</h2>
+      <p class="muted">Ce formulaire fonctionne sans Claude — utile après la fin de l'abonnement. Remplis les champs (colle le texte de ton cours), puis choisis comment enregistrer.</p>
+    </div>
+    <form id="ajout-form" class="cas-form" style="max-width:900px;">
+      <fieldset>
+        <legend>Identification</legend>
+        <label>Catégorie existante
+          <select id="aj-categorie-existante"><option value="">— nouvelle catégorie —</option></select>
+        </label>
+        <div class="bagang-grid">
+          <label>ID catégorie (ex: 05_tonifient_qi)
+            <input type="text" id="aj-categorie-id">
+          </label>
+          <label>Nom complet de la catégorie
+            <input type="text" id="aj-categorie-nom">
+          </label>
+        </div>
+        <div class="bagang-grid">
+          <label>Pinyin
+            <input type="text" id="aj-pinyin" placeholder="Ex: Sì Jūn Zǐ Tāng">
+          </label>
+          <label>Hanzi
+            <input type="text" id="aj-hanzi">
+          </label>
+        </div>
+        <div class="bagang-grid">
+          <label>Nom français
+            <input type="text" id="aj-nom-fr">
+          </label>
+          <label>Sous-type
+            <input type="text" id="aj-sous-type">
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Composition</legend>
+        <p class="muted">Une substance par ligne, format : <code>Substance ; hanzi ; dose ; rôle</code> (hanzi et rôle facultatifs, laisser vide entre les <code>;</code>).</p>
+        <textarea id="aj-composition" rows="6" placeholder="Rén Shēn ; 人参 ; 9g ; jun&#10;Bái Zhú ; 白术 ; 9g ; chen"></textarea>
+      </fieldset>
+
+      <fieldset>
+        <legend>Champs texte</legend>
+        <label>Mode de préparation / posologie<textarea id="aj-preparation" rows="2"></textarea></label>
+        <label>Actions thérapeutiques<textarea id="aj-actions" rows="2"></textarea></label>
+        <label>Indications / syndrome<textarea id="aj-indications" rows="2"></textarea></label>
+        <label>Tableau clinique<textarea id="aj-tableau" rows="2"></textarea></label>
+        <label>Contre-indications / précautions<textarea id="aj-contre" rows="2"></textarea></label>
+        <label>Modifications courantes<textarea id="aj-modifications" rows="3"></textarea></label>
+        <label>Comparaison avec formules proches<textarea id="aj-comparaison" rows="3"></textarea></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Source et vérification</legend>
+        <label>Fichier / origine (ex: chemin du PDF de cours, ou "Yao Dao, transmis en conversation le ...")
+          <input type="text" id="aj-source">
+        </label>
+        <label>À vérifier (une note par ligne, laisser vide si rien)
+          <textarea id="aj-a-verifier" rows="2"></textarea>
+        </label>
+      </fieldset>
+
+      <div class="cas-toolbar">
+        <button type="button" id="aj-save-fs">💾 Enregistrer directement dans data/ (Chrome/Edge)</button>
+        <button type="button" id="aj-download">⬇ Télécharger le JSON</button>
+        <button type="button" id="aj-reset">Vider le formulaire</button>
+      </div>
+      <p id="aj-status" class="muted"></p>
+    </form>
+  </section>
+
+</main>
+
+<script src="app.js?v=20"></script>
+</body>
+</html>
