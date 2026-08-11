@@ -325,6 +325,11 @@ const Psy = {
         `<li class="muted">Base pas encore prête (${e.message}).</li>`;
       return;
     }
+    try {
+      const stermanIdx = await Store.readJSON("psycho_emotionnel/sterman_principes/index.json");
+      this.stermanRawIndex = stermanIdx;
+      this.entries.push(...(stermanIdx.principes || []).map(p => ({ ...p, kind: "sterman", chemin: "sterman_principes/" + p.chemin })));
+    } catch (e) { /* pas encore extrait — silencieux, cette section n'apparaît que quand elle existe */ }
     this.renderGroups();
     this.renderList(this.entries);
   },
@@ -340,8 +345,10 @@ const Psy = {
       return chip;
     };
     el.appendChild(mk("Tous (" + this.entries.length + ")", null));
-    el.appendChild(mk("Niveaux de latence (" + this.entries.filter(e => e.kind === "niveau").length + ")", "niveau"));
-    el.appendChild(mk("Vaisseaux / Confluences (" + this.entries.filter(e => e.kind === "vaisseau").length + ")", "vaisseau"));
+    el.appendChild(mk("Farrell — Niveaux de latence (" + this.entries.filter(e => e.kind === "niveau").length + ")", "niveau"));
+    el.appendChild(mk("Farrell — Vaisseaux / Confluences (" + this.entries.filter(e => e.kind === "vaisseau").length + ")", "vaisseau"));
+    const stermanCount = this.entries.filter(e => e.kind === "sterman").length;
+    if (stermanCount) el.appendChild(mk("Sterman — Principes cliniques (" + stermanCount + ")", "sterman"));
     if (this.activeKind === null) el.firstChild.classList.add("active");
   },
 
@@ -354,7 +361,7 @@ const Psy = {
     if (this.activeKind) pool = pool.filter(e => e.kind === this.activeKind);
     const q = (query || "").trim().toLowerCase();
     if (!q) return pool;
-    return pool.filter(e => (e.nom || "").toLowerCase().includes(q));
+    return pool.filter(e => (e.nom || "").toLowerCase().includes(q) || (e.categorie_source || "").toLowerCase().includes(q) || (e.resume_court || "").toLowerCase().includes(q));
   },
 
   renderList(list) {
@@ -362,8 +369,9 @@ const Psy = {
     ul.innerHTML = "";
     list.forEach(e => {
       const li = document.createElement("li");
+      const kindLabel = e.kind === "niveau" ? "Farrell — Niveau de latence" : e.kind === "vaisseau" ? "Farrell — Vaisseau / confluence" : "Sterman — " + (e.categorie_source || "Principe clinique");
       li.innerHTML = `<span class="fl-pinyin">${escapeHtml(e.nom)}</span>
-        <span class="fl-syndrome">${e.kind === "niveau" ? "Niveau de latence" : "Vaisseau / confluence"}</span>`;
+        <span class="fl-syndrome">${escapeHtml(kindLabel)}</span>`;
       li.addEventListener("click", () => this.showDetail(e, li));
       ul.appendChild(li);
     });
@@ -377,9 +385,21 @@ const Psy = {
     detail.innerHTML = "<p class='muted'>Chargement...</p>";
     try {
       const d = await Store.readJSON("psycho_emotionnel/" + entry.chemin);
-      detail.innerHTML = entry.kind === "niveau" ? this.renderNiveau(d) : this.renderVaisseau(d);
+      detail.innerHTML = entry.kind === "niveau" ? this.renderNiveau(d) : entry.kind === "vaisseau" ? this.renderVaisseau(d) : this.renderSterman(d);
       addEditControls(detail, "psycho_emotionnel/" + entry.chemin, d, {
         onSaved: async (parsed) => {
+          if (entry.kind === "sterman") {
+            const arr = (this.stermanRawIndex && this.stermanRawIndex.principes) || [];
+            const i = arr.findIndex(x => x.id === entry.id);
+            const summary = { id: parsed.id || entry.id, nom: parsed.nom, categorie_source: parsed.categorie_source, resume_court: parsed.resume_court, chemin: entry.chemin.replace(/^sterman_principes\//, "") };
+            if (i >= 0) Object.assign(arr[i], summary); else arr.push(summary);
+            await Store.writeJSON("psycho_emotionnel/sterman_principes/index.json", this.stermanRawIndex);
+            const eIdx = this.entries.findIndex(e => e.id === entry.id && e.kind === "sterman");
+            if (eIdx >= 0) Object.assign(this.entries[eIdx], summary);
+            this.renderGroups();
+            this.applyFilters();
+            return;
+          }
           const key = entry.kind === "niveau" ? "niveaux" : "vaisseaux";
           if (!this.rawIndex[key]) this.rawIndex[key] = [];
           const arr = this.rawIndex[key];
@@ -446,6 +466,36 @@ const Psy = {
       ${citations}
       ${verif}
       <p class="muted">Source : ${escapeHtml((d.source && d.source.livre) || "?")}${d.source && d.source.chapitre_ou_section ? " — " + escapeHtml(d.source.chapitre_ou_section) : ""}</p>
+    `;
+  },
+
+  renderSterman(d) {
+    const list = (arr) => arr && arr.length ? `<ul class="tcm-list">${arr.map(x => `<li>${formatArrayEntry(x)}</li>`).join("")}</ul>` : "";
+    const verif = (d.a_verifier && d.a_verifier.length)
+      ? `<section><h3>À vérifier contre la source</h3>${d.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("")}</section>`
+      : "";
+    return `
+      <h2>${escapeHtml(d.nom)}</h2>
+      <p class="muted">${escapeHtml(d.categorie_source || "")} · Ann Cecil-Sterman (même lignée que Farrell — élèves de Dr Jeffrey Yuen)</p>
+      ${d.principe_pratiquable ? `<section><h3>Principe</h3><div class="tcm-text">${formatTcmText(d.principe_pratiquable)}</div></section>` : ""}
+      ${(d.instructions_mise_en_pratique || d.contexte_utilisation) ? `
+      <section class="psy-decision">
+        <h3>Mise en pratique</h3>
+        <div class="psy-retention-grid">
+          <div class="psy-box psy-box-liberer">
+            <h4>Dans quel contexte l'utiliser</h4>
+            <div class="tcm-text">${d.contexte_utilisation ? formatTcmText(d.contexte_utilisation) : '<p class="muted">Non précisé.</p>'}</div>
+          </div>
+          <div class="psy-box psy-box-maintenir">
+            <h4>🔧 Comment l'appliquer</h4>
+            <div class="tcm-text">${d.instructions_mise_en_pratique ? formatTcmText(d.instructions_mise_en_pratique) : '<p class="muted">Non précisé.</p>'}</div>
+          </div>
+        </div>
+      </section>` : ""}
+      ${d.points_ou_structures_cles ? `<section><h3>Points / structures clés</h3>${list(d.points_ou_structures_cles)}</section>` : ""}
+      ${d.avertissements_precautions ? `<section><h3>Avertissements / précautions</h3><div class="tcm-text">${formatTcmText(d.avertissements_precautions)}</div></section>` : ""}
+      ${verif}
+      <p class="muted">Source : ${escapeHtml((d.source && d.source.livre) || "?")}${d.source && d.source.chapitre_ou_page ? " — " + escapeHtml(d.source.chapitre_ou_page) : ""}</p>
     `;
   }
 };
@@ -1930,8 +1980,9 @@ const GlobalSearch = {
     });
 
     (Psy.entries || []).forEach(e => {
-      if ((e.nom || "").toLowerCase().includes(q)) out.push({
-        group: "Réf. Psy (Farrell)", title: e.nom, sub: e.kind === "niveau" ? "Niveau de latence" : "Vaisseau / confluence",
+      const hay = [e.nom, e.categorie_source, e.resume_court].filter(Boolean).join(" ").toLowerCase();
+      if (hay.includes(q)) out.push({
+        group: "Principes Taoïstes", title: e.nom, sub: e.kind === "niveau" ? "Farrell — Niveau de latence" : e.kind === "vaisseau" ? "Farrell — Vaisseau / confluence" : "Sterman — " + (e.categorie_source || ""),
         go: () => { this.gotoTab("psy"); Psy.showDetail(e); }
       });
     });
