@@ -1,0 +1,305 @@
+:root {
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --ink: #000000;
+  --muted: #555555;
+  --line: #000000;
+  --accent: #ff2b00;
+  --accent-soft: #fff2ee;
+  --danger: #ff2b00;
+  --font-body: "Archivo", system-ui, sans-serif;
+  --font-title: "Young Serif", Georgia, serif;
+  font-family: var(--font-body);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Volontairement gardé clair (gris très pâle) même si le système est en mode sombre —
+       l'assistant ne doit jamais passer en fond noir. */
+    --bg: #efefef;
+    --panel: #f7f7f7;
+    --ink: #000000;
+    --muted: #555555;
+    --line: #000000;
+    --accent: #ff2b00;
+    --accent-soft: #fde3db;
+    --danger: #ff2b00;
+  }
+}
+
+* { box-sizing: border-box; border-radius: 0 !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); }
+.muted { color: var(--muted); font-size: 0.9em; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.5rem; border-bottom: 1.5px solid var(--line); background: var(--panel);
+  flex-wrap: wrap; gap: 0.5rem;
+}
+.topbar h1 { font-family: var(--font-title); font-size: 1.5rem; margin: 0; font-weight: 400; }
+.tabs { display: flex; gap: 0.6rem; }
+.tab-btn {
+  padding: 0.5rem 1.1rem; border: 1px solid var(--line); background: var(--bg);
+  color: var(--ink); cursor: pointer; font-size: 0.85rem; font-family: inherit;
+  text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700;
+}
+.tab-btn:hover { background: var(--accent); border-color: var(--accent); color: #000; }
+.tab-btn.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.global-search-wrap { position: relative; flex: 1 1 320px; max-width: 460px; }
+#global-search {
+  width: 100%; padding: 0.6rem 0.8rem; border: 1px solid var(--line); background: var(--bg);
+  color: var(--ink); font-family: inherit; font-size: 0.9rem;
+}
+#global-search:focus { outline: 1.5px solid var(--accent); outline-offset: -2px; }
+#global-search-results {
+  display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50;
+  background: var(--panel); border: 1.5px solid var(--line); max-height: 70vh; overflow-y: auto;
+}
+#global-search-results.open { display: block; }
+#global-search-results .gsr-group-label {
+  padding: 0.35rem 0.7rem; background: var(--ink); color: var(--bg); font-size: 0.7rem;
+  text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+}
+#global-search-results ul { list-style: none; margin: 0; padding: 0; }
+#global-search-results li {
+  padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--line); cursor: pointer;
+}
+#global-search-results li:hover, #global-search-results li.gsr-active { background: var(--accent-soft); }
+#global-search-results .gsr-title { font-weight: 700; }
+#global-search-results .gsr-sub { display: block; font-size: 0.78rem; color: var(--muted); }
+#global-search-results .gsr-empty { padding: 0.8rem; color: var(--muted); font-size: 0.85rem; }
+
+.sync-btn {
+  padding: 0.5rem 0.9rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  cursor: pointer; font-size: 0.8rem; font-family: inherit; text-transform: uppercase;
+  letter-spacing: 0.03em; font-weight: 700;
+}
+.sync-btn:hover { background: var(--accent); border-color: var(--accent); color: #000; }
+.sync-panel {
+  max-width: 640px; margin: 1.2rem auto; padding: 1.5rem; background: var(--panel);
+  border: 1.5px solid var(--line);
+}
+.sync-panel h2 { font-family: var(--font-title); font-weight: 400; margin-top: 0; }
+.sync-mode-row { display: flex; flex-direction: column; gap: 0.6rem; margin: 1rem 0; }
+.sync-mode-row label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+#sync-github-fields { display: flex; flex-direction: column; gap: 0.8rem; margin: 1rem 0; }
+#sync-github-fields label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; font-weight: 700; }
+#sync-github-fields input {
+  padding: 0.55rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  font-family: inherit; font-size: 0.9rem; font-weight: 400;
+}
+.sync-warning { border-left: 2px solid var(--accent); padding-left: 0.7rem; }
+.sync-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1rem; }
+.sync-actions button {
+  padding: 0.5rem 1rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  cursor: pointer; font-family: inherit; font-size: 0.85rem; text-transform: uppercase; font-weight: 700;
+}
+#sync-save-btn { background: var(--accent); border-color: var(--accent); color: #000; }
+.sync-actions button:hover { background: var(--ink); color: var(--bg); }
+
+main { padding: 1.5rem; max-width: 1280px; margin: 0 auto; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* --- Formules --- */
+.formules-layout { display: grid; grid-template-columns: 320px 1fr; gap: 1.5rem; align-items: start; }
+@media (max-width: 800px) { .formules-layout { grid-template-columns: 1fr; } }
+
+.formules-sidebar { background: var(--panel); border: 1.5px solid var(--line); padding: 1rem; position: sticky; top: 1rem; max-height: 85vh; overflow: auto; }
+#formule-search, #cas-formule-search, #psy-search, #syn-search, #casp-search, #pts-search {
+  width: 100%; padding: 0.6rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  margin-bottom: 0.8rem; font-family: inherit; font-size: 0.9rem;
+}
+#formule-search:focus, #cas-formule-search:focus, #psy-search:focus, #syn-search:focus, #casp-search:focus, #pts-search:focus { outline: 1.5px solid var(--accent); outline-offset: -2px; }
+#formule-categories { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem; }
+.cat-chip {
+  font-size: 0.72rem; padding: 0.3rem 0.6rem; border: 1px solid var(--line); cursor: pointer;
+  background: var(--bg); color: var(--ink); text-transform: uppercase; letter-spacing: 0.02em; font-family: inherit;
+}
+.cat-chip.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 700; }
+
+#formule-list, #psy-list, #syn-list, #casp-list, #pts-list { list-style: none; margin: 0; padding: 0; }
+#formule-list li, #psy-list li, #syn-list li, #casp-list li, #pts-list li { padding: 0.6rem 0.4rem; border-bottom: 1px solid var(--line); cursor: pointer; }
+#formule-list li:hover, #psy-list li:hover, #syn-list li:hover, #casp-list li:hover, #pts-list li:hover { background: var(--accent-soft); }
+#formule-list li.selected, #psy-list li.selected, #syn-list li.selected, #casp-list li.selected, #pts-list li.selected { background: var(--accent); }
+#formule-list li.selected .fl-pinyin, #formule-list li.selected .fl-syndrome,
+#psy-list li.selected .fl-pinyin, #psy-list li.selected .fl-syndrome,
+#syn-list li.selected .fl-pinyin, #syn-list li.selected .fl-syndrome,
+#casp-list li.selected .fl-pinyin, #casp-list li.selected .fl-syndrome,
+#pts-list li.selected .fl-pinyin, #pts-list li.selected .fl-syndrome { color: #000; }
+#formule-list .fl-pinyin, #psy-list .fl-pinyin, #syn-list .fl-pinyin, #casp-list .fl-pinyin, #pts-list .fl-pinyin { font-weight: 700; text-transform: uppercase; }
+#formule-list .fl-syndrome, #psy-list .fl-syndrome, #syn-list .fl-syndrome, #casp-list .fl-syndrome, #pts-list .fl-syndrome { display: block; font-size: 0.8rem; color: var(--muted); }
+
+.formule-detail { background: var(--panel); border: 1.5px solid var(--line); padding: 1.5rem; min-height: 300px; }
+.formule-detail h2 { font-family: var(--font-title); font-weight: 400; font-size: 1.7rem; margin-top: 0; border-bottom: 1px solid var(--ink); padding-bottom: 0.5rem; }
+.formule-detail .hanzi { font-size: 1.3rem; color: var(--accent); margin-left: 0.5rem; }
+.formule-detail table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1.2rem; border: 1px solid var(--line); }
+.formule-detail th, .formule-detail td { text-align: left; padding: 0.4rem 0.6rem; border: 1px solid var(--line); font-size: 0.92rem; }
+.formule-detail th { background: var(--ink); color: var(--bg); text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em; }
+.formule-detail section { margin-bottom: 1.4rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.formule-detail section:first-of-type { border-top: none; padding-top: 0; }
+.formule-detail h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink); margin-bottom: 0.5rem; font-weight: 700; }
+.tag-verifier { display: inline-block; background: var(--accent); color: #000; font-size: 0.75rem; padding: 0.2rem 0.6rem; margin: 0.15rem 0.3rem 0.15rem 0; font-weight: 700; }
+
+/* Mise en forme des textes MTC denses (voir formatTcmText dans app.js) */
+.tcm-text { line-height: 1.6; }
+.tcm-text ul.tcm-list { margin: 0; padding-left: 1.3em; }
+.tcm-text ul.tcm-list li { margin-bottom: 0.6em; }
+.tcm-label { display: block; margin-top: 0.8em; color: var(--bg); background: var(--ink); padding: 0.15em 0.4em; width: fit-content; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.03em; }
+.tcm-label:first-child { margin-top: 0; }
+.tcm-formule { color: var(--accent); font-weight: 700; }
+.tcm-hanzi-inline { color: var(--accent); opacity: 0.8; margin-left: 0.1em; }
+.tcm-substance { font-weight: 700; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; }
+.tcm-dose { font-weight: 700; background: var(--accent-soft); padding: 0 0.25em; white-space: nowrap; }
+.tcm-note { font-style: italic; opacity: 0.75; font-size: 0.92em; }
+
+/* --- Fiche de cas --- */
+.cas-toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.2rem; align-items: center; }
+.cas-toolbar select, .cas-toolbar button, .file-btn {
+  padding: 0.5rem 0.9rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  cursor: pointer; font-size: 0.85rem; font-family: inherit; text-transform: uppercase; letter-spacing: 0.02em;
+}
+.cas-toolbar button:hover, .file-btn:hover { background: var(--ink); color: var(--bg); }
+.cas-toolbar button.danger { color: var(--bg); border-color: var(--danger); background: var(--danger); font-weight: 700; }
+.cas-toolbar button.danger:hover { opacity: 0.85; }
+.file-btn { display: inline-block; }
+
+/* --- Tuteur Farrell (quiz) --- */
+.tut-nav { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.tut-nav button {
+  padding: 0.35rem 0.7rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  cursor: pointer; font-family: inherit; font-size: 0.78rem; text-transform: uppercase;
+}
+.tut-nav button:disabled { opacity: 0.35; cursor: default; }
+.tut-nav button:hover:not(:disabled) { background: var(--ink); color: var(--bg); }
+.tut-prompt { font-size: 1.05rem; line-height: 1.6; margin-bottom: 1.2rem; }
+.tut-options { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.2rem; }
+.tut-option {
+  padding: 0.7rem 1rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  cursor: pointer; font-family: inherit; font-size: 0.95rem; text-align: left;
+}
+.tut-option:hover:not(:disabled) { background: var(--accent-soft); }
+.tut-option:disabled { cursor: default; }
+.tut-option.tut-correct { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 700; }
+.tut-option.tut-wrong { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 700; }
+.tut-feedback-ok { font-weight: 700; color: #1b7a1b; }
+.tut-feedback-ko { font-weight: 700; color: var(--danger); }
+
+.cas-form fieldset { background: var(--panel); border: 1.5px solid var(--line); margin-bottom: 1.2rem; padding: 1.1rem 1.3rem; }
+.cas-form legend { padding: 0 0.5rem; font-weight: 700; color: var(--bg); background: var(--ink); text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.03em; }
+.cas-form label { display: block; margin-bottom: 0.7rem; font-size: 0.88rem; text-transform: uppercase; letter-spacing: 0.02em; font-weight: 700; }
+.cas-form input[type=text], .cas-form textarea, .cas-form select {
+  width: 100%; padding: 0.5rem; margin-top: 0.3rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  font-family: inherit; font-size: 0.9rem; text-transform: none; font-weight: 400;
+}
+.cas-form input[type=text]:focus, .cas-form textarea:focus, .cas-form select:focus { outline: 1.5px solid var(--accent); outline-offset: -2px; }
+.bagang-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.8rem; }
+
+#cas-formule-results { list-style: none; padding: 0; margin: 0.5rem 0; max-height: 200px; overflow: auto; border: 1px solid var(--line); }
+#cas-formule-results li { padding: 0.5rem; border-bottom: 1px solid var(--line); cursor: pointer; }
+#cas-formule-results li:last-child { border-bottom: none; }
+#cas-formule-results li:hover { background: var(--accent-soft); }
+#cas-formules-choisies .chosen-item {
+  display: inline-flex; align-items: center; gap: 0.4rem; background: var(--ink); color: var(--bg);
+  padding: 0.3rem 0.6rem; margin: 0.2rem 0.3rem 0.2rem 0; font-size: 0.85rem; text-transform: uppercase;
+}
+#cas-formules-choisies .chosen-item button { border: none; background: none; color: var(--bg); cursor: pointer; font-weight: 700; }
+
+/* --- Diagnostic par signes (pourcentage) --- */
+.sec-sub { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); margin: 0.8rem 0 0.3rem; }
+.ds-selected { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem; min-height: 1.6rem; }
+.ds-selected .chosen-item {
+  display: inline-flex; align-items: center; gap: 0.4rem; background: var(--ink); color: var(--bg);
+  padding: 0.35rem 0.7rem; font-size: 0.82rem;
+}
+.ds-selected .chosen-item button { border: none; background: none; color: var(--bg); cursor: pointer; font-weight: 700; font-size: 1rem; line-height: 1; }
+#ds-search {
+  width: 100%; padding: 0.6rem 0.8rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  font-family: inherit; font-size: 0.9rem; margin-bottom: 0.8rem;
+}
+#ds-search:focus { outline: 1.5px solid var(--accent); outline-offset: -2px; }
+.ds-chips { max-height: 60vh; overflow-y: auto; border: 1px solid var(--line); padding: 0.7rem; background: var(--panel); }
+.ds-cat-block { margin-bottom: 1rem; }
+.ds-cat-block:last-child { margin-bottom: 0; }
+.ds-cat-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.ds-chip {
+  padding: 0.35rem 0.65rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  cursor: pointer; font-size: 0.8rem; font-family: inherit; text-align: left; white-space: normal; max-width: 100%;
+}
+.ds-chip:hover { background: var(--accent-soft); }
+.ds-result {
+  border: 1px solid var(--line); background: var(--panel); padding: 0.8rem 1rem; margin-bottom: 0.7rem; cursor: pointer;
+}
+.ds-result:hover { background: var(--accent-soft); }
+.ds-result-top { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+.ds-result-name { font-weight: 700; }
+.ds-result-pct { font-weight: 700; font-family: var(--font-title); font-size: 1.3rem; }
+.ds-result-bar-wrap { height: 8px; background: var(--bg); border: 1px solid var(--line); margin-top: 0.5rem; }
+.ds-result-bar { height: 100%; background: var(--accent); }
+.ds-result-matched { font-size: 0.8rem; color: var(--muted); margin-top: 0.4rem; }
+
+.apropos { background: var(--panel); border: 1.5px solid var(--line); padding: 1.5rem 1.8rem; max-width: 800px; }
+.apropos h2 { font-size: 1rem; color: var(--bg); background: var(--ink); display: inline-block; padding: 0.2rem 0.5rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.apropos code { background: var(--accent-soft); padding: 0.1em 0.3em; }
+
+/* --- Réf. Psy (Farrell) --- */
+.psy-status { margin: 0 0 1rem; font-style: italic; }
+.psy-decision { border: 1.5px solid var(--ink) !important; padding: 1rem !important; }
+.syn-synthese { border-style: dashed !important; }
+.psy-retention-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.8rem; }
+@media (max-width: 700px) { .psy-retention-grid { grid-template-columns: 1fr; } }
+.psy-box { border: 1px solid var(--line); padding: 0.8rem; }
+.psy-box h4 { margin: 0 0 0.5rem; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.03em; }
+.psy-box-maintenir { background: var(--accent-soft); border-color: var(--accent); }
+.psy-box-maintenir h4 { color: var(--accent); }
+.formule-detail blockquote { margin: 0 0 0.6rem; padding: 0.5rem 0.8rem; border-left: 2px solid var(--ink); font-style: italic; color: var(--muted); }
+.formule-detail h4.sec-sub { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); margin: 0.8rem 0 0.3rem; }
+
+#casp-reveal-btn {
+  display: block; width: 100%; margin: 1rem 0; padding: 0.8rem; border: 1.5px solid var(--accent);
+  background: var(--accent); color: #000; font-family: inherit; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.03em; font-size: 0.9rem; cursor: pointer;
+}
+#casp-reveal-btn:hover { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.tdah-contre-ind { border: 1.5px solid var(--danger); background: var(--accent-soft); padding: 0.7rem 0.9rem; margin: 0.6rem 0; }
+.tdah-contre-ind strong { color: var(--danger); text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.03em; }
+
+.edit-bar { display: flex; gap: 0.6rem; align-items: center; margin-bottom: 0.8rem; flex-wrap: wrap; }
+.edit-toggle-btn, #edit-save, #edit-cancel {
+  padding: 0.4rem 0.8rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  cursor: pointer; font-family: inherit; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.02em;
+}
+.edit-toggle-btn:hover, #edit-save:hover { background: var(--ink); color: var(--bg); }
+#edit-save { border-color: var(--accent); background: var(--accent); color: #000; font-weight: 700; }
+.json-editor {
+  width: 100%; min-height: 60vh; padding: 0.8rem; border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink); font-family: "Chivo Mono", ui-monospace, Consolas, monospace; font-size: 0.82rem; line-height: 1.5;
+}
+
+/* Facteurs pathogènes (voir colorizePervers dans app.js) */
+.tcm-pervers-vent { color: #2e7d32; font-weight: 700; }
+.tcm-pervers-chaleur { color: #c62828; font-weight: 700; }
+.tcm-pervers-froid { color: #1565c0; font-weight: 700; }
+.tcm-pervers-stase { color: #6a1b9a; font-weight: 700; }
+.tcm-pervers-humidite { color: #9e7b00; font-weight: 700; }
+/* Pas de variante sombre ici : le fond reste clair en toutes circonstances (voir :root),
+   donc les couleurs de texte ci-dessus restent lisibles sans ajustement. */
+
+/* Tableau des croisements de canaux (onglet Points) */
+.pts-view-toggle { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+#croise-search {
+  width: 100%; max-width: 480px; padding: 0.6rem; border: 1px solid var(--line); background: var(--bg);
+  color: var(--ink); margin: 0.6rem 0 1rem; font-family: inherit; font-size: 0.9rem;
+}
+#croise-search:focus { outline: 1.5px solid var(--accent); outline-offset: -2px; }
+.croise-table-scroll { overflow-x: auto; border: 1.5px solid var(--line); }
+table.croise-table { border-collapse: collapse; font-size: 0.78rem; white-space: nowrap; }
+table.croise-table th, table.croise-table td { border: 1px solid var(--line); padding: 0.35rem 0.5rem; text-align: center; }
+table.croise-table thead th, table.croise-table tr > th:first-child { position: sticky; background: var(--ink); color: var(--bg); z-index: 1; }
+table.croise-table tr > th:first-child { left: 0; text-align: left; text-transform: none; }
+table.croise-table thead th { top: 0; text-transform: uppercase; letter-spacing: 0.02em; }
+table.croise-table td.croise-confirme { background: var(--ink); }
+table.croise-table td.croise-secondaire { background: #bdbdbd; }
+table.croise-table td.croise-self { background: var(--accent-soft); }
+
