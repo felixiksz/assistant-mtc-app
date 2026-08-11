@@ -768,20 +768,41 @@ const Syndromes = {
     return `<section class="psy-decision"><h3>Traitement${t.principe ? " — " + escapeHtml(t.principe) : ""}</h3>${acZangFu}${acClassique}${commun}${pharma}</section>`;
   },
 
+  renderPointsSourced(list) {
+    if (!list || !list.length) return "";
+    return `<ul class="tcm-list">${list.map(p => {
+      const label = [p.groupe, p.points].filter(Boolean).join(" — ");
+      const src = p.source_precise ? `<span class="muted"> — source : ${escapeHtml(p.source_precise)}</span>` : "";
+      return `<li><strong>${escapeHtml(label)}</strong> — ${tcmHighlightInline(escapeHtml(p.justification || ""))}${src}</li>`;
+    }).join("")}</ul>`;
+  },
+
+  renderFormulesSourced(list) {
+    if (!list || !list.length) return "";
+    return `<ul class="tcm-list">${list.map(p => {
+      const src = p.source_precise ? `<span class="muted"> — source : ${escapeHtml(p.source_precise)}</span>` : "";
+      return `<li><span class="tcm-formule">${escapeHtml(p.nom_pinyin || "")}</span> — ${tcmHighlightInline(escapeHtml(p.justification || ""))}${src}</li>`;
+    }).join("")}</ul>`;
+  },
+
   renderTraitementSynthese(t) {
     if (!t) return "";
-    const pts = (t.points_synthese && t.points_synthese.length)
-      ? `<h4 class="sec-sub">Points (synthèse)</h4><ul class="tcm-list">${t.points_synthese.map(p => `<li><strong>${escapeHtml(p.points || "")}</strong> — ${tcmHighlightInline(escapeHtml(p.justification || ""))}</li>`).join("")}</ul>` : "";
-    const reseau = (t.reseau_wang_ju_yi && t.reseau_wang_ju_yi.length)
-      ? `<h4 class="sec-sub">Réseau (Wang Ju Yi)</h4><ul class="tcm-list">${t.reseau_wang_ju_yi.map(r => `<li><strong>${escapeHtml(r.groupe || "")} — ${escapeHtml(r.points || "")}</strong> — ${tcmHighlightInline(escapeHtml(r.justification || ""))}</li>`).join("")}</ul>` : "";
-    const pharma = (t.pharmacopee_classique && t.pharmacopee_classique.length)
-      ? `<h4 class="sec-sub">Pharmacopée classique</h4><ul class="tcm-list">${t.pharmacopee_classique.map(p => `<li><span class="tcm-formule">${escapeHtml(p.nom_pinyin || "")}</span> — ${tcmHighlightInline(escapeHtml(p.justification || ""))}</li>`).join("")}</ul>` : "";
-    if (!pts && !reseau && !pharma) return "";
+    const synthese = t.synthese_des_points && t.synthese_des_points.length
+      ? `<h4 class="sec-sub">Synthèse des points</h4>${this.renderPointsSourced(t.synthese_des_points)}` : "";
+    const baseJeu = t.base_jeu && t.base_jeu.length
+      ? `<h4 class="sec-sub">Base Jeu (points des canaux)</h4>${this.renderPointsSourced(t.base_jeu)}` : "";
+    const reseau = t.reseau_wang_ju_yi && t.reseau_wang_ju_yi.length
+      ? `<h4 class="sec-sub">Réseau (Wang Ju Yi)</h4>${this.renderPointsSourced(t.reseau_wang_ju_yi)}` : "";
+    const maciocia = t.maciocia && t.maciocia.length
+      ? `<h4 class="sec-sub">Maciocia</h4>${this.renderPointsSourced(t.maciocia)}` : "";
+    const pharma = t.pharmacopee_classique && t.pharmacopee_classique.length
+      ? `<h4 class="sec-sub">Pharmacopée classique</h4>${this.renderFormulesSourced(t.pharmacopee_classique)}` : "";
+    if (!synthese && !baseJeu && !reseau && !maciocia && !pharma) return "";
     const verif = (t.a_verifier && t.a_verifier.length)
       ? t.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("") : "";
-    return `<section class="psy-decision syn-synthese"><h3>Proposition de traitement (synthèse croisée)${t.principe ? " — " + escapeHtml(t.principe) : ""}</h3>
-      <p class="muted"><em>${escapeHtml(t.avertissement || "Synthèse construite par recoupement de plusieurs sources — à valider avant usage clinique ou d'examen.")}</em></p>
-      ${pts}${reseau}${pharma}${verif}</section>`;
+    return `<section class="psy-decision syn-synthese"><h3>Propositions de traitement (plusieurs sources, gardées séparées)${t.principe ? " — " + escapeHtml(t.principe) : ""}</h3>
+      <p class="muted"><em>${escapeHtml(t.avertissement || "Chaque proposition est indépendante et indique précisément d'où elle vient — à valider avant usage clinique ou d'examen.")}</em></p>
+      ${synthese}${baseJeu}${reseau}${maciocia}${pharma}${verif}</section>`;
   },
 
   renderSyndrome(d, domaine) {
@@ -811,7 +832,7 @@ const Syndromes = {
       ${this.renderList_(d.exemples_cliniques, "Exemples cliniques")}
       ${d.correspondances_organes ? `<section><h3>Correspondances des organes</h3><div class="tcm-text">${formatTcmText(d.correspondances_organes)}</div></section>` : ""}
       ${this.renderTraitement(d.traitement)}
-      ${this.renderTraitementSynthese(d.traitement_synthese)}
+      ${this.renderTraitementSynthese(d.propositions_traitement)}
       ${verif}
       <p class="muted">Source : ${escapeHtml((d.source && d.source.livre) || "?")}</p>
     `;
