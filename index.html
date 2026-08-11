@@ -278,7 +278,10 @@
     <div class="pts-view-toggle">
       <button type="button" id="pts-view-fiches" class="cat-chip active">Fiches par point</button>
       <button type="button" id="pts-view-croisements" class="cat-chip">Tableau des croisements de canaux</button>
+      <button type="button" id="pts-load-local-images" class="cat-chip">📁 Charger les images depuis ce téléphone/dossier</button>
+      <input type="file" id="pts-local-images-input" webkitdirectory multiple style="display:none;">
     </div>
+    <p id="pts-local-images-status" class="muted" style="display:none;"></p>
     <div id="pts-view-fiches-panel">
       <div class="formules-layout">
         <aside class="formules-sidebar">
@@ -376,6 +379,6 @@
 
 </main>
 
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>

@@ -1138,6 +1138,46 @@ async function loadTdahPage() {
 }
 loadTdahPage();
 
+/* ============================= Images locales (dossier choisi sur l'appareil) ============================= */
+// Pour la copie hébergée (PWA sans dossier data/ local) : laisse charger les images
+// directement depuis un dossier du téléphone via le sélecteur de dossier du navigateur,
+// sans jamais transiter par le dépôt GitHub (qui exclut volontairement les images).
+const LocalImages = {
+  map: new Map(), // relPath ("P/P1.jpg") -> object URL
+
+  urlFor(relPath) {
+    return this.map.get(relPath) || null;
+  },
+
+  loadFiles(fileList) {
+    this.map.forEach(url => URL.revokeObjectURL(url));
+    this.map.clear();
+    let count = 0;
+    for (const file of fileList) {
+      const full = file.webkitRelativePath || file.name;
+      // webkitRelativePath commence toujours par le nom du dossier choisi (ex "images/P/P1.jpg") ;
+      // on retire ce premier segment pour retrouver le chemin relatif attendu ("P/P1.jpg").
+      const parts = full.split("/");
+      const relPath = parts.length > 1 ? parts.slice(1).join("/") : full;
+      if (!/\.(jpe?g|png|webp|gif)$/i.test(relPath)) continue;
+      this.map.set(relPath, URL.createObjectURL(file));
+      count++;
+    }
+    return count;
+  }
+};
+
+document.getElementById("pts-load-local-images").addEventListener("click", () => {
+  document.getElementById("pts-local-images-input").click();
+});
+document.getElementById("pts-local-images-input").addEventListener("change", (e) => {
+  const status = document.getElementById("pts-local-images-status");
+  const count = LocalImages.loadFiles(e.target.files);
+  status.style.display = "block";
+  status.textContent = `✅ ${count} image(s) chargée(s) depuis le dossier choisi (valable pour cette session — à refaire à la prochaine ouverture de l'app).`;
+  if (Points.lastShown) Points.showDetail(Points.lastShown);
+});
+
 /* ============================= Points (base Jeu) ============================= */
 const Points = {
   canaux: [],
@@ -1220,10 +1260,11 @@ const Points = {
   },
 
   showDetail(entry, liEl) {
+    this.lastShown = entry;
     document.querySelectorAll("#pts-list li").forEach(li => li.classList.remove("selected"));
     if (liEl) liEl.classList.add("selected");
     const d = entry.data;
-    const imgs = (d.images || []).map(img => `<img src="data/reference/points_canaux/images/${img}" alt="${escapeHtml(entry.id)}" style="max-width:280px;border:2px solid var(--ink);margin:0 0.5rem 0.5rem 0;">`).join("");
+    const imgs = (d.images || []).map(img => `<img src="${LocalImages.urlFor(img) || "data/reference/points_canaux/images/" + img}" alt="${escapeHtml(entry.id)}" style="max-width:280px;border:2px solid var(--ink);margin:0 0.5rem 0.5rem 0;">`).join("");
     const indications = (d.indications || []).length
       ? `<ul class="tcm-list">${d.indications.map(i => `<li><strong>${escapeHtml(i.categorie || "")}</strong> — ${tcmHighlightInline(escapeHtml(i.indication || ""))}</li>`).join("")}</ul>` : "";
     const actions = (d.actions || []).length
