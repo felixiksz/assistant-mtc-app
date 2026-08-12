@@ -519,6 +519,28 @@ const Tuteur = {
   current: null,
   history: [],
   historyIndex: -1,
+  STORAGE_KEY: "mtc_tuteur_state_v1",
+
+  loadPersisted() {
+    try {
+      const raw = localStorage.getItem(this.STORAGE_KEY);
+      if (!raw) return false;
+      const saved = JSON.parse(raw);
+      if (!saved || !Array.isArray(saved.history) || !saved.history.length) return false;
+      this.history = saved.history;
+      this.historyIndex = Number.isInteger(saved.historyIndex) ? saved.historyIndex : this.history.length - 1;
+      this.score = saved.score || { correct: 0, total: 0 };
+      this.current = this.history[this.historyIndex] || this.history[this.history.length - 1];
+      return true;
+    } catch (e) { return false; }
+  },
+
+  persist() {
+    try {
+      if (this.history.length > 200) { this.history = this.history.slice(-200); this.historyIndex = this.history.length - 1; }
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify({ history: this.history, historyIndex: this.historyIndex, score: this.score }));
+    } catch (e) { /* quota dépassé ou navigation privée — silencieux */ }
+  },
 
   async ensureLoaded() {
     if (this.pool.length) return;
@@ -535,15 +557,22 @@ const Tuteur = {
     const nom = entry.detail.nom || entry.nom || "";
     const aliases = [entry.nom];
     const m = nom.match(/^([^(]+)\(([^)]*)\)?/);
+    let primary = nom.trim();
     if (m) {
-      aliases.push(m[1].trim());
+      primary = m[1].trim();
+      aliases.push(primary);
       (m[2] || "").split(/[,/]/).forEach(a => {
         const t = a.replace(/^alias\s*:\s*/i, "").trim();
         if (t) aliases.push(t);
       });
     } else {
-      aliases.push(nom.trim());
+      aliases.push(primary);
+      const colonIdx = primary.indexOf(" : ");
+      if (colonIdx > 0) aliases.push(primary.slice(0, colonIdx).trim());
     }
+    // noms de vaisseaux de type "X Mai" sont souvent cités dans le texte sans le "Mai" (ex: "le Yang Qiao amène...")
+    const stem = primary.replace(/\s+Mai$/i, "").trim();
+    if (stem && stem !== primary) aliases.push(stem);
     return [...new Set(aliases.filter(Boolean))].sort((a, b) => b.length - a.length);
   },
 
@@ -641,6 +670,7 @@ const Tuteur = {
     this.history.push(q);
     this.historyIndex = this.history.length - 1;
     this.current = q;
+    this.persist();
     this.render(q);
   },
 
@@ -685,6 +715,7 @@ const Tuteur = {
     this.score.total++;
     if (q.wasCorrect) this.score.correct++;
     document.getElementById("tut-score").textContent = `Score : ${this.score.correct}/${this.score.total}`;
+    this.persist();
     this.showFeedback(q);
   },
 
@@ -709,6 +740,12 @@ const Tuteur = {
 };
 
 document.getElementById("tut-next").addEventListener("click", () => Tuteur.nextQuestion());
+document.querySelector('.tab-btn[data-tab="tuteur"]').addEventListener("click", () => {
+  if (!Tuteur.current && Tuteur.loadPersisted()) {
+    document.getElementById("tut-score").textContent = `Score : ${Tuteur.score.correct}/${Tuteur.score.total}`;
+    Tuteur.render(Tuteur.current);
+  }
+});
 
 /* ============================= Syndromes ============================= */
 const Syndromes = {
