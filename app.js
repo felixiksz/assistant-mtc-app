@@ -1212,39 +1212,104 @@ loadTdahPage();
 // directement depuis un dossier du téléphone via le sélecteur de dossier du navigateur,
 // sans jamais transiter par le dépôt GitHub (qui exclut volontairement les images).
 const LocalImages = {
-  map: new Map(), // relPath ("P/P1.jpg") -> object URL
+  map: new Map(), // relPath ("P/P1.jpg") -> object URL (session-live cache, rebuilt from IndexedDB on load)
+  db: null,
+
+  openDB() {
+    if (this.db) return Promise.resolve(this.db);
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open("mtc_local_images", 1);
+      req.onupgradeneeded = () => { req.result.createObjectStore("images"); };
+      req.onsuccess = () => { this.db = req.result; resolve(this.db); };
+      req.onerror = () => reject(req.error);
+    });
+  },
 
   urlFor(relPath) {
     return this.map.get(relPath) || null;
   },
 
-  loadFiles(fileList) {
+  relPathFor(file) {
+    const full = file.webkitRelativePath || file.name;
+    // webkitRelativePath commence toujours par le nom du dossier choisi (ex "images/P/P1.jpg") ;
+    // on retire ce premier segment pour retrouver le chemin relatif attendu ("P/P1.jpg").
+    const parts = full.split("/");
+    return parts.length > 1 ? parts.slice(1).join("/") : full;
+  },
+
+  async loadFiles(fileList) {
     this.map.forEach(url => URL.revokeObjectURL(url));
     this.map.clear();
+    const db = await this.openDB();
+    const tx = db.transaction("images", "readwrite");
+    const store = tx.objectStore("images");
     let count = 0;
     for (const file of fileList) {
-      const full = file.webkitRelativePath || file.name;
-      // webkitRelativePath commence toujours par le nom du dossier choisi (ex "images/P/P1.jpg") ;
-      // on retire ce premier segment pour retrouver le chemin relatif attendu ("P/P1.jpg").
-      const parts = full.split("/");
-      const relPath = parts.length > 1 ? parts.slice(1).join("/") : full;
+      const relPath = this.relPathFor(file);
       if (!/\.(jpe?g|png|webp|gif)$/i.test(relPath)) continue;
       this.map.set(relPath, URL.createObjectURL(file));
+      store.put(file, relPath);
       count++;
     }
+    await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); });
     return count;
+  },
+
+  async loadFromDB() {
+    const db = await this.openDB();
+    const tx = db.transaction("images", "readonly");
+    const store = tx.objectStore("images");
+    const keys = await new Promise((resolve, reject) => {
+      const req = store.getAllKeys();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    if (!keys.length) return 0;
+    const values = await new Promise((resolve, reject) => {
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    this.map.forEach(url => URL.revokeObjectURL(url));
+    this.map.clear();
+    keys.forEach((key, i) => this.map.set(key, URL.createObjectURL(values[i])));
+    return keys.length;
+  },
+
+  async clearStored() {
+    const db = await this.openDB();
+    const tx = db.transaction("images", "readwrite");
+    tx.objectStore("images").clear();
+    await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); });
+    this.map.forEach(url => URL.revokeObjectURL(url));
+    this.map.clear();
   }
 };
 
 document.getElementById("pts-load-local-images").addEventListener("click", () => {
   document.getElementById("pts-local-images-input").click();
 });
-document.getElementById("pts-local-images-input").addEventListener("change", (e) => {
+document.getElementById("pts-local-images-input").addEventListener("change", async (e) => {
   const status = document.getElementById("pts-local-images-status");
-  const count = LocalImages.loadFiles(e.target.files);
   status.style.display = "block";
-  status.textContent = `✅ ${count} image(s) chargée(s) depuis le dossier choisi (valable pour cette session — à refaire à la prochaine ouverture de l'app).`;
+  status.textContent = "Enregistrement des images en cours...";
+  const count = await LocalImages.loadFiles(e.target.files);
+  status.textContent = `✅ ${count} image(s) chargée(s) et enregistrée(s) sur cet appareil — disponibles automatiquement aux prochaines ouvertures de l'app, sans repasser par le sélecteur de dossier.`;
   if (Points.lastShown) Points.showDetail(Points.lastShown);
+});
+document.getElementById("pts-clear-local-images").addEventListener("click", async () => {
+  const status = document.getElementById("pts-local-images-status");
+  await LocalImages.clearStored();
+  status.style.display = "block";
+  status.textContent = "🗑 Images locales effacées de cet appareil.";
+  if (Points.lastShown) Points.showDetail(Points.lastShown);
+});
+LocalImages.loadFromDB().then(count => {
+  if (count) {
+    const status = document.getElementById("pts-local-images-status");
+    status.style.display = "block";
+    status.textContent = `✅ ${count} image(s) locale(s) rechargée(s) automatiquement depuis cet appareil.`;
+  }
 });
 
 /* ============================= Points (base Jeu) ============================= */
