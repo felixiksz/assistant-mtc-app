@@ -312,3 +312,18 @@ table.croise-table td.croise-confirme { background: var(--ink); }
 table.croise-table td.croise-secondaire { background: #bdbdbd; }
 table.croise-table td.croise-self { background: var(--accent-soft); }
 
+.tcm-mini-table { width: 100%; border-collapse: collapse; margin: 0.5rem 0 1rem; font-size: 0.88rem; }
+.tcm-mini-table th, .tcm-mini-table td { border: 1px solid var(--line); padding: 0.45rem 0.6rem; text-align: left; vertical-align: top; }
+.tcm-mini-table thead th { background: var(--ink); color: var(--bg); text-transform: uppercase; letter-spacing: 0.02em; font-size: 0.78rem; }
+.tcm-points-table { table-layout: fixed; }
+.tcm-points-table th:first-child, .tcm-points-table td:first-child { width: 32%; font-weight: 600; }
+.tcm-points-table td { overflow-wrap: break-word; }
+@media (max-width: 600px) {
+  .tcm-points-table, .tcm-points-table thead, .tcm-points-table tbody, .tcm-points-table th, .tcm-points-table td, .tcm-points-table tr { display: block; width: auto; }
+  .tcm-points-table thead { display: none; }
+  .tcm-points-table tr { border: 1.5px solid var(--line); margin-bottom: 0.6rem; }
+  .tcm-points-table td { border: none; border-bottom: 1px solid var(--line); }
+  .tcm-points-table td:last-child { border-bottom: none; }
+  .tcm-points-table td:first-child { background: var(--ink); color: var(--bg); font-weight: 600; }
+}
+

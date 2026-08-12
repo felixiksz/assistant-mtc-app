@@ -269,6 +269,7 @@ const Formules = {
           await Store.writeJSON("formules/index.json", this.index);
           this.renderCategories();
           this.applyFilters();
+          await this.showDetail(entry, liEl);
         }
       });
     } catch (e) {
@@ -398,6 +399,7 @@ const Psy = {
             if (eIdx >= 0) Object.assign(this.entries[eIdx], summary);
             this.renderGroups();
             this.applyFilters();
+            await this.showDetail(entry, liEl);
             return;
           }
           const key = entry.kind === "niveau" ? "niveaux" : "vaisseaux";
@@ -411,6 +413,7 @@ const Psy = {
           if (eIdx >= 0) Object.assign(this.entries[eIdx], summary);
           this.renderGroups();
           this.applyFilters();
+          await this.showDetail(entry, liEl);
         }
       });
     } catch (e) {
@@ -443,7 +446,7 @@ const Psy = {
           </div>
         </div>
       </section>` : ""}
-      ${d.points_ou_structures_cles ? `<section><h3>Points / structures clés</h3>${list(d.points_ou_structures_cles)}</section>` : ""}
+      ${d.points_ou_structures_cles ? `<section><h3>Points / structures clés</h3>${formatPointsTable(d.points_ou_structures_cles)}</section>` : ""}
       ${d.avertissements_precautions ? `<section><h3>Avertissements / précautions</h3><div class="tcm-text">${formatTcmText(d.avertissements_precautions)}</div></section>` : ""}
       ${verif}
       <p class="muted">Source : ${escapeHtml((d.source && d.source.livre) || "?")}${d.source && d.source.chapitre_ou_section ? " — " + escapeHtml(d.source.chapitre_ou_section) : ""}</p>
@@ -462,7 +465,7 @@ const Psy = {
       <h2>${escapeHtml(d.nom)}</h2>
       ${d.signature_emotionnelle ? `<section><h3>Signature émotionnelle</h3><div class="tcm-text">${formatTcmText(d.signature_emotionnelle)}</div></section>` : ""}
       ${d.pathologies_indications ? `<section><h3>Pathologies / indications</h3>${list(d.pathologies_indications)}</section>` : ""}
-      ${d.points_cles ? `<section><h3>Points clés</h3>${list(d.points_cles)}</section>` : ""}
+      ${d.points_cles ? `<section><h3>Points clés</h3>${formatPointsTable(d.points_cles)}</section>` : ""}
       ${citations}
       ${verif}
       <p class="muted">Source : ${escapeHtml((d.source && d.source.livre) || "?")}${d.source && d.source.chapitre_ou_section ? " — " + escapeHtml(d.source.chapitre_ou_section) : ""}</p>
@@ -492,7 +495,7 @@ const Psy = {
           </div>
         </div>
       </section>` : ""}
-      ${d.points_ou_structures_cles ? `<section><h3>Points / structures clés</h3>${list(d.points_ou_structures_cles)}</section>` : ""}
+      ${d.points_ou_structures_cles ? `<section><h3>Points / structures clés</h3>${formatPointsTable(d.points_ou_structures_cles)}</section>` : ""}
       ${d.avertissements_precautions ? `<section><h3>Avertissements / précautions</h3><div class="tcm-text">${formatTcmText(d.avertissements_precautions)}</div></section>` : ""}
       ${verif}
       <p class="muted">Source : ${escapeHtml((d.source && d.source.livre) || "?")}${d.source && d.source.chapitre_ou_page ? " — " + escapeHtml(d.source.chapitre_ou_page) : ""}</p>
@@ -844,6 +847,7 @@ const Syndromes = {
           if (eIdx >= 0) Object.assign(this.entries[eIdx], { nom: parsed.nom_syndrome || entry.nom, sousLabel: parsed.organe || parsed.niveau_ou_couche || parsed.sous_categorie || "" });
           this.renderGroups();
           this.applyFilters();
+          await this.showDetail(entry, liEl);
         }
       });
     } catch (e) {
@@ -1176,6 +1180,7 @@ const CasPratique = {
           const cIdx = this.cas.findIndex(c => c.id === entry.id);
           if (cIdx >= 0) Object.assign(this.cas[cIdx], patch);
           this.renderList(this.search(document.getElementById("casp-search").value));
+          await this.showDetail(entry, liEl);
         }
       });
       const btn = document.getElementById("casp-reveal-btn");
@@ -1741,6 +1746,9 @@ const TCM_UPPER_CHARS = "A-ZĀÁǍÀĒÉĚÈĪÍǏÌŌÓǑÒŪÚǓÙ";
 const TCM_LOWER_CHARS = "a-zāáǎàēéěèīíǐìōóǒòūúǔùńň";
 const TCM_SECTION_LABELS = "Variations?|Composition|Indications?|Actions?|Mode de préparation(?:\\/posologie)?|Posologie|Contre-indications?|Précautions?|Modifications?|Comparaison|Tableau clinique|Syndrome";
 const TCM_FORMULA_SUFFIXES = "Tāng|Tang|Sàn|Sǎn|San|Wán|Wan|Yǐn|Yin|Jiǎn|Jian|Dān|Dan|Gāo|Gao|Fāng|Fang";
+// Noms des six catégories de canaux (Jue Yin, Shao Yin... ) : à mettre en gras, jamais en couleur.
+// "Jue/Shao/Tai Yin" tombent sinon dans le piège du régex de noms de formules ci-dessous (suffixe Yin = 饮).
+const TCM_CHANNEL_NAMES = ["Jue Yin", "Shao Yin", "Tai Yin", "Yang Ming", "Shao Yang", "Tai Yang"];
 
 const TCM_PERVERS = [
   { re: /\b(vents?)\b/gi, cls: "tcm-pervers-vent" },
@@ -1773,8 +1781,14 @@ function tcmHighlightInline(str) {
   );
   s = s.replace(
     new RegExp(`\\b([${TCM_UPPER_CHARS}][${TCM_TONE_CHARS}]*(?:\\s[${TCM_UPPER_CHARS}][${TCM_TONE_CHARS}]*){0,5}\\s(?:${TCM_FORMULA_SUFFIXES}))\\b(\\s*[（(][^）)<>]{1,15}[）)])?`, "g"),
-    (m, name, hanzi) => `<span class="tcm-formule">${name}</span>${hanzi ? `<span class="tcm-hanzi-inline">${hanzi}</span>` : ""}`
+    (m, name, hanzi) => {
+      if (TCM_CHANNEL_NAMES.includes(name.trim())) return m;
+      return `<span class="tcm-formule">${name}</span>${hanzi ? `<span class="tcm-hanzi-inline">${hanzi}</span>` : ""}`;
+    }
   );
+  TCM_CHANNEL_NAMES.forEach(name => {
+    s = s.replace(new RegExp(`\\b${name}\\b`, "gi"), `<strong>${name}</strong>`);
+  });
   return s;
 }
 
@@ -1823,10 +1837,14 @@ function formatTcmText(str) {
 }
 
 function formatArrayEntry(str) {
-  const raw = escapeHtml(String(str));
-  const segments = splitTopLevel(raw, ";");
+  // Important : on découpe le texte BRUT (non échappé) avant d'appeler escapeHtml.
+  // escapeHtml transforme "'" en "&#39;" et "&" en "&amp;" — ces entités contiennent elles-mêmes
+  // un ";" qui, si l'échappement avait lieu avant le split, casserait le texte à tort
+  // (ex: "d'expérimenter" → faux split au ";" de "d&#39;expérimenter").
+  const rawText = String(str);
+  const segments = splitTopLevel(rawText, ";");
   if (segments.length < 3) {
-    return tcmHighlightInline(raw);
+    return tcmHighlightInline(escapeHtml(rawText));
   }
 
   const LABEL_RE = /^(.{1,60}?)\s*[—=:]\s*(.+)$/;
@@ -1836,7 +1854,7 @@ function formatArrayEntry(str) {
   });
 
   if (!parsed.every(p => p)) {
-    return `<ul class="tcm-sublist">${segments.map(s => `<li>${tcmHighlightInline(s)}</li>`).join("")}</ul>`;
+    return `<ul class="tcm-sublist">${segments.map(s => `<li>${tcmHighlightInline(escapeHtml(s))}</li>`).join("")}</ul>`;
   }
 
   const KV_RE = /^([a-zà-ÿ]+)\s+(.+)$/i;
@@ -1856,13 +1874,29 @@ function formatArrayEntry(str) {
   if (consistent) {
     const keys = rows[0].pairs.map(p => p.key);
     const header = `<tr><th>Élément</th>${keys.map(k => `<th>${escapeHtml(k.charAt(0).toUpperCase() + k.slice(1))}</th>`).join("")}</tr>`;
-    const body = rows.map(r => `<tr><td>${tcmHighlightInline(r.label)}</td>${r.pairs.map(p => `<td>${tcmHighlightInline(p.value)}</td>`).join("")}</tr>`).join("");
+    const body = rows.map(r => `<tr><td>${tcmHighlightInline(escapeHtml(r.label))}</td>${r.pairs.map(p => `<td>${tcmHighlightInline(escapeHtml(p.value))}</td>`).join("")}</tr>`).join("");
     return `<table class="tcm-mini-table"><thead>${header}</thead><tbody>${body}</tbody></table>`;
   }
 
   const header2 = `<tr><th>Élément</th><th>Détail</th></tr>`;
-  const body2 = rows.map(r => `<tr><td>${tcmHighlightInline(r.label)}</td><td>${tcmHighlightInline(r.rest)}</td></tr>`).join("");
+  const body2 = rows.map(r => `<tr><td>${tcmHighlightInline(escapeHtml(r.label))}</td><td>${tcmHighlightInline(escapeHtml(r.rest))}</td></tr>`).join("");
   return `<table class="tcm-mini-table"><thead>${header2}</thead><tbody>${body2}</tbody></table>`;
+}
+
+// Rend une liste de points/structures clés en tableau à deux colonnes (Point | Indications)
+// plutôt qu'en liste à puces. Chaque entrée du tableau JSON est une chaîne "Point : indications"
+// (le premier ":" sépare le point de son détail) ; à défaut de ":", la ligne entière va en indication.
+function formatPointsTable(arr, headerLabel) {
+  if (!arr || !arr.length) return "";
+  const rows = arr.map(item => {
+    const rawText = String(item);
+    const idx = rawText.indexOf(":");
+    if (idx < 0 || idx > 80) return { point: "", indications: rawText };
+    return { point: rawText.slice(0, idx).trim(), indications: rawText.slice(idx + 1).trim() };
+  });
+  const header = `<tr><th>${escapeHtml(headerLabel || "Point")}</th><th>Indications</th></tr>`;
+  const body = rows.map(r => `<tr><td>${tcmHighlightInline(escapeHtml(r.point))}</td><td>${tcmHighlightInline(escapeHtml(r.indications))}</td></tr>`).join("");
+  return `<table class="tcm-mini-table tcm-points-table"><thead>${header}</thead><tbody>${body}</tbody></table>`;
 }
 
 /* ============================= Ajouter une formule (sans IA) =============================
