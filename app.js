@@ -661,14 +661,52 @@ const Tuteur = {
     };
   },
 
+  // Teste le contenu clinique lui-même plutôt que la forme d'un paragraphe : à partir d'une
+  // indication de point (sans son code ni son nom), il faut retrouver à quel niveau/vaisseau
+  // ce point appartient — nécessite de connaître le sens clinique, pas juste reconnaître un style de texte.
+  buildPointOriginQuestion() {
+    const candidates = this.pool.filter(e => (e.kind === "niveau" || e.kind === "vaisseau") &&
+      Array.isArray(e.detail.points_ou_structures_cles || e.detail.points_cles) &&
+      (e.detail.points_ou_structures_cles || e.detail.points_cles).length);
+    if (!candidates.length) return null;
+    const target = candidates[Math.floor(Math.random() * candidates.length)];
+    const pointsArr = target.detail.points_ou_structures_cles || target.detail.points_cles;
+    const rawPoint = pointsArr[Math.floor(Math.random() * pointsArr.length)];
+    const idx = rawPoint.indexOf(":");
+    if (idx < 0) return null;
+    const indicationRaw = rawPoint.slice(idx + 1).trim();
+    const sentence = this.mask(indicationRaw.split(/(?<=[.!?;])\s+/).slice(0, 2).join(" "), target);
+    if (!sentence) return null;
+    let distractors = shuffleArray(this.pool.filter(p => p.kind === target.kind && p.id !== target.id)).slice(0, 3);
+    if (distractors.length < 3) {
+      const chosenIds = new Set([target.id, ...distractors.map(d => d.id)]);
+      const extra = shuffleArray(this.pool.filter(p => p.kind === target.kind && !chosenIds.has(p.id)));
+      distractors = distractors.concat(extra).slice(0, 3);
+    }
+    if (!distractors.length) return null;
+    const options = shuffleArray([target, ...distractors]).map(o => ({ id: o.id, label: o.nom }));
+    const label = target.kind === "niveau" ? "niveau de latence" : "vaisseau/confluence";
+    return {
+      type: "point_origin",
+      prompt: `Ce point et son sens clinique appartiennent à quel ${label} ?\n\n« ${sentence} »`,
+      options,
+      correctId: target.id,
+      target,
+      sourceLabel: (target.detail.source && target.detail.source.livre) || ""
+    };
+  },
+
   async nextQuestion() {
     const quizEl = document.getElementById("tut-quiz");
     quizEl.innerHTML = `<p class="muted">Chargement...</p>`;
     await this.ensureLoaded();
     if (!this.pool.length) { quizEl.innerHTML = `<p class="muted">Base Réf. Psy pas encore prête.</p>`; return; }
     const r = Math.random();
-    let q = r < 0.5 ? this.buildIdentifyQuestion() : r < 0.75 ? this.buildMaintenirLibererQuestion() : this.buildContexteApplicationQuestion();
-    if (!q) q = this.buildIdentifyQuestion() || this.buildMaintenirLibererQuestion() || this.buildContexteApplicationQuestion();
+    let q = r < 0.30 ? this.buildIdentifyQuestion()
+      : r < 0.50 ? this.buildMaintenirLibererQuestion()
+      : r < 0.85 ? this.buildPointOriginQuestion()
+      : this.buildContexteApplicationQuestion();
+    if (!q) q = this.buildPointOriginQuestion() || this.buildIdentifyQuestion() || this.buildMaintenirLibererQuestion() || this.buildContexteApplicationQuestion();
     if (!q) { quizEl.innerHTML = `<p class="muted">Pas assez de contenu vérifié pour générer une question.</p>`; return; }
     this.history.push(q);
     this.historyIndex = this.history.length - 1;
@@ -737,6 +775,8 @@ const Tuteur = {
     } else if (q.type === "contexte_application") {
       const src = q.target.detail.source && q.target.detail.source.livre;
       extra = `<p class="muted">Principe : ${escapeHtml(q.target.nom)}${src ? " — source : " + escapeHtml(src) : ""}</p>`;
+    } else if (q.type === "point_origin") {
+      extra = `<p class="muted">Réponse : ${escapeHtml(q.target.nom)}${q.sourceLabel ? " — source : " + escapeHtml(q.sourceLabel) : ""}</p>`;
     }
     fb.innerHTML = `<p class="${q.wasCorrect ? "tut-feedback-ok" : "tut-feedback-ko"}">${q.wasCorrect ? "✅ Correct !" : "❌ Pas la bonne réponse."}</p>${extra}`;
   }
@@ -1789,7 +1829,17 @@ function tcmHighlightInline(str) {
   TCM_CHANNEL_NAMES.forEach(name => {
     s = s.replace(new RegExp(`\\b${name}\\b`, "gi"), `<strong>${name}</strong>`);
   });
+  s = applyLiteMarkup(s);
   return s;
+}
+
+// Petite syntaxe de mise en forme manuelle, saisie via la barre d'outils de l'éditeur de fiches :
+// **gras**, *italique*, __souligné__. Volontairement minimal (pas de markdown complet).
+function applyLiteMarkup(s) {
+  return s
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/__(.+?)__/g, "<u>$1</u>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>");
 }
 
 // Découpe une chaîne sur un séparateur donné, sans jamais couper à l'intérieur de parenthèses.
@@ -1832,7 +1882,9 @@ function formatFormuleField(str) {
 
 function formatTcmText(str) {
   if (str === null || str === undefined) return "";
-  const raw = escapeHtml(String(str));
+  // Une ligne commençant par "- " (saisie via la barre d'outils) devient une puce visuelle "• ",
+  // sans casser le paragraphe unique existant (les sauts de ligne restent gérés par CSS white-space: pre-line).
+  const raw = escapeHtml(String(str)).replace(/^-\s+/gm, "• ");
   return `<p>${tcmHighlightInline(raw)}</p>`;
 }
 
@@ -1942,6 +1994,41 @@ function addEditControls(container, relPath, obj, opts) {
   btn.addEventListener("click", () => openJsonEditor(container, relPath, obj, opts));
 }
 
+// Enrobe (ou déroule si déjà présent) la sélection courante du textarea avec un marqueur
+// de mise en forme (**gras**, *italique*, __souligné__), utilisé par la barre d'outils.
+function wrapTextareaSelection(textarea, marker) {
+  const start = textarea.selectionStart, end = textarea.selectionEnd;
+  const val = textarea.value;
+  const selected = val.slice(start, end);
+  const already = selected.startsWith(marker) && selected.endsWith(marker) && selected.length >= marker.length * 2;
+  const newSelected = already ? selected.slice(marker.length, selected.length - marker.length) : marker + selected + marker;
+  textarea.value = val.slice(0, start) + newSelected + val.slice(end);
+  textarea.focus();
+  textarea.selectionStart = start;
+  textarea.selectionEnd = start + newSelected.length;
+}
+
+// Préfixe chaque ligne couverte par la sélection avec "- " (puce), ou l'enlève si déjà présente.
+function toggleBulletLines(textarea) {
+  const start = textarea.selectionStart, end = textarea.selectionEnd;
+  const val = textarea.value;
+  const lineStart = val.lastIndexOf("\n", start - 1) + 1;
+  let lineEnd = val.indexOf("\n", end - 1 >= start ? end - 1 : end);
+  if (lineEnd === -1) lineEnd = val.length;
+  const block = val.slice(lineStart, lineEnd);
+  const lines = block.split("\n");
+  const allBulleted = lines.every(l => l.startsWith("- ") || l.trim() === "");
+  const newLines = lines.map(l => {
+    if (l.trim() === "") return l;
+    return allBulleted ? l.replace(/^-\s+/, "") : (l.startsWith("- ") ? l : "- " + l);
+  });
+  const newBlock = newLines.join("\n");
+  textarea.value = val.slice(0, lineStart) + newBlock + val.slice(lineEnd);
+  textarea.focus();
+  textarea.selectionStart = lineStart;
+  textarea.selectionEnd = lineStart + newBlock.length;
+}
+
 function openJsonEditor(container, relPath, obj, opts) {
   const original = container.innerHTML;
   const editorDiv = document.createElement("div");
@@ -1951,12 +2038,23 @@ function openJsonEditor(container, relPath, obj, opts) {
       <button type="button" id="edit-cancel">Annuler</button>
       <span id="edit-status" class="muted"></span>
     </div>
+    <div class="edit-toolbar">
+      <button type="button" id="fmt-bold" title="Gras : **texte sélectionné**"><strong>G</strong></button>
+      <button type="button" id="fmt-italic" title="Italique : *texte sélectionné*"><em>I</em></button>
+      <button type="button" id="fmt-underline" title="Souligné : __texte sélectionné__"><u>S</u></button>
+      <button type="button" id="fmt-list" title="Liste à puces (préfixe chaque ligne par « - »)">• Liste</button>
+      <span class="muted edit-toolbar-hint">sélectionne du texte dans une valeur, puis clique</span>
+    </div>
     <textarea id="edit-textarea" class="json-editor" spellcheck="false"></textarea>
   `;
   container.innerHTML = "";
   container.appendChild(editorDiv);
   document.getElementById("edit-textarea").value = JSON.stringify(obj, null, 2);
   document.getElementById("edit-cancel").addEventListener("click", () => { container.innerHTML = original; });
+  document.getElementById("fmt-bold").addEventListener("click", () => wrapTextareaSelection(document.getElementById("edit-textarea"), "**"));
+  document.getElementById("fmt-italic").addEventListener("click", () => wrapTextareaSelection(document.getElementById("edit-textarea"), "*"));
+  document.getElementById("fmt-underline").addEventListener("click", () => wrapTextareaSelection(document.getElementById("edit-textarea"), "__"));
+  document.getElementById("fmt-list").addEventListener("click", () => toggleBulletLines(document.getElementById("edit-textarea")));
   document.getElementById("edit-save").addEventListener("click", async () => {
     const status = document.getElementById("edit-status");
     let parsed;
