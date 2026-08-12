@@ -549,7 +549,7 @@ const Tuteur = {
 
   mask(text, entry) {
     let out = text;
-    const placeholder = entry.kind === "niveau" ? "[ce niveau]" : "[ce vaisseau/cette confluence]";
+    const placeholder = entry.kind === "niveau" ? "[ce niveau]" : entry.kind === "vaisseau" ? "[ce vaisseau/cette confluence]" : "[ce principe]";
     this.aliasesFor(entry).forEach(alias => {
       if (alias.length < 3) return;
       const esc = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -560,7 +560,9 @@ const Tuteur = {
 
   pickSnippet(entry) {
     const d = entry.detail;
-    const candidates = [d.signature_emotionnelle, d.description_generale].filter(Boolean);
+    const candidates = entry.kind === "sterman"
+      ? [d.principe_pratiquable].filter(Boolean)
+      : [d.signature_emotionnelle, d.description_generale].filter(Boolean);
     if (!candidates.length) return null;
     const text = candidates[Math.floor(Math.random() * candidates.length)];
     const sentences = text.split(/(?<=[.!?])\s+/).slice(0, 3).join(" ");
@@ -568,7 +570,7 @@ const Tuteur = {
   },
 
   buildIdentifyQuestion() {
-    const candidates = this.pool.filter(e => e.detail.signature_emotionnelle || e.detail.description_generale);
+    const candidates = this.pool.filter(e => e.detail.signature_emotionnelle || e.detail.description_generale || e.detail.principe_pratiquable);
     if (!candidates.length) return null;
     const target = candidates[Math.floor(Math.random() * candidates.length)];
     const snippet = this.pickSnippet(target);
@@ -580,9 +582,10 @@ const Tuteur = {
       distractors = distractors.concat(extra);
     }
     const options = shuffleArray([target, ...distractors]).map(o => ({ id: o.id, label: o.nom }));
+    const promptLabel = target.kind === "sterman" ? "Quel principe clinique correspond à cet énoncé" : "Quel niveau de latence / vaisseau / confluence correspond à cette description";
     return {
       type: "identify",
-      prompt: `Quel niveau de latence / vaisseau / confluence correspond à cette description ?\n\n« ${snippet} »`,
+      prompt: `${promptLabel} ?\n\n« ${snippet} »`,
       options,
       correctId: target.id,
       sourceLabel: (target.detail.source && target.detail.source.livre) || "",
@@ -609,13 +612,31 @@ const Tuteur = {
     };
   },
 
+  buildContexteApplicationQuestion() {
+    const candidates = this.pool.filter(e => e.kind === "sterman" && e.detail.contexte_utilisation && e.detail.instructions_mise_en_pratique);
+    if (!candidates.length) return null;
+    const target = candidates[Math.floor(Math.random() * candidates.length)];
+    const isContexte = Math.random() < 0.5;
+    const rawText = isContexte ? target.detail.contexte_utilisation : target.detail.instructions_mise_en_pratique;
+    const sentences = this.mask(rawText.split(/(?<=[.!?])\s+/).slice(0, 2).join(" "), target);
+    return {
+      type: "contexte_application",
+      prompt: `Principe : ${target.detail.nom}\n\nCe texte décrit-il le CONTEXTE d'utilisation (quand s'en servir) ou les INSTRUCTIONS de mise en pratique (comment l'appliquer) ?\n\n« ${sentences} »`,
+      options: [{ id: "contexte", label: "Contexte d'utilisation" }, { id: "application", label: "Instructions de mise en pratique" }],
+      correctId: isContexte ? "contexte" : "application",
+      target,
+      criteriaText: null
+    };
+  },
+
   async nextQuestion() {
     const quizEl = document.getElementById("tut-quiz");
     quizEl.innerHTML = `<p class="muted">Chargement...</p>`;
     await this.ensureLoaded();
     if (!this.pool.length) { quizEl.innerHTML = `<p class="muted">Base Réf. Psy pas encore prête.</p>`; return; }
-    let q = Math.random() < 0.55 ? this.buildIdentifyQuestion() : this.buildMaintenirLibererQuestion();
-    if (!q) q = this.buildIdentifyQuestion() || this.buildMaintenirLibererQuestion();
+    const r = Math.random();
+    let q = r < 0.5 ? this.buildIdentifyQuestion() : r < 0.75 ? this.buildMaintenirLibererQuestion() : this.buildContexteApplicationQuestion();
+    if (!q) q = this.buildIdentifyQuestion() || this.buildMaintenirLibererQuestion() || this.buildContexteApplicationQuestion();
     if (!q) { quizEl.innerHTML = `<p class="muted">Pas assez de contenu vérifié pour générer une question.</p>`; return; }
     this.history.push(q);
     this.historyIndex = this.history.length - 1;
@@ -679,6 +700,9 @@ const Tuteur = {
       extra = `<p class="muted">Réponse : ${escapeHtml(q.target.nom)} — source : ${escapeHtml(q.sourceLabel)}</p>`;
     } else if (q.type === "maintenir_liberer" && q.criteriaText) {
       extra = `<h4 class="sec-sub">Critère de décision (texte source)</h4><div class="tcm-text">${formatTcmText(q.criteriaText)}</div>`;
+    } else if (q.type === "contexte_application") {
+      const src = q.target.detail.source && q.target.detail.source.livre;
+      extra = `<p class="muted">Principe : ${escapeHtml(q.target.nom)}${src ? " — source : " + escapeHtml(src) : ""}</p>`;
     }
     fb.innerHTML = `<p class="${q.wasCorrect ? "tut-feedback-ok" : "tut-feedback-ko"}">${q.wasCorrect ? "✅ Correct !" : "❌ Pas la bonne réponse."}</p>${extra}`;
   }
