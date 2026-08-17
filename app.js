@@ -309,8 +309,23 @@ Formules.load().then(() => Ajout.populateCategories());
 /* ============================= Réf. Psy (Farrell) ============================= */
 const Psy = {
   entries: [], // {id, kind: "niveau"|"vaisseau", nom, chemin}
-  activeKind: null,
+  activeSysteme: null,
   rawIndex: null,
+  _deepIndexed: false,
+  _deepIndexing: false,
+
+  async ensureDeepIndexed() {
+    if (this._deepIndexed || this._deepIndexing) return;
+    this._deepIndexing = true;
+    await Promise.all(this.entries.map(async e => {
+      try {
+        const d = await Store.readJSON("psycho_emotionnel/" + e.chemin);
+        e._searchText = flattenDetailText(d);
+      } catch (err) { /* fiche indisponible pour l'instant — la recherche restera limitée au résumé */ }
+    }));
+    this._deepIndexed = true;
+    this._deepIndexing = false;
+  },
 
   async load() {
     try {
@@ -335,22 +350,49 @@ const Psy = {
     this.renderList(this.entries);
   },
 
+  // Les 4 systèmes classiques (Sinews / Luo / Divergents / 8 Merveilleux Vaisseaux) — Farrell et
+  // Sterman y sont tous deux rattachés, quelle que soit l'autrice, pour retrouver un point d'entrée
+  // unique par système plutôt que de garder les deux corpus dans des silos séparés.
+  systeme(e) {
+    if (e.kind === "niveau") {
+      const map = { tendino_musculaire: "Sinews", luo: "Luo", meridiens_distincts: "Divergents", merveilleux_vaisseaux: "8EV" };
+      return map[e.id] || "Autre";
+    }
+    if (e.kind === "vaisseau") return (e.id || "").startsWith("confluence_") ? "Divergents" : "8EV";
+    if (e.kind === "sterman") {
+      const map = { Sinew: "Sinews", Luo: "Luo", Divergent: "Divergents", "8EV": "8EV" };
+      return map[e.categorie_source] || "Autre";
+    }
+    return "Autre";
+  },
+
+  // Sous-catégorisation heuristique (mots-clés du titre/résumé) — les fiches Farrell (niveau/vaisseau)
+  // sont des profils complets couvrant diagnostic ET traitement, donc regroupées à part ; les principes
+  // Sterman, plus atomiques, se prêtent mieux à un tri diagnostic vs traitement vs autre.
+  sousCategorie(e) {
+    if (e.kind === "niveau" || e.kind === "vaisseau") return "Profil clinique (diagnostic + traitement)";
+    const hay = [(e.nom || ""), (e.resume_court || "")].join(" ");
+    if (/diagnostic|pouls|signe|critère|critere|différenci|differenci|décision|decision|choisir|distinguer/i.test(hay)) return "Diagnostic";
+    if (/traitement|protocole|technique|point|piquer|aiguille|puncture|cure|séquence|sequence|ordre d[e']/i.test(hay)) return "Traitement";
+    return "Autre";
+  },
+
   renderGroups() {
     const el = document.getElementById("psy-groups");
     el.innerHTML = "";
-    const mk = (label, kind) => {
+    const mk = (label, systeme) => {
       const chip = document.createElement("button");
-      chip.className = "cat-chip" + (this.activeKind === kind ? " active" : "");
+      chip.className = "cat-chip" + (this.activeSysteme === systeme ? " active" : "");
       chip.textContent = label;
-      chip.addEventListener("click", () => { this.activeKind = kind; this.renderGroups(); this.applyFilters(); });
+      chip.addEventListener("click", () => { this.activeSysteme = systeme; this.renderGroups(); this.applyFilters(); });
       return chip;
     };
     el.appendChild(mk("Tous (" + this.entries.length + ")", null));
-    el.appendChild(mk("Farrell — Niveaux de latence (" + this.entries.filter(e => e.kind === "niveau").length + ")", "niveau"));
-    el.appendChild(mk("Farrell — Vaisseaux / Confluences (" + this.entries.filter(e => e.kind === "vaisseau").length + ")", "vaisseau"));
-    const stermanCount = this.entries.filter(e => e.kind === "sterman").length;
-    if (stermanCount) el.appendChild(mk("Sterman — Principes cliniques (" + stermanCount + ")", "sterman"));
-    if (this.activeKind === null) el.firstChild.classList.add("active");
+    ["Sinews", "Luo", "Divergents", "8EV"].forEach(sys => {
+      const n = this.entries.filter(e => this.systeme(e) === sys).length;
+      if (n) el.appendChild(mk(sys + " (" + n + ")", sys));
+    });
+    if (this.activeSysteme === null) el.firstChild.classList.add("active");
   },
 
   applyFilters() {
@@ -359,22 +401,38 @@ const Psy = {
 
   search(query) {
     let pool = this.entries;
-    if (this.activeKind) pool = pool.filter(e => e.kind === this.activeKind);
+    if (this.activeSysteme) pool = pool.filter(e => this.systeme(e) === this.activeSysteme);
     const q = (query || "").trim().toLowerCase();
     if (!q) return pool;
-    return pool.filter(e => (e.nom || "").toLowerCase().includes(q) || (e.categorie_source || "").toLowerCase().includes(q) || (e.resume_court || "").toLowerCase().includes(q));
+    return pool.filter(e => (e.nom || "").toLowerCase().includes(q) || (e.categorie_source || "").toLowerCase().includes(q) || (e.resume_court || "").toLowerCase().includes(q) || (e._searchText || "").includes(q));
   },
 
   renderList(list) {
     const ul = document.getElementById("psy-list");
     ul.innerHTML = "";
+    const bySousCat = new Map();
     list.forEach(e => {
-      const li = document.createElement("li");
-      const kindLabel = e.kind === "niveau" ? "Farrell — Niveau de latence" : e.kind === "vaisseau" ? "Farrell — Vaisseau / confluence" : "Sterman — " + (e.categorie_source || "Principe clinique");
-      li.innerHTML = `<span class="fl-pinyin">${escapeHtml(e.nom)}</span>
-        <span class="fl-syndrome">${escapeHtml(kindLabel)}</span>`;
-      li.addEventListener("click", () => this.showDetail(e, li));
-      ul.appendChild(li);
+      const sc = this.sousCategorie(e);
+      if (!bySousCat.has(sc)) bySousCat.set(sc, []);
+      bySousCat.get(sc).push(e);
+    });
+    const order = ["Profil clinique (diagnostic + traitement)", "Diagnostic", "Traitement", "Autre"];
+    [...bySousCat.keys()].sort((a, b) => order.indexOf(a) - order.indexOf(b)).forEach(sc => {
+      const items = bySousCat.get(sc);
+      if (bySousCat.size > 1) {
+        const header = document.createElement("li");
+        header.className = "psy-list-subheader";
+        header.textContent = sc + " (" + items.length + ")";
+        ul.appendChild(header);
+      }
+      items.forEach(e => {
+        const li = document.createElement("li");
+        const kindLabel = e.kind === "niveau" ? "Farrell — Niveau de latence" : e.kind === "vaisseau" ? "Farrell — Vaisseau / confluence" : "Sterman — " + (e.categorie_source || "Principe clinique");
+        li.innerHTML = `<span class="fl-pinyin">${escapeHtml(e.nom)}</span>
+          <span class="fl-syndrome">${escapeHtml(kindLabel)}</span>`;
+        li.addEventListener("click", () => this.showDetail(e, li));
+        ul.appendChild(li);
+      });
     });
     document.getElementById("psy-count").textContent = list.length + " entrée(s)";
   },
@@ -384,6 +442,7 @@ const Psy = {
     if (liEl) liEl.classList.add("selected");
     const detail = document.getElementById("psy-detail");
     detail.innerHTML = "<p class='muted'>Chargement...</p>";
+    detail.scrollIntoView({ behavior: "smooth", block: "start" });
     try {
       const d = await Store.readJSON("psycho_emotionnel/" + entry.chemin);
       detail.innerHTML = entry.kind === "niveau" ? this.renderNiveau(d) : entry.kind === "vaisseau" ? this.renderVaisseau(d) : this.renderSterman(d);
@@ -428,7 +487,7 @@ const Psy = {
       ? `<section><h3>À vérifier contre la source</h3>${d.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("")}</section>`
       : "";
     return `
-      <h2>${escapeHtml(d.nom)}</h2>
+      <div class="psy-sticky-header"><h2>${escapeHtml(d.nom)}</h2></div>
       ${d.description_generale ? `<section><h3>Description</h3><div class="tcm-text">${formatTcmText(d.description_generale)}</div></section>` : ""}
       ${d.indications_cliniques ? `<section><h3>Indications cliniques</h3>${list(d.indications_cliniques)}</section>` : ""}
       ${(dec.critere || dec.technique_maintenir || dec.technique_liberer) ? `
@@ -462,7 +521,7 @@ const Psy = {
       ? `<section><h3>Citations notables</h3>${d.citations_notables.map(c => `<blockquote>${escapeHtml(c)}</blockquote>`).join("")}</section>`
       : "";
     return `
-      <h2>${escapeHtml(d.nom)}</h2>
+      <div class="psy-sticky-header"><h2>${escapeHtml(d.nom)}</h2></div>
       ${d.signature_emotionnelle ? `<section><h3>Signature émotionnelle</h3><div class="tcm-text">${formatTcmText(d.signature_emotionnelle)}</div></section>` : ""}
       ${d.pathologies_indications ? `<section><h3>Pathologies / indications</h3>${list(d.pathologies_indications)}</section>` : ""}
       ${d.points_cles ? `<section><h3>Points clés</h3>${formatPointsTable(d.points_cles)}</section>` : ""}
@@ -478,8 +537,10 @@ const Psy = {
       ? `<section><h3>À vérifier contre la source</h3>${d.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("")}</section>`
       : "";
     return `
-      <h2>${escapeHtml(d.nom)}</h2>
-      <p class="muted">${escapeHtml(d.categorie_source || "")} · Ann Cecil-Sterman (même lignée que Farrell — élèves de Dr Jeffrey Yuen)</p>
+      <div class="psy-sticky-header">
+        <h2>${escapeHtml(d.nom)}</h2>
+        <p class="muted">${escapeHtml(d.categorie_source || "")} · Ann Cecil-Sterman (même lignée que Farrell — élèves de Dr Jeffrey Yuen)</p>
+      </div>
       ${d.principe_pratiquable ? `<section><h3>Principe</h3><div class="tcm-text">${formatTcmText(d.principe_pratiquable)}</div></section>` : ""}
       ${(d.instructions_mise_en_pratique || d.contexte_utilisation) ? `
       <section class="psy-decision">
@@ -504,7 +565,7 @@ const Psy = {
 };
 
 document.getElementById("psy-search").addEventListener("input", (e) => Psy.renderList(Psy.search(e.target.value)));
-Psy.load();
+Psy.load().then(() => Psy.ensureDeepIndexed());
 
 /* ============================= Tuteur Farrell (quiz) ============================= */
 function shuffleArray(arr) {
@@ -796,6 +857,21 @@ const Syndromes = {
   activeDomaine: null,
   domaineLabels: { organes: "Organes", externes: "Externes", qi_sang_liquides: "Qi / Sang / Liquides" },
   rawIndexByDomaine: {},
+  _deepIndexed: false,
+  _deepIndexing: false,
+
+  async ensureDeepIndexed() {
+    if (this._deepIndexed || this._deepIndexing) return;
+    this._deepIndexing = true;
+    await Promise.all(this.entries.map(async e => {
+      try {
+        const d = await Store.readJSON(`syndromes/${e.domaine}/${e.chemin}`);
+        e._searchText = flattenDetailText(d);
+      } catch (err) { /* fiche indisponible pour l'instant */ }
+    }));
+    this._deepIndexed = true;
+    this._deepIndexing = false;
+  },
 
   async loadDomaine(domaine, relPath) {
     try {
@@ -995,7 +1071,7 @@ const Syndromes = {
 };
 
 document.getElementById("syn-search").addEventListener("input", (e) => Syndromes.renderList(Syndromes.search(e.target.value)));
-Syndromes.load();
+Syndromes.load().then(() => Syndromes.ensureDeepIndexed());
 
 /* ============================= Diagnostic par signes (pourcentage) ============================= */
 function dsSplitSigns(rawText) {
@@ -1168,6 +1244,21 @@ const CasPratique = {
   cas: [],
   sources: {},
   rawIndex: null,
+  _deepIndexed: false,
+  _deepIndexing: false,
+
+  async ensureDeepIndexed() {
+    if (this._deepIndexed || this._deepIndexing) return;
+    this._deepIndexing = true;
+    await Promise.all(this.cas.map(async c => {
+      try {
+        const d = await Store.readJSON("cas_pratique/" + c.chemin);
+        c._searchText = flattenDetailText(d);
+      } catch (err) { /* fiche indisponible pour l'instant */ }
+    }));
+    this._deepIndexed = true;
+    this._deepIndexing = false;
+  },
 
   async load() {
     try {
@@ -1256,7 +1347,7 @@ const CasPratique = {
 };
 
 document.getElementById("casp-search").addEventListener("input", (e) => CasPratique.renderList(CasPratique.search(e.target.value)));
-CasPratique.load();
+CasPratique.load().then(() => CasPratique.ensureDeepIndexed());
 
 /* ============================= TDAH (page transversale) ============================= */
 async function loadTdahPage() {
@@ -1767,6 +1858,20 @@ refreshCasSelect();
 newCas();
 
 /* ============================= Utils ============================= */
+// Aplati récursivement toutes les chaînes de texte d'un objet JSON (indications, points,
+// avertissements, etc.) en un seul blob minuscule, pour que la recherche globale trouve du
+// contenu qui n'est pas dans le résumé léger d'un index (ex: une indication citée sur un point).
+function flattenDetailText(d) {
+  const parts = [];
+  const walk = (v) => {
+    if (typeof v === "string") parts.push(v);
+    else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === "object") Object.values(v).forEach(walk);
+  };
+  walk(d);
+  return parts.join(" ").toLowerCase();
+}
+
 function escapeHtml(str) {
   if (str === null || str === undefined) return "";
   return String(str).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -2238,7 +2343,7 @@ const GlobalSearch = {
     });
 
     (Psy.entries || []).forEach(e => {
-      const hay = [e.nom, e.categorie_source, e.resume_court].filter(Boolean).join(" ").toLowerCase();
+      const hay = [e.nom, e.categorie_source, e.resume_court, e._searchText].filter(Boolean).join(" ").toLowerCase();
       if (hay.includes(q)) out.push({
         group: "Principes Taoïstes", title: e.nom, sub: e.kind === "niveau" ? "Farrell — Niveau de latence" : e.kind === "vaisseau" ? "Farrell — Vaisseau / confluence" : "Sterman — " + (e.categorie_source || ""),
         go: () => { this.gotoTab("psy"); Psy.showDetail(e); }
@@ -2246,7 +2351,7 @@ const GlobalSearch = {
     });
 
     (Syndromes.entries || []).forEach(e => {
-      const hay = [e.nom, e.sousLabel].filter(Boolean).join(" ").toLowerCase();
+      const hay = [e.nom, e.sousLabel, e._searchText].filter(Boolean).join(" ").toLowerCase();
       if (hay.includes(q)) out.push({
         group: "Syndromes", title: e.nom, sub: (Syndromes.domaineLabels[e.domaine] || "") + (e.sousLabel ? " · " + e.sousLabel : ""),
         go: () => { this.gotoTab("syndromes"); Syndromes.showDetail(e); }
@@ -2254,7 +2359,7 @@ const GlobalSearch = {
     });
 
     (CasPratique.cas || []).forEach(c => {
-      const hay = [c.titre_original, c.resume_court].filter(Boolean).join(" ").toLowerCase();
+      const hay = [c.titre_original, c.resume_court, c._searchText].filter(Boolean).join(" ").toLowerCase();
       if (hay.includes(q)) out.push({
         group: "Exemples de cas cliniques", title: c.titre_original || c.id, sub: CasPratique.sources[c.source_id] || "",
         go: () => { this.gotoTab("cas-pratique"); CasPratique.showDetail(c); }
