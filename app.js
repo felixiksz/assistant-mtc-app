@@ -1384,53 +1384,90 @@ document.getElementById("casp-search").addEventListener("input", (e) => CasPrati
 CasPratique.load().then(() => CasPratique.ensureDeepIndexed());
 
 /* ============================= TDAH (page transversale) ============================= */
+// Construit le HTML d'une fiche-type (TDAH ou Dépression/Anxiété/Insomnie) — même structure des deux
+// côtés, factorisée ici pour éviter la duplication qui existait entre loadTdahPage et loadDepressionPage.
+function renderPsyTypeCard(t, idPrefix) {
+  const signes = (t.signes_cles && t.signes_cles.length)
+    ? `<h4 class="sec-sub">Signes clés</h4><ul class="tcm-list">${t.signes_cles.map(s => `<li>${tcmHighlightInline(escapeHtml(s))}</li>`).join("")}</ul>` : "";
+  let points = "";
+  if (t.points && t.points.length) {
+    points = `<h4 class="sec-sub">Points / associations proposés</h4><ul class="tcm-list">${t.points.map(p =>
+      `<li><strong>${escapeHtml(p.points || "")}</strong> — ${tcmHighlightInline(escapeHtml(p.justification || ""))}<br><span class="muted">Source : ${escapeHtml(p.source_precise || "")}</span></li>`
+    ).join("")}</ul>`;
+  } else if (t.points_note) {
+    points = `<h4 class="sec-sub">Points / associations proposés</h4><p class="muted">${escapeHtml(t.points_note)}</p>`;
+  }
+  if (t.points && t.points.length && t.points_note) {
+    points += `<p class="muted">${escapeHtml(t.points_note)}</p>`;
+  }
+  const principe = t.principe_traitement ? `<h4 class="sec-sub">Principe de traitement</h4><p>${tcmHighlightInline(escapeHtml(t.principe_traitement))}</p>` : "";
+  let pharma = "";
+  if (t.pharmacopee && t.pharmacopee.length) {
+    pharma = `<h4 class="sec-sub">Pharmacopée</h4>` + t.pharmacopee.map(p => {
+      const comp = (p.composition || []).map(c => `<tr><td>${escapeHtml(c.substance || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role || "")}</td></tr>`).join("");
+      const mods = (p.modifications && p.modifications.length)
+        ? `<h4 class="sec-sub">Modifications</h4><ul class="tcm-list">${p.modifications.map(m => `<li>${tcmHighlightInline(escapeHtml(m))}</li>`).join("")}</ul>` : "";
+      const contreInd = (p.contre_indications && p.contre_indications.length)
+        ? `<div class="tdah-contre-ind"><strong>⚠ Contre-indications / précautions</strong><ul class="tcm-list">${p.contre_indications.map(ci => `<li>${tcmHighlightInline(escapeHtml(ci))}</li>`).join("")}</ul></div>` : "";
+      return `<p><span class="tcm-formule">${escapeHtml(p.nom_pinyin || "")}</span></p>
+        ${comp ? `<table><thead><tr><th>Substance</th><th>Dose</th><th>Rôle</th></tr></thead><tbody>${comp}</tbody></table>` : ""}
+        ${p.indication_precise ? `<p>${tcmHighlightInline(escapeHtml(p.indication_precise))}</p>` : ""}
+        ${contreInd}
+        ${p.preparation ? `<p class="muted">${escapeHtml(p.preparation)}</p>` : ""}
+        ${mods}`;
+    }).join("<hr>");
+  }
+  const pharmaNote = t.pharmacopee_note ? `<p class="muted">${escapeHtml(t.pharmacopee_note)}</p>` : "";
+  return `<details class="depression-type-details" id="${idPrefix}-${escapeHtml(t.id || slugify(t.nom))}">
+    <summary><h3>${escapeHtml(t.nom)}</h3><p class="muted">${escapeHtml(t.approche || "")}</p></summary>
+    <div class="depression-type-body">
+      ${t.mecanisme ? `<p>${tcmHighlightInline(escapeHtml(t.mecanisme))}</p>` : ""}
+      ${signes}${principe}${points}${pharma}${pharmaNote}
+      <p class="muted">Source : ${escapeHtml((t.source && t.source.origine) || "")} (${escapeHtml((t.source && t.source.fichier) || "")})</p>
+    </div>
+  </details>`;
+}
+
+// Construit l'index cliquable en haut d'une page psy (TDAH ou Dépression/Anxiété/Insomnie) et câble
+// les clics pour ouvrir la fiche correspondante et y défiler.
+function renderPsyIndex(el, types, idPrefix) {
+  const index = types.map(t => {
+    const id = idPrefix + "-" + escapeHtml(t.id || slugify(t.nom));
+    return `<li><a href="#${id}" data-target="${id}">${escapeHtml(t.nom)}</a></li>`;
+  }).join("");
+  el.querySelectorAll(".depression-index a").forEach(a => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      const target = document.getElementById(a.dataset.target);
+      if (target) {
+        target.open = true;
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  });
+  return `<nav class="depression-index"><h4 class="sec-sub">Index — clique pour ouvrir et aller directement à un tableau</h4><ol>${index}</ol></nav>`;
+}
+
 async function loadTdahPage() {
   const el = document.getElementById("tdah-detail");
   try {
     const d = await Store.readJSON("tdah_transversal.json");
     window.TdahData = d;
-    const types = (d.types || []).map((t, ti) => {
-      const signes = (t.signes_cles && t.signes_cles.length)
-        ? `<h4 class="sec-sub">Signes clés</h4><ul class="tcm-list">${t.signes_cles.map(s => `<li>${tcmHighlightInline(escapeHtml(s))}</li>`).join("")}</ul>` : "";
-      let points = "";
-      if (t.points && t.points.length) {
-        points = `<h4 class="sec-sub">Points / associations proposés</h4><ul class="tcm-list">${t.points.map(p =>
-          `<li><strong>${escapeHtml(p.points || "")}</strong> — ${tcmHighlightInline(escapeHtml(p.justification || ""))}<br><span class="muted">Source : ${escapeHtml(p.source_precise || "")}</span></li>`
-        ).join("")}</ul>`;
-      } else if (t.points_note) {
-        points = `<h4 class="sec-sub">Points / associations proposés</h4><p class="muted">${escapeHtml(t.points_note)}</p>`;
-      }
-      const principe = t.principe_traitement ? `<h4 class="sec-sub">Principe de traitement</h4><p>${tcmHighlightInline(escapeHtml(t.principe_traitement))}</p>` : "";
-      let pharma = "";
-      if (t.pharmacopee && t.pharmacopee.length) {
-        pharma = `<h4 class="sec-sub">Pharmacopée</h4>` + t.pharmacopee.map(p => {
-          const comp = (p.composition || []).map(c => `<tr><td>${escapeHtml(c.substance || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role || "")}</td></tr>`).join("");
-          const mods = (p.modifications && p.modifications.length)
-            ? `<h4 class="sec-sub">Modifications</h4><ul class="tcm-list">${p.modifications.map(m => `<li>${tcmHighlightInline(escapeHtml(m))}</li>`).join("")}</ul>` : "";
-          const contreInd = (p.contre_indications && p.contre_indications.length)
-            ? `<div class="tdah-contre-ind"><strong>⚠ Contre-indications / précautions</strong><ul class="tcm-list">${p.contre_indications.map(ci => `<li>${tcmHighlightInline(escapeHtml(ci))}</li>`).join("")}</ul></div>` : "";
-          return `<p><span class="tcm-formule">${escapeHtml(p.nom_pinyin || "")}</span></p>
-            ${comp ? `<table><thead><tr><th>Substance</th><th>Dose</th><th>Rôle</th></tr></thead><tbody>${comp}</tbody></table>` : ""}
-            ${p.indication_precise ? `<p>${tcmHighlightInline(escapeHtml(p.indication_precise))}</p>` : ""}
-            ${contreInd}
-            ${p.preparation ? `<p class="muted">${escapeHtml(p.preparation)}</p>` : ""}
-            ${mods}`;
-        }).join("<hr>");
-      }
-      const pharmaNote = t.pharmacopee_note ? `<p class="muted">${escapeHtml(t.pharmacopee_note)}</p>` : "";
-      return `<section class="syn-synthese psy-decision" id="tdah-type-${ti}">
-        <h3>${escapeHtml(t.nom)}</h3>
-        <p class="muted">${escapeHtml(t.approche || "")}</p>
-        ${t.mecanisme ? `<p>${tcmHighlightInline(escapeHtml(t.mecanisme))}</p>` : ""}
-        ${signes}${principe}${points}${pharma}${pharmaNote}
-        <p class="muted">Source : ${escapeHtml((t.source && t.source.origine) || "")} (${escapeHtml((t.source && t.source.fichier) || "")})</p>
-      </section>`;
-    }).join("");
+    const types = d.types || [];
+    const typesHtml = types.map(t => renderPsyTypeCard(t, "psy-tdah")).join("");
     el.innerHTML = `
       <h2>${escapeHtml(d.titre)}</h2>
       <p class="muted"><em>${escapeHtml(d.avertissement || "")}</em></p>
-      ${types}
+      <nav class="depression-index"><h4 class="sec-sub">Index — clique pour ouvrir et aller directement à un tableau</h4><ol>${types.map(t => `<li><a href="#psy-tdah-${escapeHtml(t.id || slugify(t.nom))}" data-target="psy-tdah-${escapeHtml(t.id || slugify(t.nom))}">${escapeHtml(t.nom)}</a></li>`).join("")}</ol></nav>
+      ${typesHtml}
     `;
+    el.querySelectorAll(".depression-index a").forEach(a => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const target = document.getElementById(a.dataset.target);
+        if (target) { target.open = true; target.scrollIntoView({ behavior: "smooth", block: "start" }); }
+      });
+    });
     addEditControls(el, "tdah_transversal.json", d, { onSaved: () => loadTdahPage() });
   } catch (e) {
     el.innerHTML = `<p class="muted">Page pas encore prête (${e.message}).</p>`;
@@ -1438,78 +1475,40 @@ async function loadTdahPage() {
 }
 loadTdahPage();
 
-/* ============================= Dépression / Anxiété / Insomnie (page transversale) ============================= */
-async function loadDepressionPage() {
-  const el = document.getElementById("depression-detail");
+/* ============================= Dépression / Anxiété / Insomnie (page transversale, 3 sous-onglets) ============================= */
+// Les 13 types de data/depression_anxiete_insomnie_transversal.json sont tagués par thème(s) (champ
+// "themes": ["depression","anxiete","insomnie"], un type peut appartenir à plusieurs). Cette fonction
+// charge le fichier une fois par thème et n'affiche que les types concernés — TDAH, Dépression, Anxiété
+// et Insomnie restent 4 boutons bien séparés dans "Tableaux Psy", jamais fusionnés entre eux.
+async function loadPsyTransversalTheme(elId, theme) {
+  const el = document.getElementById(elId);
   try {
     const d = await Store.readJSON("depression_anxiete_insomnie_transversal.json");
     window.DepressionAnxieteInsomnieData = d;
-    const types = (d.types || []).map((t, ti) => {
-      const signes = (t.signes_cles && t.signes_cles.length)
-        ? `<h4 class="sec-sub">Signes clés</h4><ul class="tcm-list">${t.signes_cles.map(s => `<li>${tcmHighlightInline(escapeHtml(s))}</li>`).join("")}</ul>` : "";
-      let points = "";
-      if (t.points && t.points.length) {
-        points = `<h4 class="sec-sub">Points / associations proposés</h4><ul class="tcm-list">${t.points.map(p =>
-          `<li><strong>${escapeHtml(p.points || "")}</strong> — ${tcmHighlightInline(escapeHtml(p.justification || ""))}<br><span class="muted">Source : ${escapeHtml(p.source_precise || "")}</span></li>`
-        ).join("")}</ul>`;
-      } else if (t.points_note) {
-        points = `<h4 class="sec-sub">Points / associations proposés</h4><p class="muted">${escapeHtml(t.points_note)}</p>`;
-      }
-      if (t.points && t.points.length && t.points_note) {
-        points += `<p class="muted">${escapeHtml(t.points_note)}</p>`;
-      }
-      const principe = t.principe_traitement ? `<h4 class="sec-sub">Principe de traitement</h4><p>${tcmHighlightInline(escapeHtml(t.principe_traitement))}</p>` : "";
-      let pharma = "";
-      if (t.pharmacopee && t.pharmacopee.length) {
-        pharma = `<h4 class="sec-sub">Pharmacopée</h4>` + t.pharmacopee.map(p => {
-          const comp = (p.composition || []).map(c => `<tr><td>${escapeHtml(c.substance || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role || "")}</td></tr>`).join("");
-          const mods = (p.modifications && p.modifications.length)
-            ? `<h4 class="sec-sub">Modifications</h4><ul class="tcm-list">${p.modifications.map(m => `<li>${tcmHighlightInline(escapeHtml(m))}</li>`).join("")}</ul>` : "";
-          const contreInd = (p.contre_indications && p.contre_indications.length)
-            ? `<div class="tdah-contre-ind"><strong>⚠ Contre-indications / précautions</strong><ul class="tcm-list">${p.contre_indications.map(ci => `<li>${tcmHighlightInline(escapeHtml(ci))}</li>`).join("")}</ul></div>` : "";
-          return `<p><span class="tcm-formule">${escapeHtml(p.nom_pinyin || "")}</span></p>
-            ${comp ? `<table><thead><tr><th>Substance</th><th>Dose</th><th>Rôle</th></tr></thead><tbody>${comp}</tbody></table>` : ""}
-            ${p.indication_precise ? `<p>${tcmHighlightInline(escapeHtml(p.indication_precise))}</p>` : ""}
-            ${contreInd}
-            ${p.preparation ? `<p class="muted">${escapeHtml(p.preparation)}</p>` : ""}
-            ${mods}`;
-        }).join("<hr>");
-      }
-      const pharmaNote = t.pharmacopee_note ? `<p class="muted">${escapeHtml(t.pharmacopee_note)}</p>` : "";
-      return `<details class="depression-type-details" id="depression-type-${ti}">
-        <summary><h3>${escapeHtml(t.nom)}</h3><p class="muted">${escapeHtml(t.approche || "")}</p></summary>
-        <div class="depression-type-body">
-          ${t.mecanisme ? `<p>${tcmHighlightInline(escapeHtml(t.mecanisme))}</p>` : ""}
-          ${signes}${principe}${points}${pharma}${pharmaNote}
-          <p class="muted">Source : ${escapeHtml((t.source && t.source.origine) || "")} (${escapeHtml((t.source && t.source.fichier) || "")})</p>
-        </div>
-      </details>`;
-    }).join("");
-    const index = (d.types || []).map((t, ti) =>
-      `<li><a href="#depression-type-${ti}" data-target="depression-type-${ti}">${escapeHtml(t.nom)}</a></li>`
-    ).join("");
+    const types = (d.types || []).filter(t => (t.themes || []).includes(theme));
+    const idPrefix = "psy-" + theme;
+    const typesHtml = types.map(t => renderPsyTypeCard(t, idPrefix)).join("");
     el.innerHTML = `
       <h2>${escapeHtml(d.titre)}</h2>
       <p class="muted"><em>${escapeHtml(d.avertissement || "")}</em></p>
-      <nav class="depression-index"><h4 class="sec-sub">Index — clique pour ouvrir et aller directement à un tableau</h4><ol>${index}</ol></nav>
-      ${types}
+      <nav class="depression-index"><h4 class="sec-sub">Index — clique pour ouvrir et aller directement à un tableau</h4><ol>${types.map(t => `<li><a href="#${idPrefix}-${escapeHtml(t.id || slugify(t.nom))}" data-target="${idPrefix}-${escapeHtml(t.id || slugify(t.nom))}">${escapeHtml(t.nom)}</a></li>`).join("")}</ol></nav>
+      ${typesHtml}
     `;
     el.querySelectorAll(".depression-index a").forEach(a => {
       a.addEventListener("click", (e) => {
         e.preventDefault();
         const target = document.getElementById(a.dataset.target);
-        if (target) {
-          target.open = true;
-          target.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
+        if (target) { target.open = true; target.scrollIntoView({ behavior: "smooth", block: "start" }); }
       });
     });
-    addEditControls(el, "depression_anxiete_insomnie_transversal.json", d, { onSaved: () => loadDepressionPage() });
+    addEditControls(el, "depression_anxiete_insomnie_transversal.json", d, { onSaved: () => loadPsyTransversalTheme(elId, theme) });
   } catch (e) {
     el.innerHTML = `<p class="muted">Page pas encore prête (${e.message}).</p>`;
   }
 }
-loadDepressionPage();
+loadPsyTransversalTheme("depression-detail", "depression");
+loadPsyTransversalTheme("anxiete-detail", "anxiete");
+loadPsyTransversalTheme("insomnie-detail", "insomnie");
 
 document.getElementById("tableaux-psy-switch").addEventListener("click", (e) => {
   const btn = e.target.closest(".cat-chip");
@@ -1684,6 +1683,7 @@ const Points = {
       (e.data.nom_fr || "").toLowerCase().includes(q) ||
       (e.data.indications || []).some(i => (i.indication || "").toLowerCase().includes(q)) ||
       (e.data.indications_contemporaines || []).some(i => (i || "").toLowerCase().includes(q)) ||
+      (e.data.indications_psycho_emotionnelles || []).some(i => (i.indication || "").toLowerCase().includes(q) || (i.source || "").toLowerCase().includes(q)) ||
       (e.data.actions || []).some(a => (a || "").toLowerCase().includes(q)) ||
       (Array.isArray(e.data.associations)
         ? e.data.associations.some(a => (a || "").toLowerCase().includes(q))
@@ -1718,6 +1718,8 @@ const Points = {
       ? `<ul class="tcm-list">${d.actions.map(a => `<li>${tcmHighlightInline(escapeHtml(a))}</li>`).join("")}</ul>` : "";
     const indicContemp = (d.indications_contemporaines || []).length
       ? `<ul class="tcm-list">${d.indications_contemporaines.map(i => `<li>${tcmHighlightInline(escapeHtml(i))}</li>`).join("")}</ul>` : "";
+    const indicPsycho = (d.indications_psycho_emotionnelles || []).length
+      ? `<ul class="tcm-list">${d.indications_psycho_emotionnelles.map(i => `<li>${tcmHighlightInline(escapeHtml(i.indication || ""))}${i.source ? ` <span class="muted">(${escapeHtml(i.source)}${i.auteur_lignee ? " — " + escapeHtml(i.auteur_lignee) : ""})</span>` : ""}</li>`).join("")}</ul>` : "";
     const associations = Array.isArray(d.associations)
       ? (d.associations.length ? `<ul class="tcm-list">${d.associations.map(a => `<li>${tcmHighlightInline(escapeHtml(a))}</li>`).join("")}</ul>` : "")
       : (d.associations ? `<div class="tcm-text">${formatTcmText(d.associations)}</div>` : "");
@@ -1734,12 +1736,13 @@ const Points = {
       ${correspondances ? `<section><h3>Correspondances</h3>${correspondances}</section>` : ""}
       ${indications ? `<section><h3>Indications</h3>${indications}</section>` : ""}
       ${indicContemp ? `<section><h3>Indications contemporaines</h3>${indicContemp}</section>` : ""}
+      ${indicPsycho ? `<section><h3>Indications psycho-émotionnelles</h3>${indicPsycho}</section>` : ""}
       ${actions ? `<section><h3>Actions</h3>${actions}</section>` : ""}
       ${associations ? `<section><h3>Associations</h3>${associations}</section>` : ""}
       ${d.note ? `<section><h3>Note</h3><div class="tcm-text">${formatTcmText(d.note)}</div></section>` : ""}
       <p class="muted">Source : base Jeu (Points des canaux.xlsx) + images localisation.jpg (Bibliothèque MTC)</p>
     `;
-    addEditControls(document.getElementById("pts-detail"), "reference/points_canaux/" + entry.canal + ".json", d, { arrayItem: true, matchField: "point", matchValue: entry.id });
+    addEditControls(document.getElementById("pts-detail"), "reference/points_canaux/" + entry.canal + ".json", d, { arrayItem: true, matchField: "point", matchValue: entry.id, editorFn: openPointEditor });
   }
 };
 
@@ -2236,7 +2239,222 @@ function addEditControls(container, relPath, obj, opts) {
   btn.textContent = "✏️ Modifier cette fiche";
   bar.appendChild(btn);
   container.prepend(bar);
-  btn.addEventListener("click", () => openJsonEditor(container, relPath, obj, opts));
+  const editorFn = opts.editorFn || openJsonEditor;
+  btn.addEventListener("click", () => editorFn(container, relPath, obj, opts));
+}
+
+// Enregistre un objet de fiche modifié (JSON entier ou élément d'un tableau, selon opts.arrayItem) —
+// utilisé aussi bien par l'éditeur JSON brut que par les éditeurs en formulaire.
+async function saveFicheObject(relPath, opts, parsed, obj, status) {
+  status.textContent = Store.mode === "github" ? "Enregistrement sur GitHub..." : "Choisis le dossier 'data' de Assistant-Diagnostic si demandé...";
+  if (opts.arrayItem) {
+    await Store.writeArrayItem(relPath, opts.matchField, opts.matchValue, parsed);
+  } else {
+    await Store.writeJSON(relPath, parsed);
+  }
+  Object.assign(obj, parsed);
+  status.textContent = "✅ Enregistré dans " + relPath + " (" + (Store.mode === "github" ? "GitHub" : "local") + ") — déjà pris en compte dans la recherche.";
+  if (typeof opts.onSaved === "function") {
+    try {
+      await opts.onSaved(parsed);
+    } catch (syncErr) {
+      status.textContent += " (⚠ index de recherche non resynchronisé : " + syncErr.message + " — recharge la page pour rattraper.)";
+    }
+  }
+}
+
+// Éditeur de liste réutilisable : une rangée de champs (texte simple ou {clé,libellé}[]) par élément,
+// avec bouton "+ Ajouter" et une croix de suppression par rangée. Pas d'état JS séparé : les valeurs
+// sont lues directement dans le DOM au moment d'enregistrer (getValues()), donc pas de risque de
+// désynchronisation entre ce qui est affiché et ce qui est sauvegardé.
+function buildListEditor(items, fields) {
+  const wrap = document.createElement("div");
+  wrap.className = "list-editor";
+  const rowsWrap = document.createElement("div");
+  rowsWrap.className = "list-editor-rows";
+  wrap.appendChild(rowsWrap);
+
+  function addRow(values) {
+    values = values || {};
+    const row = document.createElement("div");
+    row.className = "list-editor-row";
+    fields.forEach(f => {
+      const input = document.createElement(f.big ? "textarea" : "input");
+      if (!f.big) input.type = "text";
+      input.placeholder = f.label;
+      input.dataset.key = f.key;
+      input.value = values[f.key] || "";
+      row.appendChild(input);
+    });
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.className = "list-editor-remove";
+    rm.title = "Supprimer cette ligne";
+    rm.textContent = "✕";
+    rm.addEventListener("click", () => row.remove());
+    row.appendChild(rm);
+    rowsWrap.appendChild(row);
+  }
+
+  (items || []).forEach(item => {
+    addRow(fields.length === 1 && fields[0].key === "_value" ? { _value: item } : item);
+  });
+
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "list-editor-add";
+  addBtn.textContent = "+ Ajouter";
+  addBtn.addEventListener("click", () => addRow());
+  wrap.appendChild(addBtn);
+
+  function getValues() {
+    const rows = Array.from(rowsWrap.querySelectorAll(".list-editor-row"));
+    const out = [];
+    rows.forEach(row => {
+      const inputs = Array.from(row.querySelectorAll("input,textarea"));
+      const obj = {};
+      let anyFilled = false;
+      inputs.forEach(inp => {
+        const v = inp.value.trim();
+        if (v) anyFilled = true;
+        obj[inp.dataset.key] = v;
+      });
+      if (!anyFilled) return;
+      out.push(fields.length === 1 && fields[0].key === "_value" ? obj._value : obj);
+    });
+    return out;
+  }
+
+  return { el: wrap, getValues };
+}
+
+// Éditeur en formulaire pour les fiches de points_canaux : plus de JSON brut à taper à la main
+// (source d'erreurs fréquentes sur mobile : retour à la ligne littéral qui casse le JSON, guillemets
+// mal fermés, etc.) — chaque champ est un input/textarea normal, les listes (indications, actions...)
+// ont des rangées ajoutables/supprimables, et l'objet JSON n'est reconstruit qu'au moment d'enregistrer.
+function openPointEditor(container, relPath, obj, opts) {
+  const original = container.innerHTML;
+  const wrap = document.createElement("div");
+  wrap.className = "fiche-form-editor";
+  wrap.innerHTML = `
+    <div class="edit-bar">
+      <button type="button" id="edit-save">💾 Enregistrer</button>
+      <button type="button" id="edit-cancel">Annuler</button>
+      <span id="edit-status" class="muted"></span>
+    </div>
+    <p class="muted ff-hint">Formulaire — chaque champ s'enregistre séparément, pas besoin d'écrire du JSON. <button type="button" id="ff-switch-json" class="ff-link-btn">Passer en mode JSON brut (avancé)</button></p>
+  `;
+  const fieldsHost = document.createElement("div");
+  fieldsHost.className = "ff-fields";
+  wrap.appendChild(fieldsHost);
+
+  const textField = (key, label, value) => {
+    const div = document.createElement("div");
+    div.className = "ff-field";
+    const lab = document.createElement("label");
+    lab.textContent = label;
+    div.appendChild(lab);
+    const input = document.createElement("input");
+    input.type = "text";
+    input.dataset.key = key;
+    input.value = value || "";
+    div.appendChild(input);
+    fieldsHost.appendChild(div);
+  };
+  const areaField = (key, label, value) => {
+    const div = document.createElement("div");
+    div.className = "ff-field";
+    const lab = document.createElement("label");
+    lab.textContent = label;
+    div.appendChild(lab);
+    const ta = document.createElement("textarea");
+    ta.dataset.key = key;
+    ta.value = value || "";
+    div.appendChild(ta);
+    fieldsHost.appendChild(div);
+  };
+  const listField = (label, editor) => {
+    const div = document.createElement("div");
+    div.className = "ff-field";
+    const lab = document.createElement("label");
+    lab.textContent = label;
+    div.appendChild(lab);
+    div.appendChild(editor.el);
+    fieldsHost.appendChild(div);
+  };
+
+  textField("pinyin", "Pinyin", obj.pinyin);
+  textField("hanzi", "Hanzi", obj.hanzi);
+  textField("nom_fr", "Nom (français)", obj.nom_fr);
+  textField("canal_indicatif", "Canal indicatif (si applicable)", obj.canal_indicatif);
+  areaField("localisation", "Localisation", obj.localisation);
+  areaField("methode_localisation", "Méthode de localisation", obj.methode_localisation);
+  areaField("methode_travail", "Méthode de travail", obj.methode_travail);
+  areaField("categories_point", "Catégories du point", obj.categories_point);
+
+  const indicEditor = buildListEditor(obj.indications || [], [
+    { key: "categorie", label: "Catégorie (ex: Cœur)" },
+    { key: "indication", label: "Indication", big: true }
+  ]);
+  listField("Indications (classiques)", indicEditor);
+
+  const psychoEditor = buildListEditor(obj.indications_psycho_emotionnelles || [], [
+    { key: "indication", label: "Indication", big: true },
+    { key: "source", label: "Source (livre / chapitre / page)" },
+    { key: "auteur_lignee", label: "Auteur ou lignée" }
+  ]);
+  listField("Indications psycho-émotionnelles", psychoEditor);
+
+  const contempEditor = buildListEditor(obj.indications_contemporaines || [], [{ key: "_value", label: "Indication" }]);
+  listField("Indications contemporaines", contempEditor);
+
+  const actionsEditor = buildListEditor(obj.actions || [], [{ key: "_value", label: "Action" }]);
+  listField("Actions", actionsEditor);
+
+  const assocIsArray = Array.isArray(obj.associations);
+  const assocEditor = buildListEditor(assocIsArray ? obj.associations : (obj.associations ? obj.associations.split("\n") : []), [{ key: "_value", label: "Association", big: true }]);
+  listField("Associations", assocEditor);
+
+  const corrEditor = buildListEditor(obj.correspondances || [], [{ key: "_value", label: "Correspondance" }]);
+  listField("Correspondances", corrEditor);
+
+  const imgEditor = buildListEditor(obj.images || [], [{ key: "_value", label: "nom_fichier.jpg" }]);
+  listField("Images (noms de fichiers)", imgEditor);
+
+  areaField("note", "Note", obj.note);
+
+  container.innerHTML = "";
+  container.appendChild(wrap);
+
+  document.getElementById("edit-cancel").addEventListener("click", () => { container.innerHTML = original; });
+  document.getElementById("ff-switch-json").addEventListener("click", () => openJsonEditor(container, relPath, obj, opts));
+  document.getElementById("edit-save").addEventListener("click", async () => {
+    const status = document.getElementById("edit-status");
+    const val = (key) => { const el = fieldsHost.querySelector(`[data-key="${key}"]`); return el ? el.value.trim() : ""; };
+    const parsed = Object.assign({}, obj, {
+      pinyin: val("pinyin") || null,
+      hanzi: val("hanzi") || null,
+      nom_fr: val("nom_fr") || null,
+      canal_indicatif: val("canal_indicatif") || null,
+      localisation: val("localisation") || null,
+      methode_localisation: val("methode_localisation") || null,
+      methode_travail: val("methode_travail") || null,
+      categories_point: val("categories_point") || null,
+      note: val("note") || null,
+      indications: indicEditor.getValues(),
+      indications_psycho_emotionnelles: psychoEditor.getValues(),
+      indications_contemporaines: contempEditor.getValues(),
+      actions: actionsEditor.getValues(),
+      correspondances: corrEditor.getValues(),
+      images: imgEditor.getValues(),
+      associations: assocIsArray ? assocEditor.getValues() : assocEditor.getValues().join("\n")
+    });
+    try {
+      await saveFicheObject(relPath, opts, parsed, obj, status);
+    } catch (e) {
+      status.textContent = "⚠ " + e.message;
+    }
+  });
 }
 
 // Récolte récursivement tous les chemins de clés d'un objet JSON (les tableaux ne comptent pas
@@ -2344,21 +2562,7 @@ function openJsonEditor(container, relPath, obj, opts) {
     try { parsed = JSON.parse(document.getElementById("edit-textarea").value); }
     catch (e) { status.textContent = "⚠ JSON invalide : " + e.message; return; }
     try {
-      status.textContent = Store.mode === "github" ? "Enregistrement sur GitHub..." : "Choisis le dossier 'data' de Assistant-Diagnostic si demandé...";
-      if (opts.arrayItem) {
-        await Store.writeArrayItem(relPath, opts.matchField, opts.matchValue, parsed);
-      } else {
-        await Store.writeJSON(relPath, parsed);
-      }
-      Object.assign(obj, parsed);
-      status.textContent = "✅ Enregistré dans " + relPath + " (" + (Store.mode === "github" ? "GitHub" : "local") + ") — déjà pris en compte dans la recherche.";
-      if (typeof opts.onSaved === "function") {
-        try {
-          await opts.onSaved(parsed);
-        } catch (syncErr) {
-          status.textContent += " (⚠ index de recherche non resynchronisé : " + syncErr.message + " — recharge la page pour rattraper.)";
-        }
-      }
+      await saveFicheObject(relPath, opts, parsed, obj, status);
     } catch (e) {
       status.textContent = "⚠ " + e.message;
     }
@@ -2557,7 +2761,7 @@ const GlobalSearch = {
       });
     });
 
-    ((window.TdahData && window.TdahData.types) || []).forEach((t, ti) => {
+    ((window.TdahData && window.TdahData.types) || []).forEach(t => {
       const hay = [t.nom, t.mecanisme, t.approche, ...(t.signes_cles || [])].filter(Boolean).join(" ").toLowerCase();
       if (hay.includes(q)) out.push({
         group: "TDAH", title: t.nom, sub: t.approche || "",
@@ -2565,25 +2769,29 @@ const GlobalSearch = {
           this.gotoTab("tableaux-psy");
           document.querySelector('#tableaux-psy-switch .cat-chip[data-subtab="tdah"]').click();
           setTimeout(() => {
-            const el = document.getElementById("tdah-type-" + ti);
-            if (el) el.scrollIntoView({ behavior: "auto", block: "start" });
+            const el = document.getElementById("psy-tdah-" + (t.id || slugify(t.nom)));
+            if (el) { el.open = true; el.scrollIntoView({ behavior: "auto", block: "start" }); }
           }, 50);
         }
       });
     });
 
-    ((window.DepressionAnxieteInsomnieData && window.DepressionAnxieteInsomnieData.types) || []).forEach((t, ti) => {
+    const PSY_THEME_LABELS = { depression: "Dépression", anxiete: "Anxiété", insomnie: "Insomnie" };
+    ((window.DepressionAnxieteInsomnieData && window.DepressionAnxieteInsomnieData.types) || []).forEach(t => {
       const hay = [t.nom, t.mecanisme, t.approche, ...(t.signes_cles || [])].filter(Boolean).join(" ").toLowerCase();
-      if (hay.includes(q)) out.push({
-        group: "Dépression / Anxiété / Insomnie", title: t.nom, sub: t.approche || "",
-        go: () => {
-          this.gotoTab("tableaux-psy");
-          document.querySelector('#tableaux-psy-switch .cat-chip[data-subtab="depression"]').click();
-          setTimeout(() => {
-            const el = document.getElementById("depression-type-" + ti);
-            if (el) { el.open = true; el.scrollIntoView({ behavior: "auto", block: "start" }); }
-          }, 50);
-        }
+      if (!hay.includes(q)) return;
+      (t.themes || []).forEach(theme => {
+        out.push({
+          group: PSY_THEME_LABELS[theme] || theme, title: t.nom, sub: t.approche || "",
+          go: () => {
+            this.gotoTab("tableaux-psy");
+            document.querySelector('#tableaux-psy-switch .cat-chip[data-subtab="' + theme + '"]').click();
+            setTimeout(() => {
+              const el = document.getElementById("psy-" + theme + "-" + (t.id || slugify(t.nom)));
+              if (el) { el.open = true; el.scrollIntoView({ behavior: "auto", block: "start" }); }
+            }, 50);
+          }
+        });
       });
     });
 
