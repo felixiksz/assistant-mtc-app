@@ -1404,6 +1404,64 @@ async function loadTdahPage() {
 }
 loadTdahPage();
 
+/* ============================= Dépression / Anxiété / Insomnie (page transversale) ============================= */
+async function loadDepressionPage() {
+  const el = document.getElementById("depression-detail");
+  try {
+    const d = await Store.readJSON("depression_anxiete_insomnie_transversal.json");
+    window.DepressionAnxieteInsomnieData = d;
+    const types = (d.types || []).map((t, ti) => {
+      const signes = (t.signes_cles && t.signes_cles.length)
+        ? `<h4 class="sec-sub">Signes clés</h4><ul class="tcm-list">${t.signes_cles.map(s => `<li>${tcmHighlightInline(escapeHtml(s))}</li>`).join("")}</ul>` : "";
+      let points = "";
+      if (t.points && t.points.length) {
+        points = `<h4 class="sec-sub">Points / associations proposés</h4><ul class="tcm-list">${t.points.map(p =>
+          `<li><strong>${escapeHtml(p.points || "")}</strong> — ${tcmHighlightInline(escapeHtml(p.justification || ""))}<br><span class="muted">Source : ${escapeHtml(p.source_precise || "")}</span></li>`
+        ).join("")}</ul>`;
+      } else if (t.points_note) {
+        points = `<h4 class="sec-sub">Points / associations proposés</h4><p class="muted">${escapeHtml(t.points_note)}</p>`;
+      }
+      if (t.points && t.points.length && t.points_note) {
+        points += `<p class="muted">${escapeHtml(t.points_note)}</p>`;
+      }
+      const principe = t.principe_traitement ? `<h4 class="sec-sub">Principe de traitement</h4><p>${tcmHighlightInline(escapeHtml(t.principe_traitement))}</p>` : "";
+      let pharma = "";
+      if (t.pharmacopee && t.pharmacopee.length) {
+        pharma = `<h4 class="sec-sub">Pharmacopée</h4>` + t.pharmacopee.map(p => {
+          const comp = (p.composition || []).map(c => `<tr><td>${escapeHtml(c.substance || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role || "")}</td></tr>`).join("");
+          const mods = (p.modifications && p.modifications.length)
+            ? `<h4 class="sec-sub">Modifications</h4><ul class="tcm-list">${p.modifications.map(m => `<li>${tcmHighlightInline(escapeHtml(m))}</li>`).join("")}</ul>` : "";
+          const contreInd = (p.contre_indications && p.contre_indications.length)
+            ? `<div class="tdah-contre-ind"><strong>⚠ Contre-indications / précautions</strong><ul class="tcm-list">${p.contre_indications.map(ci => `<li>${tcmHighlightInline(escapeHtml(ci))}</li>`).join("")}</ul></div>` : "";
+          return `<p><span class="tcm-formule">${escapeHtml(p.nom_pinyin || "")}</span></p>
+            ${comp ? `<table><thead><tr><th>Substance</th><th>Dose</th><th>Rôle</th></tr></thead><tbody>${comp}</tbody></table>` : ""}
+            ${p.indication_precise ? `<p>${tcmHighlightInline(escapeHtml(p.indication_precise))}</p>` : ""}
+            ${contreInd}
+            ${p.preparation ? `<p class="muted">${escapeHtml(p.preparation)}</p>` : ""}
+            ${mods}`;
+        }).join("<hr>");
+      }
+      const pharmaNote = t.pharmacopee_note ? `<p class="muted">${escapeHtml(t.pharmacopee_note)}</p>` : "";
+      return `<section class="syn-synthese psy-decision" id="depression-type-${ti}">
+        <h3>${escapeHtml(t.nom)}</h3>
+        <p class="muted">${escapeHtml(t.approche || "")}</p>
+        ${t.mecanisme ? `<p>${tcmHighlightInline(escapeHtml(t.mecanisme))}</p>` : ""}
+        ${signes}${principe}${points}${pharma}${pharmaNote}
+        <p class="muted">Source : ${escapeHtml((t.source && t.source.origine) || "")} (${escapeHtml((t.source && t.source.fichier) || "")})</p>
+      </section>`;
+    }).join("");
+    el.innerHTML = `
+      <h2>${escapeHtml(d.titre)}</h2>
+      <p class="muted"><em>${escapeHtml(d.avertissement || "")}</em></p>
+      ${types}
+    `;
+    addEditControls(el, "depression_anxiete_insomnie_transversal.json", d, { onSaved: () => loadDepressionPage() });
+  } catch (e) {
+    el.innerHTML = `<p class="muted">Page pas encore prête (${e.message}).</p>`;
+  }
+}
+loadDepressionPage();
+
 /* ============================= Images locales (dossier choisi sur l'appareil) ============================= */
 // Pour la copie hébergée (PWA sans dossier data/ local) : laisse charger les images
 // directement depuis un dossier du téléphone via le sélecteur de dossier du navigateur,
@@ -2425,6 +2483,20 @@ const GlobalSearch = {
           this.gotoTab("tdah");
           setTimeout(() => {
             const el = document.getElementById("tdah-type-" + ti);
+            if (el) el.scrollIntoView({ behavior: "auto", block: "start" });
+          }, 50);
+        }
+      });
+    });
+
+    ((window.DepressionAnxieteInsomnieData && window.DepressionAnxieteInsomnieData.types) || []).forEach((t, ti) => {
+      const hay = [t.nom, t.mecanisme, t.approche, ...(t.signes_cles || [])].filter(Boolean).join(" ").toLowerCase();
+      if (hay.includes(q)) out.push({
+        group: "Dépression / Anxiété / Insomnie", title: t.nom, sub: t.approche || "",
+        go: () => {
+          this.gotoTab("depression");
+          setTimeout(() => {
+            const el = document.getElementById("depression-type-" + ti);
             if (el) el.scrollIntoView({ behavior: "auto", block: "start" });
           }, 50);
         }
