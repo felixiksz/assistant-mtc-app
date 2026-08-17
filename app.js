@@ -346,6 +346,11 @@ const Psy = {
       this.stermanRawIndex = stermanIdx;
       this.entries.push(...(stermanIdx.principes || []).map(p => ({ ...p, kind: "sterman", chemin: "sterman_principes/" + p.chemin })));
     } catch (e) { /* pas encore extrait — silencieux, cette section n'apparaît que quand elle existe */ }
+    try {
+      const yuenIdx = await Store.readJSON("psycho_emotionnel/jeffrey_yuen_principes/index.json");
+      this.yuenRawIndex = yuenIdx;
+      this.entries.push(...(yuenIdx.principes || []).map(p => ({ ...p, kind: "yuen", chemin: "jeffrey_yuen_principes/" + p.chemin })));
+    } catch (e) { /* pas encore distillé — silencieux */ }
     this.renderGroups();
     this.renderList(this.entries);
   },
@@ -359,7 +364,7 @@ const Psy = {
       return map[e.id] || "Autre";
     }
     if (e.kind === "vaisseau") return (e.id || "").startsWith("confluence_") ? "Divergents" : "8EV";
-    if (e.kind === "sterman") {
+    if (e.kind === "sterman" || e.kind === "yuen") {
       const map = { Sinew: "Sinews", Luo: "Luo", Divergent: "Divergents", "8EV": "8EV" };
       return map[e.categorie_source] || "Autre";
     }
@@ -368,7 +373,7 @@ const Psy = {
 
   // Sous-catégorisation heuristique (mots-clés du titre/résumé) — les fiches Farrell (niveau/vaisseau)
   // sont des profils complets couvrant diagnostic ET traitement, donc regroupées à part ; les principes
-  // Sterman, plus atomiques, se prêtent mieux à un tri diagnostic vs traitement vs autre.
+  // Sterman/Yuen, plus atomiques, se prêtent mieux à un tri diagnostic vs traitement vs autre.
   sousCategorie(e) {
     if (e.kind === "niveau" || e.kind === "vaisseau") return "Profil clinique (diagnostic + traitement)";
     const hay = [(e.nom || ""), (e.resume_court || "")].join(" ");
@@ -428,7 +433,7 @@ const Psy = {
       items.forEach(e => {
         const li = document.createElement("li");
         const seenKey = e.kind + ":" + e.id;
-        const kindLabel = e.kind === "niveau" ? "Farrell — Niveau de latence" : e.kind === "vaisseau" ? "Farrell — Vaisseau / confluence" : "Sterman — " + (e.categorie_source || "Principe clinique");
+        const kindLabel = e.kind === "niveau" ? "Farrell — Niveau de latence" : e.kind === "vaisseau" ? "Farrell — Vaisseau / confluence" : e.kind === "yuen" ? "Jeffrey Yuen — " + (e.categorie_source || "Principe clinique") : "Sterman — " + (e.categorie_source || "Principe clinique");
         const unseen = !SeenTracker.isSeen("psy", seenKey);
         li.innerHTML = `${unseen ? '<span class="unseen-dot" title="Jamais ouverte">●</span>' : ""}<span class="fl-pinyin">${escapeHtml(e.nom)}</span>
           <span class="fl-syndrome">${escapeHtml(kindLabel)}</span>`;
@@ -453,13 +458,16 @@ const Psy = {
       this.attachSeenToggle(detail, entry, liEl);
       addEditControls(detail, "psycho_emotionnel/" + entry.chemin, d, {
         onSaved: async (parsed) => {
-          if (entry.kind === "sterman") {
-            const arr = (this.stermanRawIndex && this.stermanRawIndex.principes) || [];
+          if (entry.kind === "sterman" || entry.kind === "yuen") {
+            const rawIdx = entry.kind === "sterman" ? this.stermanRawIndex : this.yuenRawIndex;
+            const indexPath = entry.kind === "sterman" ? "psycho_emotionnel/sterman_principes/index.json" : "psycho_emotionnel/jeffrey_yuen_principes/index.json";
+            const cheminPrefix = entry.kind === "sterman" ? "sterman_principes/" : "jeffrey_yuen_principes/";
+            const arr = (rawIdx && rawIdx.principes) || [];
             const i = arr.findIndex(x => x.id === entry.id);
-            const summary = { id: parsed.id || entry.id, nom: parsed.nom, categorie_source: parsed.categorie_source, resume_court: parsed.resume_court, chemin: entry.chemin.replace(/^sterman_principes\//, "") };
+            const summary = { id: parsed.id || entry.id, nom: parsed.nom, categorie_source: parsed.categorie_source, resume_court: parsed.resume_court, chemin: entry.chemin.replace(new RegExp("^" + cheminPrefix), "") };
             if (i >= 0) Object.assign(arr[i], summary); else arr.push(summary);
-            await Store.writeJSON("psycho_emotionnel/sterman_principes/index.json", this.stermanRawIndex);
-            const eIdx = this.entries.findIndex(e => e.id === entry.id && e.kind === "sterman");
+            await Store.writeJSON(indexPath, rawIdx);
+            const eIdx = this.entries.findIndex(e => e.id === entry.id && e.kind === entry.kind);
             if (eIdx >= 0) Object.assign(this.entries[eIdx], summary);
             this.renderGroups();
             this.applyFilters();
@@ -565,7 +573,7 @@ const Psy = {
     return `
       <div class="psy-sticky-header">
         <h2>${escapeHtml(d.nom)}</h2>
-        <p class="muted">${escapeHtml(d.categorie_source || "")} · Ann Cecil-Sterman (même lignée que Farrell — élèves de Dr Jeffrey Yuen)</p>
+        <p class="muted">${escapeHtml(d.categorie_source || "")}${d.source && d.source.livre ? " · " + escapeHtml(d.source.livre) : ""}</p>
       </div>
       ${d.principe_pratiquable ? `<section><h3>Principe</h3><div class="tcm-text">${formatTcmText(d.principe_pratiquable)}</div></section>` : ""}
       ${(d.instructions_mise_en_pratique || d.contexte_utilisation) ? `
@@ -679,7 +687,7 @@ const Tuteur = {
 
   pickSnippet(entry) {
     const d = entry.detail;
-    const candidates = entry.kind === "sterman"
+    const candidates = (entry.kind === "sterman" || entry.kind === "yuen")
       ? [d.principe_pratiquable].filter(Boolean)
       : [d.signature_emotionnelle, d.description_generale].filter(Boolean);
     if (!candidates.length) return null;
@@ -701,7 +709,7 @@ const Tuteur = {
       distractors = distractors.concat(extra);
     }
     const options = shuffleArray([target, ...distractors]).map(o => ({ id: o.id, label: o.nom }));
-    const promptLabel = target.kind === "sterman" ? "Quel principe clinique correspond à cet énoncé" : "Quel niveau de latence / vaisseau / confluence correspond à cette description";
+    const promptLabel = (target.kind === "sterman" || target.kind === "yuen") ? "Quel principe clinique correspond à cet énoncé" : "Quel niveau de latence / vaisseau / confluence correspond à cette description";
     return {
       type: "identify",
       prompt: `${promptLabel} ?\n\n« ${snippet} »`,
@@ -732,7 +740,7 @@ const Tuteur = {
   },
 
   buildContexteApplicationQuestion() {
-    const candidates = this.pool.filter(e => e.kind === "sterman" && e.detail.contexte_utilisation && e.detail.instructions_mise_en_pratique);
+    const candidates = this.pool.filter(e => (e.kind === "sterman" || e.kind === "yuen") && e.detail.contexte_utilisation && e.detail.instructions_mise_en_pratique);
     if (!candidates.length) return null;
     const target = candidates[Math.floor(Math.random() * candidates.length)];
     const isContexte = Math.random() < 0.5;
@@ -2515,7 +2523,7 @@ const GlobalSearch = {
     (Psy.entries || []).forEach(e => {
       const hay = [e.nom, e.categorie_source, e.resume_court, e._searchText].filter(Boolean).join(" ").toLowerCase();
       if (hay.includes(q)) out.push({
-        group: "Principes Taoïstes", title: e.nom, sub: e.kind === "niveau" ? "Farrell — Niveau de latence" : e.kind === "vaisseau" ? "Farrell — Vaisseau / confluence" : "Sterman — " + (e.categorie_source || ""),
+        group: "Principes Taoïstes", title: e.nom, sub: e.kind === "niveau" ? "Farrell — Niveau de latence" : e.kind === "vaisseau" ? "Farrell — Vaisseau / confluence" : e.kind === "yuen" ? "Jeffrey Yuen — " + (e.categorie_source || "") : "Sterman — " + (e.categorie_source || ""),
         go: () => { this.gotoTab("psy"); Psy.showDetail(e); }
       });
     });
