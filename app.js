@@ -2099,22 +2099,59 @@ function addEditControls(container, relPath, obj, opts) {
   btn.addEventListener("click", () => openJsonEditor(container, relPath, obj, opts));
 }
 
+// Récolte récursivement tous les chemins de clés d'un objet JSON (les tableaux ne comptent pas
+// comme un niveau de clé, seuls les noms de champs comptent) — sert à détecter si un formatage a
+// accidentellement modifié un NOM DE CHAMP plutôt que le contenu d'une valeur.
+function jsonKeyPaths(obj, prefix, out) {
+  if (Array.isArray(obj)) {
+    obj.forEach(v => jsonKeyPaths(v, prefix, out));
+  } else if (obj && typeof obj === "object") {
+    Object.keys(obj).forEach(k => {
+      out.add(prefix + "/" + k);
+      jsonKeyPaths(obj[k], prefix + "/" + k, out);
+    });
+  }
+}
+
+// Après une action de la barre d'outils, vérifie que l'ensemble des noms de champs JSON n'a pas
+// changé (ex: sélectionner "critere" et cliquer Gras transformerait la clé "critere" en clé
+// "**critere**", qui devient introuvable pour l'app — la fiche perd silencieusement ce contenu).
+// Si un nom de champ a changé, annule l'action et prévient l'utilisatrice plutôt que de laisser
+// passer une corruption silencieuse.
+function guardKeyIntegrity(textarea, beforeValue, statusEl) {
+  let before, after;
+  try { before = JSON.parse(beforeValue); } catch (e) { return; }
+  try { after = JSON.parse(textarea.value); } catch (e) { return; }
+  const beforeKeys = new Set(), afterKeys = new Set();
+  jsonKeyPaths(before, "", beforeKeys);
+  jsonKeyPaths(after, "", afterKeys);
+  let changed = beforeKeys.size !== afterKeys.size;
+  if (!changed) for (const k of beforeKeys) if (!afterKeys.has(k)) { changed = true; break; }
+  if (changed) {
+    textarea.value = beforeValue;
+    if (statusEl) statusEl.textContent = "⚠ Annulé : ce formatage aurait modifié le nom d'un champ JSON (pas son contenu). Sélectionne uniquement le texte à l'intérieur d'une valeur, après les « : », pas le nom du champ lui-même.";
+  } else if (statusEl) {
+    statusEl.textContent = "";
+  }
+}
+
 // Enrobe (ou déroule si déjà présent) la sélection courante du textarea avec un marqueur
 // de mise en forme (**gras**, *italique*, __souligné__), utilisé par la barre d'outils.
-function wrapTextareaSelection(textarea, marker) {
+function wrapTextareaSelection(textarea, marker, statusEl) {
   const start = textarea.selectionStart, end = textarea.selectionEnd;
   const val = textarea.value;
   const selected = val.slice(start, end);
   const already = selected.startsWith(marker) && selected.endsWith(marker) && selected.length >= marker.length * 2;
   const newSelected = already ? selected.slice(marker.length, selected.length - marker.length) : marker + selected + marker;
   textarea.value = val.slice(0, start) + newSelected + val.slice(end);
+  guardKeyIntegrity(textarea, val, statusEl);
   textarea.focus();
   textarea.selectionStart = start;
   textarea.selectionEnd = start + newSelected.length;
 }
 
 // Préfixe chaque ligne couverte par la sélection avec "- " (puce), ou l'enlève si déjà présente.
-function toggleBulletLines(textarea) {
+function toggleBulletLines(textarea, statusEl) {
   const start = textarea.selectionStart, end = textarea.selectionEnd;
   const val = textarea.value;
   const lineStart = val.lastIndexOf("\n", start - 1) + 1;
@@ -2129,6 +2166,7 @@ function toggleBulletLines(textarea) {
   });
   const newBlock = newLines.join("\n");
   textarea.value = val.slice(0, lineStart) + newBlock + val.slice(lineEnd);
+  guardKeyIntegrity(textarea, val, statusEl);
   textarea.focus();
   textarea.selectionStart = lineStart;
   textarea.selectionEnd = lineStart + newBlock.length;
@@ -2156,10 +2194,10 @@ function openJsonEditor(container, relPath, obj, opts) {
   container.appendChild(editorDiv);
   document.getElementById("edit-textarea").value = JSON.stringify(obj, null, 2);
   document.getElementById("edit-cancel").addEventListener("click", () => { container.innerHTML = original; });
-  document.getElementById("fmt-bold").addEventListener("click", () => wrapTextareaSelection(document.getElementById("edit-textarea"), "**"));
-  document.getElementById("fmt-italic").addEventListener("click", () => wrapTextareaSelection(document.getElementById("edit-textarea"), "*"));
-  document.getElementById("fmt-underline").addEventListener("click", () => wrapTextareaSelection(document.getElementById("edit-textarea"), "__"));
-  document.getElementById("fmt-list").addEventListener("click", () => toggleBulletLines(document.getElementById("edit-textarea")));
+  document.getElementById("fmt-bold").addEventListener("click", () => wrapTextareaSelection(document.getElementById("edit-textarea"), "**", document.getElementById("edit-status")));
+  document.getElementById("fmt-italic").addEventListener("click", () => wrapTextareaSelection(document.getElementById("edit-textarea"), "*", document.getElementById("edit-status")));
+  document.getElementById("fmt-underline").addEventListener("click", () => wrapTextareaSelection(document.getElementById("edit-textarea"), "__", document.getElementById("edit-status")));
+  document.getElementById("fmt-list").addEventListener("click", () => toggleBulletLines(document.getElementById("edit-textarea"), document.getElementById("edit-status")));
   document.getElementById("edit-save").addEventListener("click", async () => {
     const status = document.getElementById("edit-status");
     let parsed;
