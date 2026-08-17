@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=25">
+<link rel="stylesheet" href="style.css?v=26">
 </head>
 <body>
 <header class="topbar">
@@ -25,14 +25,11 @@
     <button class="tab-btn active" data-tab="formules">Formules</button>
     <button class="tab-btn" data-tab="cas">Fiche de cas</button>
     <button class="tab-btn" data-tab="psy">Principes Taoïstes</button>
-    <button class="tab-btn" data-tab="tuteur">Tuteur Taoïste</button>
     <button class="tab-btn" data-tab="syndromes">Syndromes</button>
     <button class="tab-btn" data-tab="diag-signes">Diagnostic par signes</button>
     <button class="tab-btn" data-tab="cas-pratique">Exemples de cas cliniques</button>
-    <button class="tab-btn" data-tab="tdah">TDAH</button>
-    <button class="tab-btn" data-tab="depression">Dépression / Anxiété / Insomnie</button>
+    <button class="tab-btn" data-tab="tableaux-psy">Tableaux Psy</button>
     <button class="tab-btn" data-tab="points">Points</button>
-    <button class="tab-btn" data-tab="ajouter">Ajouter une formule dans la base de données</button>
   </nav>
 </header>
 
@@ -64,7 +61,10 @@
   <section id="tab-formules" class="tab-panel active">
     <div class="formules-layout">
       <aside class="formules-sidebar">
-        <input type="search" id="formule-search" placeholder="Rechercher : pinyin, syndrome, substance...">
+        <div class="sidebar-header-row">
+          <input type="search" id="formule-search" placeholder="Rechercher : pinyin, syndrome, substance...">
+          <button type="button" class="tab-btn icon-btn" data-tab="ajouter" title="Ajouter une formule dans la base de données">+</button>
+        </div>
         <div id="formule-categories"></div>
         <ul id="formule-list"></ul>
         <p id="formule-count" class="muted"></p>
@@ -196,11 +196,14 @@
 
   <!-- ===================== ONGLET PRINCIPES TAOÏSTES (Farrell + Sterman) ===================== -->
   <section id="tab-psy" class="tab-panel">
-    <p class="muted">Farrell (psycho-émotionnel, Merveilleux Vaisseaux) et Sterman (protocoles cliniques Sinew/Luo/Divergent/8EV) — deux élèves du même enseignant, Dr Jeffrey Yuen. Filtre par autrice/type ci-dessous.</p>
+    <p class="muted">Farrell (psycho-émotionnel, Merveilleux Vaisseaux), Sterman (protocoles cliniques Sinew/Luo/Divergent/8EV) et Jeffrey Yuen (Luo, leur enseignant commun) — filtre par autrice/type ci-dessous.</p>
     <p class="muted psy-status"></p>
     <div class="formules-layout">
       <aside class="formules-sidebar">
-        <input type="search" id="psy-search" placeholder="Rechercher : niveau, vaisseau, signe, point...">
+        <div class="sidebar-header-row">
+          <input type="search" id="psy-search" placeholder="Rechercher : niveau, vaisseau, signe, point...">
+          <button type="button" class="tab-btn icon-btn" data-tab="tuteur" title="Quiz">★</button>
+        </div>
         <div id="psy-groups"></div>
         <ul id="psy-list"></ul>
         <p id="psy-count" class="muted"></p>
@@ -211,9 +214,11 @@
     </div>
   </section>
 
-  <!-- ===================== ONGLET TUTEUR TAOÏSTE (quiz) ===================== -->
+  <!-- ===================== ONGLET QUIZ (ex-Tuteur Taoïste) ===================== -->
   <section id="tab-tuteur" class="tab-panel">
-    <p class="muted">Quiz généré à partir de ta base vérifiée (Farrell — niveaux de latence + vaisseaux/confluences ; Sterman — principes cliniques pratiquables) — jamais inventé : les questions et les corrigés viennent directement des fiches de l'onglet Principes Taoïstes.</p>
+    <button type="button" class="tab-btn" data-tab="psy">← Retour à Principes Taoïstes</button>
+    <h2>Quiz</h2>
+    <p class="muted">Quiz généré à partir de ta base vérifiée (Farrell — niveaux de latence + vaisseaux/confluences ; Sterman et Jeffrey Yuen — principes cliniques pratiquables) — jamais inventé : les questions et les corrigés viennent directement des fiches de l'onglet Principes Taoïstes.</p>
     <div class="cas-toolbar">
       <button type="button" id="tut-next">Nouvelle question</button>
       <span id="tut-score" class="muted"></span>
@@ -267,18 +272,22 @@
     </div>
   </section>
 
-  <!-- ===================== ONGLET TDAH (transversal) ===================== -->
-  <section id="tab-tdah" class="tab-panel">
-    <article id="tdah-detail" class="formule-detail">
-      <p class="muted">Chargement...</p>
-    </article>
-  </section>
-
-  <!-- ===================== ONGLET DÉPRESSION / ANXIÉTÉ / INSOMNIE (transversal) ===================== -->
-  <section id="tab-depression" class="tab-panel">
-    <article id="depression-detail" class="formule-detail">
-      <p class="muted">Chargement...</p>
-    </article>
+  <!-- ===================== ONGLET TABLEAUX PSY (TDAH + Dépression/Anxiété/Insomnie) ===================== -->
+  <section id="tab-tableaux-psy" class="tab-panel">
+    <div class="cat-chip-row" id="tableaux-psy-switch">
+      <button type="button" class="cat-chip active" data-subtab="tdah">TDAH</button>
+      <button type="button" class="cat-chip" data-subtab="depression">Dépression / Anxiété / Insomnie</button>
+    </div>
+    <div id="subtab-tdah" class="tableaux-psy-subpanel active">
+      <article id="tdah-detail" class="formule-detail">
+        <p class="muted">Chargement...</p>
+      </article>
+    </div>
+    <div id="subtab-depression" class="tableaux-psy-subpanel">
+      <article id="depression-detail" class="formule-detail">
+        <p class="muted">Chargement...</p>
+      </article>
+    </div>
   </section>
 
   <!-- ===================== ONGLET POINTS (base Jeu) ===================== -->
@@ -316,6 +325,7 @@
   <!-- ===================== ONGLET AJOUTER UNE FORMULE (sans IA) ===================== -->
   <section id="tab-ajouter" class="tab-panel">
     <div class="apropos" style="max-width:900px;">
+      <button type="button" class="tab-btn" data-tab="formules">← Retour aux formules</button>
       <h2>Ajouter une formule dans la base de données</h2>
       <p class="muted">Ce formulaire fonctionne sans Claude — utile après la fin de l'abonnement. Remplis les champs (colle le texte de ton cours), puis choisis comment enregistrer.</p>
     </div>
@@ -389,6 +399,6 @@
 
 </main>
 
-<script src="app.js?v=34"></script>
+<script src="app.js?v=35"></script>
 </body>
 </html>

@@ -427,8 +427,10 @@ const Psy = {
       }
       items.forEach(e => {
         const li = document.createElement("li");
+        const seenKey = e.kind + ":" + e.id;
         const kindLabel = e.kind === "niveau" ? "Farrell — Niveau de latence" : e.kind === "vaisseau" ? "Farrell — Vaisseau / confluence" : "Sterman — " + (e.categorie_source || "Principe clinique");
-        li.innerHTML = `<span class="fl-pinyin">${escapeHtml(e.nom)}</span>
+        const unseen = !SeenTracker.isSeen("psy", seenKey);
+        li.innerHTML = `${unseen ? '<span class="unseen-dot" title="Jamais ouverte">●</span>' : ""}<span class="fl-pinyin">${escapeHtml(e.nom)}</span>
           <span class="fl-syndrome">${escapeHtml(kindLabel)}</span>`;
         li.addEventListener("click", () => this.showDetail(e, li));
         ul.appendChild(li);
@@ -446,6 +448,9 @@ const Psy = {
     try {
       const d = await Store.readJSON("psycho_emotionnel/" + entry.chemin);
       detail.innerHTML = entry.kind === "niveau" ? this.renderNiveau(d) : entry.kind === "vaisseau" ? this.renderVaisseau(d) : this.renderSterman(d);
+      SeenTracker.markSeen("psy", entry.kind + ":" + entry.id);
+      if (liEl) liEl.querySelector(".unseen-dot")?.remove();
+      this.attachSeenToggle(detail, entry, liEl);
       addEditControls(detail, "psycho_emotionnel/" + entry.chemin, d, {
         onSaved: async (parsed) => {
           if (entry.kind === "sterman") {
@@ -478,6 +483,27 @@ const Psy = {
     } catch (e) {
       detail.innerHTML = `<p class="muted">Impossible de charger la fiche (${e.message}).</p>`;
     }
+  },
+
+  // Ajoute un petit bouton dans l'en-tête sticky pour re-marquer une fiche comme "non-vue"
+  // (fait réapparaître le point rouge dans la liste) — pour y revenir volontairement plus tard.
+  attachSeenToggle(detail, entry, liEl) {
+    const header = detail.querySelector(".psy-sticky-header");
+    if (!header) return;
+    const seenKey = entry.kind + ":" + entry.id;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "seen-toggle-btn";
+    btn.textContent = "○ Marquer comme non-vue";
+    btn.addEventListener("click", () => {
+      SeenTracker.markUnseen("psy", seenKey);
+      if (liEl && !liEl.querySelector(".unseen-dot")) {
+        liEl.insertAdjacentHTML("afterbegin", '<span class="unseen-dot" title="Jamais ouverte">●</span>');
+      }
+      btn.textContent = "✅ Marquée non-vue";
+      btn.disabled = true;
+    });
+    header.appendChild(btn);
   },
 
   renderNiveau(d) {
@@ -1442,25 +1468,49 @@ async function loadDepressionPage() {
         }).join("<hr>");
       }
       const pharmaNote = t.pharmacopee_note ? `<p class="muted">${escapeHtml(t.pharmacopee_note)}</p>` : "";
-      return `<section class="syn-synthese psy-decision" id="depression-type-${ti}">
-        <h3>${escapeHtml(t.nom)}</h3>
-        <p class="muted">${escapeHtml(t.approche || "")}</p>
-        ${t.mecanisme ? `<p>${tcmHighlightInline(escapeHtml(t.mecanisme))}</p>` : ""}
-        ${signes}${principe}${points}${pharma}${pharmaNote}
-        <p class="muted">Source : ${escapeHtml((t.source && t.source.origine) || "")} (${escapeHtml((t.source && t.source.fichier) || "")})</p>
-      </section>`;
+      return `<details class="depression-type-details" id="depression-type-${ti}">
+        <summary><h3>${escapeHtml(t.nom)}</h3><p class="muted">${escapeHtml(t.approche || "")}</p></summary>
+        <div class="depression-type-body">
+          ${t.mecanisme ? `<p>${tcmHighlightInline(escapeHtml(t.mecanisme))}</p>` : ""}
+          ${signes}${principe}${points}${pharma}${pharmaNote}
+          <p class="muted">Source : ${escapeHtml((t.source && t.source.origine) || "")} (${escapeHtml((t.source && t.source.fichier) || "")})</p>
+        </div>
+      </details>`;
     }).join("");
+    const index = (d.types || []).map((t, ti) =>
+      `<li><a href="#depression-type-${ti}" data-target="depression-type-${ti}">${escapeHtml(t.nom)}</a></li>`
+    ).join("");
     el.innerHTML = `
       <h2>${escapeHtml(d.titre)}</h2>
       <p class="muted"><em>${escapeHtml(d.avertissement || "")}</em></p>
+      <nav class="depression-index"><h4 class="sec-sub">Index — clique pour ouvrir et aller directement à un tableau</h4><ol>${index}</ol></nav>
       ${types}
     `;
+    el.querySelectorAll(".depression-index a").forEach(a => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const target = document.getElementById(a.dataset.target);
+        if (target) {
+          target.open = true;
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+    });
     addEditControls(el, "depression_anxiete_insomnie_transversal.json", d, { onSaved: () => loadDepressionPage() });
   } catch (e) {
     el.innerHTML = `<p class="muted">Page pas encore prête (${e.message}).</p>`;
   }
 }
 loadDepressionPage();
+
+document.getElementById("tableaux-psy-switch").addEventListener("click", (e) => {
+  const btn = e.target.closest(".cat-chip");
+  if (!btn) return;
+  document.querySelectorAll("#tableaux-psy-switch .cat-chip").forEach(c => c.classList.remove("active"));
+  btn.classList.add("active");
+  document.querySelectorAll(".tableaux-psy-subpanel").forEach(p => p.classList.remove("active"));
+  document.getElementById("subtab-" + btn.dataset.subtab).classList.add("active");
+});
 
 /* ============================= Images locales (dossier choisi sur l'appareil) ============================= */
 // Pour la copie hébergée (PWA sans dossier data/ local) : laisse charger les images
@@ -1929,6 +1979,30 @@ function flattenDetailText(d) {
   walk(d);
   return parts.join(" ").toLowerCase();
 }
+
+// Suivi léger des fiches déjà ouvertes (localStorage), pour afficher un petit point rouge sur les
+// entrées jamais consultées — utile en révision pour ne pas oublier des fiches. Une fiche peut être
+// remarquée manuellement comme "non-vue" pour y revenir plus tard.
+const SeenTracker = {
+  _key(listKey) { return "mtc_seen_" + listKey; },
+  _getSet(listKey) {
+    try { return new Set(JSON.parse(localStorage.getItem(this._key(listKey)) || "[]")); }
+    catch (e) { return new Set(); }
+  },
+  isSeen(listKey, id) { return this._getSet(listKey).has(id); },
+  markSeen(listKey, id) {
+    const s = this._getSet(listKey);
+    if (s.has(id)) return;
+    s.add(id);
+    try { localStorage.setItem(this._key(listKey), JSON.stringify([...s])); } catch (e) { /* quota/privé */ }
+  },
+  markUnseen(listKey, id) {
+    const s = this._getSet(listKey);
+    if (!s.has(id)) return;
+    s.delete(id);
+    try { localStorage.setItem(this._key(listKey), JSON.stringify([...s])); } catch (e) { /* quota/privé */ }
+  }
+};
 
 function escapeHtml(str) {
   if (str === null || str === undefined) return "";
@@ -2480,7 +2554,8 @@ const GlobalSearch = {
       if (hay.includes(q)) out.push({
         group: "TDAH", title: t.nom, sub: t.approche || "",
         go: () => {
-          this.gotoTab("tdah");
+          this.gotoTab("tableaux-psy");
+          document.querySelector('#tableaux-psy-switch .cat-chip[data-subtab="tdah"]').click();
           setTimeout(() => {
             const el = document.getElementById("tdah-type-" + ti);
             if (el) el.scrollIntoView({ behavior: "auto", block: "start" });
@@ -2494,10 +2569,11 @@ const GlobalSearch = {
       if (hay.includes(q)) out.push({
         group: "Dépression / Anxiété / Insomnie", title: t.nom, sub: t.approche || "",
         go: () => {
-          this.gotoTab("depression");
+          this.gotoTab("tableaux-psy");
+          document.querySelector('#tableaux-psy-switch .cat-chip[data-subtab="depression"]').click();
           setTimeout(() => {
             const el = document.getElementById("depression-type-" + ti);
-            if (el) el.scrollIntoView({ behavior: "auto", block: "start" });
+            if (el) { el.open = true; el.scrollIntoView({ behavior: "auto", block: "start" }); }
           }, 50);
         }
       });
