@@ -508,7 +508,7 @@ const Psy = {
       ${d.points_ou_structures_cles ? `<section><h3>Points / structures clés</h3>${formatPointsTable(d.points_ou_structures_cles)}</section>` : ""}
       ${d.avertissements_precautions ? `<section><h3>Avertissements / précautions</h3><div class="tcm-text">${formatTcmText(d.avertissements_precautions)}</div></section>` : ""}
       ${verif}
-      <p class="muted">Source : ${escapeHtml((d.source && d.source.livre) || "?")}${d.source && d.source.chapitre_ou_section ? " — " + escapeHtml(d.source.chapitre_ou_section) : ""}</p>
+      <p class="muted">Source : ${escapeHtml((d.source && d.source.livre) || "?")}${d.source && (d.source.chapitre_ou_page || d.source.chapitre_ou_section) ? " — " + escapeHtml(d.source.chapitre_ou_page || d.source.chapitre_ou_section) : ""}</p>
     `;
   },
 
@@ -527,7 +527,7 @@ const Psy = {
       ${d.points_cles ? `<section><h3>Points clés</h3>${formatPointsTable(d.points_cles)}</section>` : ""}
       ${citations}
       ${verif}
-      <p class="muted">Source : ${escapeHtml((d.source && d.source.livre) || "?")}${d.source && d.source.chapitre_ou_section ? " — " + escapeHtml(d.source.chapitre_ou_section) : ""}</p>
+      <p class="muted">Source : ${escapeHtml((d.source && d.source.livre) || "?")}${d.source && (d.source.chapitre_ou_page || d.source.chapitre_ou_section) ? " — " + escapeHtml(d.source.chapitre_ou_page || d.source.chapitre_ou_section) : ""}</p>
     `;
   },
 
