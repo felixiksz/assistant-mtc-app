@@ -2246,7 +2246,7 @@ function addEditControls(container, relPath, obj, opts) {
   btn.textContent = "✏️ Modifier cette fiche";
   bar.appendChild(btn);
   container.prepend(bar);
-  const editorFn = opts.editorFn || openJsonEditor;
+  const editorFn = opts.editorFn || openGenericFormEditor;
   btn.addEventListener("click", () => editorFn(container, relPath, obj, opts));
 }
 
@@ -2285,6 +2285,15 @@ function buildListEditor(items, fields) {
     values = values || {};
     const row = document.createElement("div");
     row.className = "list-editor-row";
+    // Conserve toute clé de l'objet d'origine qui n'a pas son propre champ dans le formulaire (ex. un
+    // champ de métadonnée ajouté plus tard type source_detail) — sans ça, enregistrer depuis le
+    // formulaire effacerait silencieusement cette donnée au lieu de simplement ne pas l'exposer.
+    if (fields.length > 1 || fields[0].key !== "_value") {
+      const fieldKeys = new Set(fields.map(f => f.key));
+      const hidden = {};
+      Object.keys(values).forEach(k => { if (!fieldKeys.has(k) && values[k] !== undefined) hidden[k] = values[k]; });
+      if (Object.keys(hidden).length) row.dataset.hidden = JSON.stringify(hidden);
+    }
     fields.forEach(f => {
       const input = document.createElement(f.big ? "textarea" : "input");
       if (!f.big) input.type = "text";
@@ -2327,7 +2336,12 @@ function buildListEditor(items, fields) {
         obj[inp.dataset.key] = v;
       });
       if (!anyFilled) return;
-      out.push(fields.length === 1 && fields[0].key === "_value" ? obj._value : obj);
+      if (fields.length === 1 && fields[0].key === "_value") { out.push(obj._value); return; }
+      let merged = obj;
+      if (row.dataset.hidden) {
+        try { merged = Object.assign(JSON.parse(row.dataset.hidden), obj); } catch (e) { /* ignore, garde obj tel quel */ }
+      }
+      out.push(merged);
     });
     return out;
   }
@@ -2568,6 +2582,153 @@ function openJsonEditor(container, relPath, obj, opts) {
     let parsed;
     try { parsed = JSON.parse(document.getElementById("edit-textarea").value); }
     catch (e) { status.textContent = "⚠ JSON invalide : " + e.message; return; }
+    try {
+      await saveFicheObject(relPath, opts, parsed, obj, status);
+    } catch (e) {
+      status.textContent = "⚠ " + e.message;
+    }
+  });
+}
+
+// Transforme une clé JSON (snake_case) en libellé lisible : "chapitre_ou_page" -> "Chapitre ou page".
+function prettifyKey(k) {
+  const s = k.replace(/_/g, " ");
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function isArrayOfPrimitives(arr) {
+  return Array.isArray(arr) && arr.every(x => x === null || typeof x === "string" || typeof x === "number");
+}
+function isArrayOfPlainObjects(arr) {
+  return Array.isArray(arr) && arr.length > 0 && arr.every(x => x && typeof x === "object" && !Array.isArray(x));
+}
+function unionKeysOfArray(arr) {
+  const seen = new Set(), keys = [];
+  arr.forEach(item => Object.keys(item).forEach(k => { if (!seen.has(k)) { seen.add(k); keys.push(k); } }));
+  return keys;
+}
+
+// Éditeur en formulaire GÉNÉRIQUE : couvre n'importe quelle fiche JSON de l'outil en parcourant
+// dynamiquement ses clés (au lieu d'un formulaire écrit à la main par type de fiche). Chaque clé de
+// premier niveau devient un champ, selon la forme de sa valeur (texte, liste simple, liste d'objets,
+// sous-objet). Comme il parcourt TOUTES les clés existantes sans en présélectionner, il ne peut pas
+// silencieusement perdre un champ à l'enregistrement (contrairement à un formulaire à liste de champs
+// fixe) — voir le bug qui a fait sauter source_detail sur un point avant ce correctif.
+function openGenericFormEditor(container, relPath, obj, opts) {
+  const original = container.innerHTML;
+  const wrap = document.createElement("div");
+  wrap.className = "fiche-form-editor";
+  wrap.innerHTML = `
+    <div class="edit-bar">
+      <button type="button" id="edit-save">💾 Enregistrer</button>
+      <button type="button" id="edit-cancel">Annuler</button>
+      <span id="edit-status" class="muted"></span>
+    </div>
+    <p class="muted ff-hint">Formulaire — chaque champ s'enregistre séparément, pas besoin d'écrire du JSON. <button type="button" id="ff-switch-json" class="ff-link-btn">Passer en mode JSON brut (avancé)</button></p>
+  `;
+  const fieldsHost = document.createElement("div");
+  fieldsHost.className = "ff-fields";
+  wrap.appendChild(fieldsHost);
+
+  const addField = (label, contentEl) => {
+    const div = document.createElement("div");
+    div.className = "ff-field";
+    const lab = document.createElement("label");
+    lab.textContent = label;
+    div.appendChild(lab);
+    div.appendChild(contentEl);
+    fieldsHost.appendChild(div);
+    return div;
+  };
+
+  const handlers = {}; // key -> () => nouvelle valeur
+
+  Object.keys(obj).forEach(key => {
+    const val = obj[key];
+    const label = prettifyKey(key);
+
+    // Liste de textes simples (ou tableau vide : on suppose le cas le plus courant, une liste de textes)
+    if (Array.isArray(val) && (val.length === 0 || isArrayOfPrimitives(val))) {
+      const editor = buildListEditor(val, [{ key: "_value", label: label, big: val.some(v => (v || "").length > 60) }]);
+      addField(label, editor.el);
+      handlers[key] = () => editor.getValues();
+      return;
+    }
+    // Liste d'objets (ex: composition, points...) : un champ par clé rencontrée dans N'IMPORTE LEQUEL
+    // des éléments (pas seulement le premier), pour ne rien perdre de la structure. Seulement si tous
+    // les champs sont "plats" (texte/nombre) : buildListEditor ne sait pas rendre un sous-tableau/
+    // sous-objet À L'INTÉRIEUR d'une rangée (ex. "types" d'une page transversale, où chaque type
+    // contient lui-même des tableaux points/pharmacopée) — dans ce cas, repli JSON pour tout le champ
+    // plutôt que de risquer de corrompre la structure en la forçant dans de simples champs texte.
+    if (isArrayOfPlainObjects(val)) {
+      const allShallow = val.every(item => Object.values(item).every(v => v === null || typeof v !== "object"));
+      if (allShallow) {
+        const subKeys = unionKeysOfArray(val);
+        const fields = subKeys.map(k => ({
+          key: k, label: prettifyKey(k),
+          big: val.some(item => typeof item[k] === "string" && item[k].length > 60)
+        }));
+        const editor = buildListEditor(val, fields);
+        addField(label, editor.el);
+        handlers[key] = () => editor.getValues();
+        return;
+      }
+      const ta = document.createElement("textarea");
+      ta.value = JSON.stringify(val, null, 2);
+      ta.rows = 14;
+      addField(label + " (structure imbriquée — JSON)", ta);
+      handlers[key] = () => { try { return JSON.parse(ta.value); } catch (e) { return val; } };
+      return;
+    }
+    // Sous-objet simple (ex: source: {livre, chapitre_ou_page}) : un champ texte par sous-clé.
+    if (val && typeof val === "object" && !Array.isArray(val)) {
+      const subDiv = document.createElement("div");
+      subDiv.className = "ff-subobject";
+      const subHandlers = {};
+      Object.keys(val).forEach(subKey => {
+        const subVal = val[subKey];
+        const subFieldWrap = document.createElement("div");
+        subFieldWrap.className = "ff-subfield";
+        const subLab = document.createElement("label");
+        subLab.textContent = prettifyKey(subKey);
+        subFieldWrap.appendChild(subLab);
+        if (subVal !== null && typeof subVal === "object") {
+          // Structure trop profonde pour un rendu générique simple : repli JSON scopé à ce seul champ.
+          const ta = document.createElement("textarea");
+          ta.value = JSON.stringify(subVal, null, 2);
+          subFieldWrap.appendChild(ta);
+          subHandlers[subKey] = () => { try { return JSON.parse(ta.value); } catch (e) { return subVal; } };
+        } else {
+          const isLong = typeof subVal === "string" && (subVal.length > 60 || subVal.includes("\n"));
+          const input = document.createElement(isLong ? "textarea" : "input");
+          if (!isLong) input.type = "text";
+          input.value = subVal === null || subVal === undefined ? "" : subVal;
+          subFieldWrap.appendChild(input);
+          subHandlers[subKey] = () => { const v = input.value.trim(); return v === "" ? null : v; };
+        }
+        subDiv.appendChild(subFieldWrap);
+      });
+      addField(label, subDiv);
+      handlers[key] = () => { const o = {}; Object.keys(subHandlers).forEach(sk => o[sk] = subHandlers[sk]()); return o; };
+      return;
+    }
+    // Valeur simple : texte, nombre, booléen ou null.
+    const isLong = typeof val === "string" && (val.length > 80 || val.includes("\n"));
+    const input = document.createElement(isLong ? "textarea" : "input");
+    if (!isLong) input.type = "text";
+    input.value = val === null || val === undefined ? "" : val;
+    addField(label, input);
+    handlers[key] = () => { const v = input.value.trim(); return v === "" ? null : v; };
+  });
+
+  container.innerHTML = "";
+  container.appendChild(wrap);
+
+  document.getElementById("edit-cancel").addEventListener("click", () => { container.innerHTML = original; });
+  document.getElementById("ff-switch-json").addEventListener("click", () => openJsonEditor(container, relPath, obj, opts));
+  document.getElementById("edit-save").addEventListener("click", async () => {
+    const status = document.getElementById("edit-status");
+    const parsed = {};
+    Object.keys(handlers).forEach(k => { parsed[k] = handlers[k](); });
     try {
       await saveFicheObject(relPath, opts, parsed, obj, status);
     } catch (e) {
