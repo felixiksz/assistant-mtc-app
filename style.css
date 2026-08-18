@@ -372,6 +372,13 @@ main { padding: 1.5rem; max-width: 1280px; margin: 0 auto; }
   color: var(--ink); font-family: inherit; font-size: 0.9rem; box-sizing: border-box;
 }
 .ff-field textarea { min-height: 4.5rem; line-height: 1.5; resize: vertical; }
+.ff-subobject { display: flex; flex-direction: column; gap: 0.6rem; padding: 0.6rem 0.8rem; border: 1px dashed var(--line); }
+.ff-subfield label { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 0.2rem; color: var(--muted); }
+.ff-subfield input[type="text"], .ff-subfield textarea {
+  width: 100%; padding: 0.4rem 0.5rem; border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink); font-family: inherit; font-size: 0.85rem; box-sizing: border-box;
+}
+.ff-subfield textarea { min-height: 3.5rem; line-height: 1.4; resize: vertical; }
 .list-editor { display: flex; flex-direction: column; gap: 0.5rem; }
 .list-editor-row { display: flex; gap: 0.4rem; align-items: flex-start; flex-wrap: wrap; }
 .list-editor-row input, .list-editor-row textarea {
