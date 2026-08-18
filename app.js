@@ -1719,7 +1719,10 @@ const Points = {
     const indicContemp = (d.indications_contemporaines || []).length
       ? `<ul class="tcm-list">${d.indications_contemporaines.map(i => `<li>${tcmHighlightInline(escapeHtml(i))}</li>`).join("")}</ul>` : "";
     const indicPsycho = (d.indications_psycho_emotionnelles || []).length
-      ? `<ul class="tcm-list">${d.indications_psycho_emotionnelles.map(i => `<li>${tcmHighlightInline(escapeHtml(i.indication || ""))}${i.source ? ` <span class="muted">(${escapeHtml(i.source)}${i.auteur_lignee ? " — " + escapeHtml(i.auteur_lignee) : ""})</span>` : ""}</li>`).join("")}</ul>` : "";
+      ? `<ul class="tcm-list psycho-emo-list">${d.indications_psycho_emotionnelles.map(i => `<li>
+            <span>${tcmHighlightInline(escapeHtml(i.indication || ""))}</span>
+            ${i.auteur_lignee ? `<span class="psi-source-tag" tabindex="0">${escapeHtml(i.auteur_lignee)}${i.source ? `<span class="psi-tooltip">${escapeHtml(i.source)}</span>` : ""}</span>` : ""}
+          </li>`).join("")}</ul>` : "";
     const associations = Array.isArray(d.associations)
       ? (d.associations.length ? `<ul class="tcm-list">${d.associations.map(a => `<li>${tcmHighlightInline(escapeHtml(a))}</li>`).join("")}</ul>` : "")
       : (d.associations ? `<div class="tcm-text">${formatTcmText(d.associations)}</div>` : "");
@@ -1736,7 +1739,7 @@ const Points = {
       ${correspondances ? `<section><h3>Correspondances</h3>${correspondances}</section>` : ""}
       ${indications ? `<section><h3>Indications</h3>${indications}</section>` : ""}
       ${indicContemp ? `<section><h3>Indications contemporaines</h3>${indicContemp}</section>` : ""}
-      ${indicPsycho ? `<section><h3>Indications psycho-émotionnelles</h3>${indicPsycho}</section>` : ""}
+      ${indicPsycho ? `<section class="psycho-emo-section"><h3>💭 Indications psycho-émotionnelles</h3>${indicPsycho}</section>` : ""}
       ${actions ? `<section><h3>Actions</h3>${actions}</section>` : ""}
       ${associations ? `<section><h3>Associations</h3>${associations}</section>` : ""}
       ${d.note ? `<section><h3>Note</h3><div class="tcm-text">${formatTcmText(d.note)}</div></section>` : ""}
