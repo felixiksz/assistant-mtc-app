@@ -1698,7 +1698,8 @@ const Points = {
     ul.innerHTML = "";
     list.slice(0, 300).forEach(e => {
       const li = document.createElement("li");
-      li.innerHTML = `<span class="fl-pinyin">${escapeHtml(e.id)}</span>
+      const hasPsycho = (e.data.indications_psycho_emotionnelles || []).length > 0;
+      li.innerHTML = `<span class="fl-pinyin">${escapeHtml(e.id)}${hasPsycho ? ` <span class="psi-list-badge" title="A une indication psycho-émotionnelle">💭</span>` : ""}</span>
         <span class="fl-syndrome">${escapeHtml(e.data.pinyin || "")}${e.data.nom_fr ? " — " + escapeHtml(e.data.nom_fr) : ""}</span>`;
       li.addEventListener("click", () => this.showDetail(e, li));
       ul.appendChild(li);
@@ -1721,7 +1722,10 @@ const Points = {
     const indicPsycho = (d.indications_psycho_emotionnelles || []).length
       ? `<ul class="tcm-list psycho-emo-list">${d.indications_psycho_emotionnelles.map(i => `<li>
             <span>${tcmHighlightInline(escapeHtml(i.indication || ""))}</span>
-            ${i.auteur_lignee ? `<span class="psi-source-tag" tabindex="0">${escapeHtml(i.auteur_lignee)}${i.source ? `<span class="psi-tooltip">${escapeHtml(i.source)}</span>` : ""}</span>` : ""}
+            <span class="psi-source-line">
+              ${i.auteur_lignee ? `<span class="psi-source-tag">${escapeHtml(i.auteur_lignee)}</span>` : ""}
+              ${i.source ? `<span class="psi-source-ref">${escapeHtml(i.source)}</span>` : ""}
+            </span>
           </li>`).join("")}</ul>` : "";
     const associations = Array.isArray(d.associations)
       ? (d.associations.length ? `<ul class="tcm-list">${d.associations.map(a => `<li>${tcmHighlightInline(escapeHtml(a))}</li>`).join("")}</ul>` : "")
