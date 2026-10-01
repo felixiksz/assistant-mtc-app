@@ -2233,18 +2233,6 @@ function slugify(s) {
     .replace(/^_+|_+$/g, "");
 }
 
-function parseComposition(text) {
-  return (text || "").split("\n").map(l => l.trim()).filter(Boolean).map(line => {
-    const parts = line.split(";").map(p => p.trim());
-    return {
-      substance_pinyin: parts[0] || "",
-      hanzi: parts[1] || null,
-      dose: parts[2] || null,
-      role_hierarchique: parts[3] || null
-    };
-  });
-}
-
 /**
  * Ajoute un bouton "Modifier cette fiche" en tête d'un conteneur déjà rempli par innerHTML.
  * mode "whole" (défaut) : relPath pointe vers un fichier contenant directement l'objet `obj`.
@@ -2753,6 +2741,20 @@ function openGenericFormEditor(container, relPath, obj, opts) {
 }
 
 const Ajout = {
+  compositionEditor: null,
+
+  initCompositionEditor(items) {
+    const host = document.getElementById("aj-composition-editor");
+    if (!host) return;
+    host.innerHTML = "";
+    this.compositionEditor = buildListEditor(items || [{}], [
+      { key: "substance_pinyin", label: "Substance (pinyin)" },
+      { key: "hanzi", label: "Hanzi" },
+      { key: "dose", label: "Dose" },
+      { key: "role_hierarchique", label: "Rôle (jun/chen/zuo/shi)" }
+    ]);
+    host.appendChild(this.compositionEditor.el);
+  },
 
   populateCategories() {
     const sel = document.getElementById("aj-categorie-existante");
@@ -2784,7 +2786,7 @@ const Ajout = {
       categorie_id: (document.getElementById("aj-categorie-id").value || "").trim(),
       categorie_nom: (document.getElementById("aj-categorie-nom").value || "").trim(),
       sous_type: v("aj-sous-type"),
-      composition: parseComposition(document.getElementById("aj-composition").value),
+      composition: this.compositionEditor ? this.compositionEditor.getValues() : [],
       mode_de_preparation_posologie: v("aj-preparation"),
       actions_therapeutiques: v("aj-actions"),
       indications_syndrome: v("aj-indications"),
@@ -2864,8 +2866,10 @@ document.getElementById("aj-download").addEventListener("click", () => {
 
 document.getElementById("aj-reset").addEventListener("click", () => {
   document.getElementById("ajout-form").reset();
+  Ajout.initCompositionEditor();
   document.getElementById("aj-status").textContent = "";
 });
+Ajout.initCompositionEditor();
 
 /* ============================= Recherche globale ============================= */
 const GlobalSearch = {
