@@ -277,34 +277,17 @@ const Formules = {
     }
   },
 
-  // Reconstruit le schéma "Analyse de la formule" des supports de cours (David Cech) : des groupes de
-  // substances par fonction partagée (ex. "tonifient le qì et le yáng"), chaque substance avec sa dose
-  // et ses actions, plus les notes qui expliquent comment les groupes/substances interagissent entre eux.
-  // Pas une reproduction pixel du diagramme original (flèches positionnées) mais le même contenu —
-  // groupement par fonction + relations explicites — dans une mise en page robuste à n'importe quelle forme de schéma.
-  renderSchemaInteractions(schema) {
-    if (!schema || !schema.groupes || !schema.groupes.length) return "";
-    const groupesHtml = schema.groupes.map(g => {
-      const herbesHtml = (g.herbes || []).map(h => `
-        <div class="schema-herbe">
-          <div class="schema-herbe-head"><span class="schema-herbe-pinyin">${escapeHtml(h.pinyin || "")}</span>${h.hanzi ? `<span class="hanzi">${escapeHtml(h.hanzi)}</span>` : ""}<span class="schema-herbe-dose">${escapeHtml(h.dose || "")}</span></div>
-          ${(h.actions || []).length ? `<ul class="tcm-list schema-herbe-actions">${h.actions.map(a => `<li>${tcmHighlightInline(escapeHtml(a))}</li>`).join("")}</ul>` : ""}
-        </div>`).join("");
-      return `
-        <div class="schema-groupe">
-          <h4 class="schema-groupe-titre">${escapeHtml(g.titre || "")}</h4>
-          ${g.note_interne ? `<p class="schema-groupe-note">${tcmHighlightInline(escapeHtml(g.note_interne))}</p>` : ""}
-          <div class="schema-herbes-row">${herbesHtml}</div>
-        </div>`;
-    }).join("");
-    const connexionsHtml = (schema.connexions || []).length
-      ? `<div class="schema-connexions"><h4 class="sec-sub">Comment les groupes interagissent</h4><ul class="tcm-list">${schema.connexions.map(c => `<li>${tcmHighlightInline(escapeHtml(c.texte || ""))}</li>`).join("")}</ul></div>`
-      : "";
-    return `<section class="schema-interactions">
-      <h3>Analyse de la formule — rôles et interactions</h3>
-      <div class="schema-groupes-wrap">${groupesHtml}</div>
-      ${connexionsHtml}
-      ${schema.source_page ? `<p class="muted">${escapeHtml(schema.source_page)}</p>` : ""}
+  // Affiche l'image "Analyse de la formule" extraite telle quelle de la documentation de cours (schéma
+  // des substances groupées par fonction, avec leurs doses/actions et les flèches d'interaction) —
+  // un vrai screenshot de la page, pas une reconstruction : plus fidèle et plus rapide à lire.
+  renderSchemaImage(relPathFromFormule, categorieId) {
+    if (!relPathFromFormule) return "";
+    const src = "data/formules/" + categorieId + "/" + relPathFromFormule;
+    return `<section><h3>Analyse de la formule</h3>
+      <a href="${escapeHtml(src)}" target="_blank" rel="noopener" class="schema-image-link">
+        <img src="${escapeHtml(src)}" alt="Analyse de la formule : rôles et interactions des substances" class="schema-image">
+      </a>
+      <p class="muted">Clique sur l'image pour l'agrandir dans un nouvel onglet.</p>
     </section>`;
   },
 
@@ -321,7 +304,7 @@ const Formules = {
       <p class="muted">${escapeHtml(f.categorie_nom || "")}${f.sous_type ? " · " + escapeHtml(f.sous_type) : ""}</p>
       ${f.nom_fr ? `<p><em>${escapeHtml(f.nom_fr)}</em></p>` : ""}
       ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th></tr></thead><tbody>${comp}</tbody></table></section>` : ""}
-      ${this.renderSchemaInteractions(f.schema_interactions)}
+      ${this.renderSchemaImage(f.schema_image, f.categorie_id)}
       ${section("Préparation / posologie", f.mode_de_preparation_posologie)}
       ${section("Actions thérapeutiques", f.actions_therapeutiques)}
       ${section("Indications / syndrome", f.indications_syndrome)}

@@ -203,20 +203,9 @@ main { padding: 1.5rem; max-width: 1280px; margin: 0 auto; }
 .tcm-dose { font-weight: 700; background: var(--accent-soft); padding: 0 0.25em; white-space: nowrap; }
 .tcm-note { font-style: italic; opacity: 0.75; font-size: 0.92em; }
 
-/* Analyse de la formule — schéma des rôles/interactions des substances (support de cours David Cech) */
-.schema-interactions { border: 1.5px solid var(--accent); padding: 0.9rem 1rem 1rem; margin: 0.8rem 0; }
-.schema-groupes-wrap { display: flex; flex-direction: column; gap: 1.1rem; margin-top: 0.6rem; }
-.schema-groupe { border: 1px solid var(--line); background: var(--panel); padding: 0.7rem 0.9rem; }
-.schema-groupe-titre { margin: 0 0 0.4rem; color: var(--accent); text-transform: uppercase; font-size: 0.82rem; letter-spacing: 0.03em; }
-.schema-groupe-note { font-style: italic; color: var(--muted); font-size: 0.88rem; margin: 0 0 0.6rem; }
-.schema-herbes-row { display: flex; flex-wrap: wrap; gap: 0.7rem; }
-.schema-herbe { flex: 1 1 200px; min-width: 180px; border: 1px solid var(--line); background: var(--bg); padding: 0.5rem 0.6rem; }
-.schema-herbe-head { display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
-.schema-herbe-pinyin { font-weight: 700; }
-.schema-herbe-dose { margin-left: auto; font-size: 0.82rem; background: var(--accent-soft); padding: 0.05em 0.4em; white-space: nowrap; }
-.schema-herbe-actions { font-size: 0.85rem; }
-.schema-connexions { margin-top: 0.9rem; padding-top: 0.7rem; border-top: 1px dashed var(--line); }
-.schema-connexions .tcm-list li { margin-bottom: 0.5em; }
+/* Analyse de la formule — image extraite telle quelle de la documentation de cours */
+.schema-image-link { display: inline-block; cursor: zoom-in; }
+.schema-image { max-width: 100%; height: auto; border: 1px solid var(--line); display: block; }
 
 /* --- Fiche de cas --- */
 .cas-toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.2rem; align-items: center; }
