@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=32">
+<link rel="stylesheet" href="style.css?v=33">
 </head>
 <body>
 <header class="topbar">
@@ -59,7 +59,17 @@
 
   <!-- ===================== ONGLET FORMULES ===================== -->
   <section id="tab-formules" class="tab-panel active">
-    <div class="formules-layout">
+    <div class="pts-view-toggle">
+      <button type="button" id="formules-view-fiches" class="cat-chip active">Fiches</button>
+      <button type="button" id="formules-view-tableaux" class="cat-chip">Tableaux comparatifs par famille</button>
+    </div>
+    <div id="formules-view-tableaux-panel" style="display:none;">
+      <div id="tab-comp-familles" class="cat-chip-row"></div>
+      <div id="tab-comp-feuilles" class="cat-chip-row"></div>
+      <p class="muted" id="tab-comp-aide">Clique sur le nom d'une formule (en-tête) pour ouvrir sa fiche. L'ordre des lignes : celles communes au plus de formules d'abord.</p>
+      <div id="tab-comp-wrap" class="tab-comp-scroll"><p class="muted">Chargement...</p></div>
+    </div>
+    <div class="formules-layout" id="formules-view-fiches-panel">
       <aside class="formules-sidebar">
         <div class="sidebar-header-row">
           <input type="search" id="formule-search" placeholder="Rechercher : pinyin, syndrome, substance...">
@@ -411,6 +421,6 @@
 
 </main>
 
-<script src="app.js?v=44"></script>
+<script src="app.js?v=45"></script>
 </body>
 </html>

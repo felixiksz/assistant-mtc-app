@@ -321,6 +321,95 @@ const Formules = {
 document.getElementById("formule-search").addEventListener("input", () => Formules.applyFilters());
 Formules.load().then(() => Ajout.populateCategories());
 
+/* ============ Tableaux comparatifs de formules (une famille à la fois) ============
+   Données : formules/tableaux/tableaux.json, produit par formules/tableaux/generer_tableaux.py
+   (mêmes tableaux que les fichiers Excel du dossier formules/tableaux/xlsx). */
+const FormuleTableaux = {
+  data: null,
+  famille: null,
+  feuille: "plantes",
+  FEUILLES: [["plantes", "Plantes + actions"], ["signes", "Signes cliniques + contre-indications"], ["tout", "Tout"]],
+
+  async ensureLoaded() {
+    if (this.data) return;
+    const wrap = document.getElementById("tab-comp-wrap");
+    try {
+      this.data = await Store.readJSON("formules/tableaux/tableaux.json");
+      this.famille = this.famille || Object.keys(this.data)[0];
+    } catch (e) {
+      wrap.innerHTML = `<p class="muted">Tableaux pas encore générés (${escapeHtml(e.message)}).</p>`;
+      return;
+    }
+    this.renderChips();
+    this.render();
+  },
+
+  renderChips() {
+    const mk = (host, items, current, onClick) => {
+      host.innerHTML = "";
+      items.forEach(([id, label]) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "cat-chip" + (id === current ? " active" : "");
+        b.textContent = label;
+        b.addEventListener("click", () => onClick(id));
+        host.appendChild(b);
+      });
+    };
+    mk(document.getElementById("tab-comp-familles"),
+      Object.entries(this.data).map(([id, f]) => [id, `${f.titre.charAt(0)}${f.titre.slice(1).toLowerCase()} (${f.formules.length})`]),
+      this.famille, id => { this.famille = id; this.renderChips(); this.render(); });
+    mk(document.getElementById("tab-comp-feuilles"), this.FEUILLES, this.feuille,
+      id => { this.feuille = id; this.renderChips(); this.render(); });
+  },
+
+  render() {
+    const fam = this.data[this.famille];
+    if (!fam) return;
+    const ncol = fam.formules.length;
+    const head = fam.formules.map(f =>
+      `<th class="tab-comp-formule" data-id="${escapeHtml(f.id)}" title="Ouvrir la fiche">${escapeHtml(f.pinyin)}${f.hanzi ? `<br><span class="hanzi">${escapeHtml(f.hanzi)}</span>` : ""}</th>`).join("");
+    const section = (titre) => `<tr class="tab-comp-section"><th colspan="${ncol + 1}">${escapeHtml(titre)}</th></tr>`;
+    const xRows = (rows) => rows.map(r =>
+      `<tr><th>${escapeHtml(r.label)}</th>${r.cellules.map(c => `<td class="tab-comp-x">${c ? "X" : ""}</td>`).join("")}</tr>`).join("");
+    const plantRows = (rows) => rows.map(r =>
+      `<tr><th>${escapeHtml(r.label)}${r.hanzi ? ` <span class="hanzi">${escapeHtml(r.hanzi)}</span>` : ""}</th>${r.cellules.map(c => `<td class="tab-comp-dose">${escapeHtml(c).replace(/\n/g, "<br>")}</td>`).join("")}</tr>`).join("");
+    const syndrome = `<tr><th>Syndrome</th>${fam.formules.map(f => `<td class="tab-comp-syndrome">${escapeHtml(f.syndrome || "")}</td>`).join("")}</tr>`;
+
+    let body = "";
+    if (this.feuille === "plantes" || this.feuille === "tout") {
+      body += syndrome + section("Plantes — dose  [J = jun, C = chen, Z = zuo, S = shi]") + plantRows(fam.plantes);
+      if (fam.actions.length) body += section("Actions") + xRows(fam.actions);
+    }
+    if (this.feuille === "signes" || this.feuille === "tout") {
+      if (fam.signes.length) body += section("Signes cliniques") + xRows(fam.signes);
+      if (fam.contre_indications.length) body += section("Contre-indications / précautions") + xRows(fam.contre_indications);
+    }
+    const wrap = document.getElementById("tab-comp-wrap");
+    wrap.innerHTML = `<table class="tab-comp"><thead><tr><th class="tab-comp-corner">${escapeHtml(fam.titre)} [${escapeHtml(fam.code)}]</th>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    wrap.querySelectorAll("th.tab-comp-formule").forEach(th => th.addEventListener("click", () => {
+      const entry = Formules.index.find(f => f.id === th.dataset.id && f.categorie_id === this.famille);
+      if (!entry) return;
+      document.getElementById("formules-view-fiches").click();
+      Formules.showDetail(entry);
+    }));
+  }
+};
+
+document.getElementById("formules-view-fiches").addEventListener("click", () => {
+  document.getElementById("formules-view-fiches").classList.add("active");
+  document.getElementById("formules-view-tableaux").classList.remove("active");
+  document.getElementById("formules-view-fiches-panel").style.display = "";
+  document.getElementById("formules-view-tableaux-panel").style.display = "none";
+});
+document.getElementById("formules-view-tableaux").addEventListener("click", () => {
+  document.getElementById("formules-view-tableaux").classList.add("active");
+  document.getElementById("formules-view-fiches").classList.remove("active");
+  document.getElementById("formules-view-fiches-panel").style.display = "none";
+  document.getElementById("formules-view-tableaux-panel").style.display = "";
+  FormuleTableaux.ensureLoaded();
+});
+
 /* ============================= Réf. Psy (Farrell) ============================= */
 const Psy = {
   entries: [], // {id, kind: "niveau"|"vaisseau", nom, chemin}
