@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=33">
+<link rel="stylesheet" href="style.css?v=34">
 </head>
 <body>
 <header class="topbar">
@@ -65,9 +65,17 @@
     </div>
     <div id="formules-view-tableaux-panel" style="display:none;">
       <div id="tab-comp-familles" class="cat-chip-row"></div>
-      <div id="tab-comp-feuilles" class="cat-chip-row"></div>
-      <p class="muted" id="tab-comp-aide">Clique sur le nom d'une formule (en-tête) pour ouvrir sa fiche. L'ordre des lignes : celles communes au plus de formules d'abord.</p>
-      <div id="tab-comp-wrap" class="tab-comp-scroll"><p class="muted">Chargement...</p></div>
+      <div class="tab-comp-options">
+        <div class="tab-comp-options-row"><strong>Champs à comparer</strong><div id="tab-comp-champs" class="cat-chip-row"></div></div>
+        <div class="tab-comp-options-row"><span class="muted">Préréglages</span><div id="tab-comp-presets" class="cat-chip-row"></div></div>
+        <details class="tab-comp-formules-details"><summary>Formules affichées</summary><div id="tab-comp-formules-choix" class="cat-chip-row"></div></details>
+        <button type="button" id="tab-comp-print" class="edit-toggle-btn">🖨 Imprimer ce tableau (A4 paysage)</button>
+      </div>
+      <p class="muted" id="tab-comp-aide">Clique sur le nom d'une formule (en-tête) pour ouvrir sa fiche. Les lignes communes au plus de formules sont en haut.</p>
+      <div id="tab-comp-print-area">
+        <h3 id="tab-comp-print-titre"></h3>
+        <div id="tab-comp-wrap" class="tab-comp-scroll"><p class="muted">Chargement...</p></div>
+      </div>
     </div>
     <div class="formules-layout" id="formules-view-fiches-panel">
       <aside class="formules-sidebar">
@@ -421,6 +429,6 @@
 
 </main>
 
-<script src="app.js?v=45"></script>
+<script src="app.js?v=46"></script>
 </body>
 </html>
