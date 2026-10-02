@@ -327,8 +327,21 @@ Formules.load().then(() => Ajout.populateCategories());
 const FormuleTableaux = {
   data: null,
   famille: null,
-  feuille: "plantes",
-  FEUILLES: [["plantes", "Plantes + actions"], ["signes", "Signes cliniques + contre-indications"], ["tout", "Tout"]],
+  champs: new Set(["syndrome", "plantes", "actions"]),
+  masquees: new Set(), // ids de formules masquées dans la famille courante
+  CHAMPS: [
+    ["syndrome", "Syndrome (court)"],
+    ["description", "Syndromes (description)"],
+    ["plantes", "Plantes + doses"],
+    ["actions", "Actions"],
+    ["signes", "Signes cliniques"],
+    ["ci", "Contre-indications"]
+  ],
+  PRESETS: [
+    ["Plantes + actions", ["syndrome", "plantes", "actions"]],
+    ["Syndromes + signes", ["syndrome", "description", "signes", "ci"]],
+    ["Tout", ["syndrome", "description", "plantes", "actions", "signes", "ci"]]
+  ],
 
   async ensureLoaded() {
     if (this.data) return;
@@ -340,53 +353,87 @@ const FormuleTableaux = {
       wrap.innerHTML = `<p class="muted">Tableaux pas encore générés (${escapeHtml(e.message)}).</p>`;
       return;
     }
-    this.renderChips();
+    this.renderControls();
     this.render();
   },
 
-  renderChips() {
-    const mk = (host, items, current, onClick) => {
-      host.innerHTML = "";
-      items.forEach(([id, label]) => {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.className = "cat-chip" + (id === current ? " active" : "");
-        b.textContent = label;
-        b.addEventListener("click", () => onClick(id));
-        host.appendChild(b);
-      });
-    };
-    mk(document.getElementById("tab-comp-familles"),
-      Object.entries(this.data).map(([id, f]) => [id, `${f.titre.charAt(0)}${f.titre.slice(1).toLowerCase()} (${f.formules.length})`]),
-      this.famille, id => { this.famille = id; this.renderChips(); this.render(); });
-    mk(document.getElementById("tab-comp-feuilles"), this.FEUILLES, this.feuille,
-      id => { this.feuille = id; this.renderChips(); this.render(); });
+  chip(host, label, active, onClick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "cat-chip" + (active ? " active" : "");
+    b.textContent = label;
+    b.addEventListener("click", onClick);
+    host.appendChild(b);
+  },
+
+  renderControls() {
+    const fam = this.data[this.famille];
+    const familles = document.getElementById("tab-comp-familles");
+    familles.innerHTML = "";
+    Object.entries(this.data).forEach(([id, f]) =>
+      this.chip(familles, `${f.titre.charAt(0)}${f.titre.slice(1).toLowerCase()} (${f.formules.length})`, id === this.famille, () => {
+        this.famille = id; this.masquees.clear(); this.renderControls(); this.render();
+      }));
+    const champs = document.getElementById("tab-comp-champs");
+    champs.innerHTML = "";
+    this.CHAMPS.forEach(([id, label]) =>
+      this.chip(champs, (this.champs.has(id) ? "☑ " : "☐ ") + label, this.champs.has(id), () => {
+        if (this.champs.has(id)) this.champs.delete(id); else this.champs.add(id);
+        this.renderControls(); this.render();
+      }));
+    const presets = document.getElementById("tab-comp-presets");
+    presets.innerHTML = "";
+    this.PRESETS.forEach(([label, ids]) =>
+      this.chip(presets, label, false, () => { this.champs = new Set(ids); this.renderControls(); this.render(); }));
+    const choix = document.getElementById("tab-comp-formules-choix");
+    choix.innerHTML = "";
+    fam.formules.forEach(f =>
+      this.chip(choix, (this.masquees.has(f.id) ? "☐ " : "☑ ") + f.pinyin, !this.masquees.has(f.id), () => {
+        if (this.masquees.has(f.id)) this.masquees.delete(f.id); else this.masquees.add(f.id);
+        this.renderControls(); this.render();
+      }));
   },
 
   render() {
     const fam = this.data[this.famille];
     if (!fam) return;
-    const ncol = fam.formules.length;
-    const head = fam.formules.map(f =>
-      `<th class="tab-comp-formule" data-id="${escapeHtml(f.id)}" title="Ouvrir la fiche">${escapeHtml(f.pinyin)}${f.hanzi ? `<br><span class="hanzi">${escapeHtml(f.hanzi)}</span>` : ""}</th>`).join("");
-    const section = (titre) => `<tr class="tab-comp-section"><th colspan="${ncol + 1}">${escapeHtml(titre)}</th></tr>`;
-    const xRows = (rows) => rows.map(r =>
-      `<tr><th>${escapeHtml(r.label)}</th>${r.cellules.map(c => `<td class="tab-comp-x">${c ? "X" : ""}</td>`).join("")}</tr>`).join("");
-    const plantRows = (rows) => rows.map(r =>
-      `<tr><th>${escapeHtml(r.label)}${r.hanzi ? ` <span class="hanzi">${escapeHtml(r.hanzi)}</span>` : ""}</th>${r.cellules.map(c => `<td class="tab-comp-dose">${escapeHtml(c).replace(/\n/g, "<br>")}</td>`).join("")}</tr>`).join("");
-    const syndrome = `<tr><th>Syndrome</th>${fam.formules.map(f => `<td class="tab-comp-syndrome">${escapeHtml(f.syndrome || "")}</td>`).join("")}</tr>`;
+    const cols = fam.formules.map((f, i) => i).filter(i => !this.masquees.has(fam.formules[i].id));
+    const ncol = cols.length;
+    const wrap = document.getElementById("tab-comp-wrap");
+    const titre = document.getElementById("tab-comp-print-titre");
+    const champsTxt = this.CHAMPS.filter(([id]) => this.champs.has(id)).map(([, l]) => l).join(" · ");
+    titre.textContent = `${fam.titre} — ${champsTxt || "aucun champ sélectionné"}`;
+    if (!ncol || !this.champs.size) {
+      wrap.innerHTML = `<p class="muted">${!ncol ? "Aucune formule affichée." : "Coche au moins un champ à comparer."}</p>`;
+      return;
+    }
+    const head = cols.map(i => {
+      const f = fam.formules[i];
+      return `<th class="tab-comp-formule" data-id="${escapeHtml(f.id)}" title="Ouvrir la fiche">${escapeHtml(f.pinyin)}${f.hanzi ? `<br><span class="hanzi">${escapeHtml(f.hanzi)}</span>` : ""}</th>`;
+    }).join("");
+    const section = (t) => `<tr class="tab-comp-section"><th colspan="${ncol + 1}">${escapeHtml(t)}</th></tr>`;
+    const xRows = (rows) => rows
+      .filter(r => cols.some(i => r.cellules[i]))
+      .map(r => `<tr><th>${escapeHtml(r.label)}</th>${cols.map(i => `<td class="tab-comp-x">${r.cellules[i] ? "X" : ""}</td>`).join("")}</tr>`).join("");
+    const plantRows = (rows) => rows
+      .filter(r => cols.some(i => r.cellules[i]))
+      .map(r => `<tr><th>${escapeHtml(r.label)}${r.hanzi ? ` <span class="hanzi">${escapeHtml(r.hanzi)}</span>` : ""}</th>${cols.map(i => `<td class="tab-comp-dose">${escapeHtml(r.cellules[i]).replace(/\n/g, "<br>")}</td>`).join("")}</tr>`).join("");
 
     let body = "";
-    if (this.feuille === "plantes" || this.feuille === "tout") {
-      body += syndrome + section("Plantes — dose  [J = jun, C = chen, Z = zuo, S = shi]") + plantRows(fam.plantes);
-      if (fam.actions.length) body += section("Actions") + xRows(fam.actions);
+    if (this.champs.has("syndrome")) {
+      body += `<tr><th>Syndrome</th>${cols.map(i => `<td class="tab-comp-syndrome">${escapeHtml(fam.formules[i].syndrome || "")}</td>`).join("")}</tr>`;
     }
-    if (this.feuille === "signes" || this.feuille === "tout") {
-      if (fam.signes.length) body += section("Signes cliniques") + xRows(fam.signes);
-      if (fam.contre_indications.length) body += section("Contre-indications / précautions") + xRows(fam.contre_indications);
+    if (this.champs.has("description")) {
+      const cell = (i) => (fam.syndromes && fam.syndromes[i] ? fam.syndromes[i] : [])
+        .map(s => `<p><strong>${escapeHtml(s.nom)}</strong>${s.description ? `<br>${escapeHtml(s.description)}` : ""}</p>`).join("");
+      body += `<tr><th>Description</th>${cols.map(i => `<td class="tab-comp-syndrome">${cell(i)}</td>`).join("")}</tr>`;
     }
-    const wrap = document.getElementById("tab-comp-wrap");
-    wrap.innerHTML = `<table class="tab-comp"><thead><tr><th class="tab-comp-corner">${escapeHtml(fam.titre)} [${escapeHtml(fam.code)}]</th>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    if (this.champs.has("plantes")) body += section("Plantes — dose  [J = jun, C = chen, Z = zuo, S = shi]") + plantRows(fam.plantes);
+    if (this.champs.has("actions") && fam.actions.length) body += section("Actions") + xRows(fam.actions);
+    if (this.champs.has("signes") && fam.signes.length) body += section("Signes cliniques") + xRows(fam.signes);
+    if (this.champs.has("ci") && fam.contre_indications.length) body += section("Contre-indications / précautions") + xRows(fam.contre_indications);
+
+    wrap.innerHTML = `<table class="tab-comp"><thead><tr><th class="tab-comp-corner">${escapeHtml(fam.code)}</th>${head}</tr></thead><tbody>${body}</tbody></table>`;
     wrap.querySelectorAll("th.tab-comp-formule").forEach(th => th.addEventListener("click", () => {
       const entry = Formules.index.find(f => f.id === th.dataset.id && f.categorie_id === this.famille);
       if (!entry) return;
@@ -395,6 +442,12 @@ const FormuleTableaux = {
     }));
   }
 };
+
+// Impression : on n'imprime que le tableau (voir @media print dans style.css), y compris avec Ctrl+P.
+function tabCompPrintable() { return document.getElementById("formules-view-tableaux-panel").style.display !== "none"; }
+window.addEventListener("beforeprint", () => { if (tabCompPrintable()) document.body.classList.add("print-tab-comp"); });
+window.addEventListener("afterprint", () => document.body.classList.remove("print-tab-comp"));
+document.getElementById("tab-comp-print").addEventListener("click", () => window.print());
 
 document.getElementById("formules-view-fiches").addEventListener("click", () => {
   document.getElementById("formules-view-fiches").classList.add("active");
