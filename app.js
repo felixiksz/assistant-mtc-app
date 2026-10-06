@@ -1800,7 +1800,7 @@ const Points = {
       try {
         const pts = await Store.readJSON(`reference/points_canaux/${c.fichier}`);
         this.cache[c.id] = pts;
-        pts.forEach(p => this.entries.push({ id: p.point, canal: c.id, canalNom: c.nom, data: p }));
+        pts.forEach(p => this.entries.push({ id: p.point, canal: c.id, canalNom: c.nom, data: p, _searchText: flattenDetailText(p) }));
       } catch (e) { /* skip */ }
     }));
     this.renderGroups();
@@ -2144,6 +2144,19 @@ newCas();
 // Aplati récursivement toutes les chaînes de texte d'un objet JSON (indications, points,
 // avertissements, etc.) en un seul blob minuscule, pour que la recherche globale trouve du
 // contenu qui n'est pas dans le résumé léger d'un index (ex: une indication citée sur un point).
+// Normalise un texte pour la recherche : minuscules, sans accents, apostrophes et espaces unifiés.
+const _normMemo = new Map();
+function normalizeSearch(str) {
+  const s = String(str || "");
+  let r = _normMemo.get(s);
+  if (r === undefined) {
+    r = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[’‘`´]/g, "'").replace(/\s+/g, " ").trim();
+    if (_normMemo.size > 4000) _normMemo.clear();
+    _normMemo.set(s, r);
+  }
+  return r;
+}
+
 function flattenDetailText(d) {
   const parts = [];
   const walk = (v) => {
@@ -2369,7 +2382,7 @@ function formatPointsTable(arr, headerLabel) {
    pour les navigateurs qui ne supportent pas cette API. */
 function slugify(s) {
   return (s || "")
-    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
@@ -3041,45 +3054,45 @@ const GlobalSearch = {
   },
 
   collect(query) {
-    const q = query.trim().toLowerCase();
+    const q = normalizeSearch(query);
     if (!q) return [];
     const out = [];
 
     (Formules.index || []).forEach(f => {
-      const hay = [f.pinyin, f.nom_fr, f.indications_syndrome, f.categorie_nom].filter(Boolean).join(" ").toLowerCase();
-      if (hay.includes(q)) out.push({
+      const hay = [f.pinyin, f.nom_fr, f.indications_syndrome, f.categorie_nom].filter(Boolean).join(" ");
+      if (normalizeSearch(hay).includes(q)) out.push({
         group: "Formules", title: f.pinyin || f.id, sub: f.indications_syndrome || f.categorie_nom || "",
         go: () => { this.gotoTab("formules"); Formules.showDetail(f); }
       });
     });
 
     (Psy.entries || []).forEach(e => {
-      const hay = [e.nom, e.categorie_source, e.resume_court, e._searchText].filter(Boolean).join(" ").toLowerCase();
-      if (hay.includes(q)) out.push({
+      const hay = [e.nom, e.categorie_source, e.resume_court, e._searchText].filter(Boolean).join(" ");
+      if (normalizeSearch(hay).includes(q)) out.push({
         group: "Principes Taoïstes", title: e.nom, sub: e.kind === "niveau" ? "Farrell — Niveau de latence" : e.kind === "vaisseau" ? "Farrell — Vaisseau / confluence" : e.kind === "yuen" ? "Jeffrey Yuen — " + (e.categorie_source || "") : "Sterman — " + (e.categorie_source || ""),
         go: () => { this.gotoTab("psy"); Psy.showDetail(e); }
       });
     });
 
     (Syndromes.entries || []).forEach(e => {
-      const hay = [e.nom, e.sousLabel, e._searchText].filter(Boolean).join(" ").toLowerCase();
-      if (hay.includes(q)) out.push({
+      const hay = [e.nom, e.sousLabel, e._searchText].filter(Boolean).join(" ");
+      if (normalizeSearch(hay).includes(q)) out.push({
         group: "Syndromes", title: e.nom, sub: (Syndromes.domaineLabels[e.domaine] || "") + (e.sousLabel ? " · " + e.sousLabel : ""),
         go: () => { this.gotoTab("syndromes"); Syndromes.showDetail(e); }
       });
     });
 
     (CasPratique.cas || []).forEach(c => {
-      const hay = [c.titre_original, c.resume_court, c._searchText].filter(Boolean).join(" ").toLowerCase();
-      if (hay.includes(q)) out.push({
+      const hay = [c.titre_original, c.resume_court, c._searchText].filter(Boolean).join(" ");
+      if (normalizeSearch(hay).includes(q)) out.push({
         group: "Exemples de cas cliniques", title: c.titre_original || c.id, sub: CasPratique.sources[c.source_id] || "",
         go: () => { this.gotoTab("cas-pratique"); CasPratique.showDetail(c); }
       });
     });
 
     (Points.entries || []).forEach(e => {
-      const hay = [e.id, e.data.pinyin, e.data.nom_fr].filter(Boolean).join(" ").toLowerCase();
-      if (hay.includes(q)) out.push({
+      const hay = [e.id, e.data.pinyin, e.data.nom_fr, e._searchText].filter(Boolean).join(" ");
+      if (normalizeSearch(hay).includes(q)) out.push({
         group: "Points", title: e.id + (e.data.pinyin ? " — " + e.data.pinyin : ""), sub: e.canalNom,
         go: () => {
           this.gotoTab("points");
@@ -3091,8 +3104,8 @@ const GlobalSearch = {
     });
 
     ((window.TdahData && window.TdahData.types) || []).forEach(t => {
-      const hay = [t.nom, t.mecanisme, t.approche, ...(t.signes_cles || [])].filter(Boolean).join(" ").toLowerCase();
-      if (hay.includes(q)) out.push({
+      const hay = [t.nom, t.mecanisme, t.approche, ...(t.signes_cles || [])].filter(Boolean).join(" ");
+      if (normalizeSearch(hay).includes(q)) out.push({
         group: "TDAH", title: t.nom, sub: t.approche || "",
         go: () => {
           this.gotoTab("tableaux-psy");
@@ -3107,8 +3120,8 @@ const GlobalSearch = {
 
     const PSY_THEME_LABELS = { depression: "Dépression", anxiete: "Anxiété", insomnie: "Insomnie" };
     ((window.DepressionAnxieteInsomnieData && window.DepressionAnxieteInsomnieData.types) || []).forEach(t => {
-      const hay = [t.nom, t.mecanisme, t.approche, ...(t.signes_cles || [])].filter(Boolean).join(" ").toLowerCase();
-      if (!hay.includes(q)) return;
+      const hay = [t.nom, t.mecanisme, t.approche, ...(t.signes_cles || [])].filter(Boolean).join(" ");
+      if (!normalizeSearch(hay).includes(q)) return;
       (t.themes || []).forEach(theme => {
         out.push({
           group: PSY_THEME_LABELS[theme] || theme, title: t.nom, sub: t.approche || "",
@@ -3126,8 +3139,8 @@ const GlobalSearch = {
 
     ((Croisement.data && Croisement.data.points) || []).forEach(p => {
       const hay = [p.point, p.canal_principal, ...(p.canaux_recoupes || []).map(c => c.canal + " " + c.nom),
-        ...(p.vaisseaux_extraordinaires_recoupes || []).map(v => v.vaisseau)].filter(Boolean).join(" ").toLowerCase();
-      if (hay.includes(q)) out.push({
+        ...(p.vaisseaux_extraordinaires_recoupes || []).map(v => v.vaisseau)].filter(Boolean).join(" ");
+      if (normalizeSearch(hay).includes(q)) out.push({
         group: "Croisements de canaux", title: p.point,
         sub: [...(p.canaux_recoupes || []).map(c => c.canal), ...(p.vaisseaux_extraordinaires_recoupes || []).map(v => v.vaisseau)].join(", "),
         go: () => {
