@@ -11,7 +11,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=34">
+<link rel="stylesheet" href="style.css?v=36">
+<script src="theme.js?v=2"></script>
 </head>
 <body>
 <header class="topbar">
@@ -21,6 +22,7 @@
     <div id="global-search-results"></div>
   </div>
   <button type="button" id="sync-settings-btn" class="sync-btn">⚙ Synchronisation</button>
+  <button type="button" id="theme-btn" class="sync-btn" aria-expanded="false" aria-controls="theme-panel">🎨 Thème</button>
   <nav class="tabs">
     <button class="tab-btn active" data-tab="formules">Formules</button>
     <button class="tab-btn" data-tab="cas">Fiche de cas</button>
@@ -32,6 +34,14 @@
     <button class="tab-btn" data-tab="points">Points</button>
   </nav>
 </header>
+
+<div id="theme-panel" class="sync-panel" style="display:none;">
+  <h2>Thèmes de couleurs</h2>
+  <p class="muted">Les mêmes paires fond / lettres que le jeu. Le contraste est renforcé automatiquement : lettres visées à 7:1 sur le fond, texte atténué et couleurs d'indication (vent, chaleur, froid…) à 4,5:1 au minimum.</p>
+  <label id="theme-boost-row"><input type="checkbox" id="theme-boost" checked> Contraste renforcé (recommandé)</label>
+  <div id="theme-grid" role="group" aria-label="Choix du thème"></div>
+  <p id="theme-info" aria-live="polite"></p>
+</div>
 
 <div id="sync-settings-panel" class="sync-panel" style="display:none;">
   <h2>Synchronisation des données</h2>
