@@ -1997,7 +1997,8 @@ const CanauxDistincts = {
     ["Signes (Sterman)", ["trajectoire", "wei", "mobilisation", "depletion"]],
     ["Signes + pouls", ["trajectoire", "wei", "mobilisation", "depletion", "pouls"]],
     ["Twicken", ["primaire", "organe", "luo"]],
-    ["Tout", ["trajectoire", "wei", "mobilisation", "depletion", "pouls", "cles", "primaire", "organe", "luo"]]
+    ["Points et zones", ["rencontre", "ouverture", "palpation", "six_yang"]],
+    ["Tout", ["trajectoire", "wei", "mobilisation", "depletion", "pouls", "cles", "primaire", "organe", "luo", "rencontre", "ouverture", "palpation", "six_yang"]]
   ],
 
   async load() {
@@ -2051,9 +2052,14 @@ const CanauxDistincts = {
   },
 
   longRef(ref) {
-    const court = (ref || "").split(",")[0].trim();
-    const s = Object.values(this.data.sources).find(x => x.court === court);
-    return s ? s.long : ref;
+    const longs = [];
+    (ref || "").split(";").forEach(part => {
+      const court = part.split(",")[0].trim();
+      const s = Object.values(this.data.sources).find(x => x.court === court);
+      const l = s ? s.long : part.trim();
+      if (!longs.includes(l)) longs.push(l);
+    });
+    return longs.join(" · ");
   },
 
   refHtml(ref) {
@@ -2070,18 +2076,30 @@ const CanauxDistincts = {
     const d = this.data;
     if (!d) return;
     const wrap = document.getElementById("cd-wrap");
-    const cols = d.champs.filter(c => this.champs.has(c.id));
+    const choisis = d.champs.filter(c => this.champs.has(c.id));
+    const cols = choisis.filter(c => c.scope !== "confluence");        // une colonne par champ de canal
+    const champsConf = choisis.filter(c => c.scope === "confluence");  // lignes sous le titre de la confluence
     const confs = d.confluences.filter(c => !this.rangs.size || this.rangs.has(c.rang));
     document.getElementById("cd-print-titre").textContent =
-      `${d.titre} — ${cols.map(c => c.label).join(" · ") || "aucun champ sélectionné"}`;
-    if (!cols.length || !confs.length) {
-      wrap.innerHTML = `<p class="muted">${!cols.length ? "Coche au moins un champ à afficher." : "Aucune confluence affichée."}</p>`;
+      `${d.titre} — ${choisis.map(c => c.label).join(" · ") || "aucun champ sélectionné"}`;
+    if (!choisis.length || !confs.length) {
+      wrap.innerHTML = `<p class="muted">${!choisis.length ? "Coche au moins un champ à afficher." : "Aucune confluence affichée."}</p>`;
       return;
     }
-    const head = cols.map(c => `<th>${escapeHtml(c.label)}<br><span class="cd-ref cd-ref-head">${escapeHtml(d.sources[c.source].court)}</span></th>`).join("");
+    const nCol = Math.max(cols.length, 1);
+    const head = cols.length
+      ? cols.map(c => `<th>${escapeHtml(c.label)}<br><span class="cd-ref cd-ref-head">${escapeHtml(d.sources[c.source].court)}</span></th>`).join("")
+      : `<th></th>`;
     let body = "";
     confs.forEach(conf => {
-      body += `<tr class="cd-section"><th colspan="${cols.length + 1}">${conf.rang}${conf.rang === 1 ? "ʳᵉ" : "ᵉ"} confluence — ${escapeHtml(conf.paire)} · médium : ${escapeHtml(conf.medium)} ${this.refHtml(conf.ref_medium)}</th></tr>`;
+      body += `<tr class="cd-section"><th colspan="${nCol + 1}">${conf.rang}${conf.rang === 1 ? "ʳᵉ" : "ᵉ"} confluence — ${escapeHtml(conf.paire)} · médium : ${escapeHtml(conf.medium)} ${this.refHtml(conf.ref_medium)}</th></tr>`;
+      champsConf.forEach(c => {
+        const cel = (conf.champs || {})[c.id];
+        if (!cel) return;
+        const paras = cel.texte.split("\n").filter(Boolean).map(p => `<p>${escapeHtml(p)}</p>`).join("");
+        body += `<tr class="cd-conf"><th class="cd-canal">${escapeHtml(c.label)}</th><td colspan="${nCol}">${paras}${this.refHtml(cel.ref)}</td></tr>`;
+      });
+      if (!cols.length) return;
       conf.canaux.forEach(can => {
         body += `<tr data-code="${escapeHtml(can.code)}"><th class="cd-canal">${escapeHtml(can.nom)} <span class="cd-code">(${escapeHtml(can.code)})</span><br><span class="cd-pol">${escapeHtml(can.polarite)}</span></th>` +
           cols.map(c => this.cellHtml(can.champs[c.id])).join("") + `</tr>`;
@@ -3296,7 +3314,8 @@ const GlobalSearch = {
     });
 
     ((CanauxDistincts.data && CanauxDistincts.data.confluences) || []).forEach(conf => conf.canaux.forEach(can => {
-      const hay = [can.nom, can.code, ...Object.values(can.champs).filter(Boolean).map(x => x.texte)].join(" ");
+      const hay = [can.nom, can.code, ...Object.values(can.champs).filter(Boolean).map(x => x.texte),
+        ...Object.values(conf.champs || {}).filter(Boolean).map(x => x.texte)].join(" ");
       if (normalizeSearch(hay).includes(q)) out.push({
         group: "Canaux distincts", title: `${can.nom} (${can.code}) — ${conf.rang}${conf.rang === 1 ? "ʳᵉ" : "ᵉ"} confluence`, sub: "Tableaux pathologiques · " + conf.paire,
         go: () => {

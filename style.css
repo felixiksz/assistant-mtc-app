@@ -561,3 +561,5 @@ table.cd-table td.cd-vide { color: var(--muted); text-align: center; vertical-al
 .cd-details p { font-size: 0.85rem; margin: 0.5rem 0; }
 #cd-print { align-self: flex-start; }
 #cd-print-titre { margin: 0.4rem 0 0; font-size: 0.95rem; }
+tr.cd-conf > td { background: var(--panel); }
+tr.cd-conf > th.cd-canal { font-weight: 700; }
