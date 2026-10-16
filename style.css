@@ -474,6 +474,21 @@ table.tab-comp td.tab-comp-syndrome p { margin: 0 0 0.4rem; }
   body.print-tab-comp table.tab-comp thead { display: table-header-group; }
   body.print-tab-comp table.tab-comp tr { break-inside: avoid; }
   body.print-tab-comp * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* Points > Canaux distincts : seul le tableau s'imprime */
+  body.print-cd header.topbar,
+  body.print-cd .sync-panel,
+  body.print-cd main > section:not(#tab-points),
+  body.print-cd #tab-points > :not(#pts-view-distincts-panel),
+  body.print-cd #pts-view-distincts-panel > :not(#cd-print-area) { display: none !important; }
+  body.print-cd { background: #fff; }
+  body.print-cd .cd-table-wrap { overflow: visible; max-height: none; border: none; }
+  body.print-cd table.cd-table { font-size: 6.5pt; width: 100%; table-layout: fixed; }
+  body.print-cd table.cd-table th, body.print-cd table.cd-table td { padding: 2px 3px; }
+  body.print-cd table.cd-table thead th, body.print-cd table.cd-table tbody th.cd-canal { position: static; min-width: 0; }
+  body.print-cd table.cd-table thead { display: table-header-group; }
+  body.print-cd table.cd-table tr { break-inside: avoid; }
+  body.print-cd .cd-ref { font-size: 5pt; }
+  body.print-cd * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
 .croise-table-scroll { overflow-x: auto; border: 1.5px solid var(--line); }
@@ -526,3 +541,23 @@ table.croise-table td.croise-self { background: var(--accent-soft); }
 
 ::placeholder { color: var(--muted); opacity: 1; }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
+
+/* --- Points > Canaux distincts : tableaux pathologiques --- */
+.cd-ref { display: block; margin-top: 0.25rem; font-size: 0.62rem; color: var(--muted); font-style: italic; letter-spacing: 0.01em; font-weight: 400; text-transform: none; }
+.cd-ref-head { display: inline; margin: 0; color: inherit; opacity: 0.8; }
+.cd-table-wrap { overflow: auto; max-height: 75vh; border: 1.5px solid var(--line); margin-top: 0.6rem; }
+table.cd-table { border-collapse: collapse; font-size: 0.78rem; min-width: 100%; }
+table.cd-table th, table.cd-table td { border: 1px solid var(--line); padding: 0.35rem 0.5rem; vertical-align: top; text-align: left; }
+table.cd-table thead th { position: sticky; top: 0; z-index: 3; background: var(--ink); color: var(--bg); min-width: 15rem; text-transform: none; }
+table.cd-table thead th:first-child { left: 0; z-index: 4; min-width: 9rem; }
+table.cd-table tbody th.cd-canal { position: sticky; left: 0; z-index: 2; background: var(--panel); min-width: 9rem; font-weight: 700; }
+table.cd-table tr.cd-section th { position: static; background: var(--row-section); text-transform: uppercase; letter-spacing: 0.03em; font-size: 0.72rem; }
+table.cd-table td p { margin: 0 0 0.35rem; }
+table.cd-table td.cd-vide { color: var(--muted); text-align: center; vertical-align: middle; }
+.cd-code, .cd-pol { font-weight: 400; font-size: 0.72rem; color: var(--muted); }
+.cd-row-flash > th, .cd-row-flash > td { outline: 3px solid var(--accent); outline-offset: -3px; }
+.cd-details { margin: 0.8rem 0; border: 1px solid var(--line); padding: 0.5rem 0.8rem; background: var(--panel); }
+.cd-details summary { cursor: pointer; font-weight: 700; }
+.cd-details p { font-size: 0.85rem; margin: 0.5rem 0; }
+#cd-print { align-self: flex-start; }
+#cd-print-titre { margin: 0.4rem 0 0; font-size: 0.95rem; }

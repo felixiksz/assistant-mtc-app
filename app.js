@@ -1974,17 +1974,160 @@ document.getElementById("croise-search").addEventListener("input", (e) => {
   if (Croisement.data) Croisement.render(Croisement.search(e.target.value));
 });
 Croisement.load();
-document.getElementById("pts-view-fiches").addEventListener("click", () => {
-  document.getElementById("pts-view-fiches").classList.add("active");
-  document.getElementById("pts-view-croisements").classList.remove("active");
-  document.getElementById("pts-view-fiches-panel").style.display = "";
-  document.getElementById("pts-view-croisements-panel").style.display = "none";
-});
+/* ============================= Points > Canaux distincts : tableaux pathologiques =============================
+   Textes repris tels quels de la base (Sterman, Twicken, Farrell), chaque cellule avec sa référence discrète.
+   Données compilées par data/reference/canaux_distincts/generer.py -> tableaux.json */
+const PTS_VIEWS = [
+  ["pts-view-fiches", "pts-view-fiches-panel"],
+  ["pts-view-croisements", "pts-view-croisements-panel"],
+  ["pts-view-distincts", "pts-view-distincts-panel"]
+];
+function showPtsView(btnId) {
+  PTS_VIEWS.forEach(([b, p]) => {
+    document.getElementById(b).classList.toggle("active", b === btnId);
+    document.getElementById(p).style.display = b === btnId ? "" : "none";
+  });
+}
+
+const CanauxDistincts = {
+  data: null,
+  champs: null,          // Set des champs affichés
+  rangs: new Set(),      // confluences affichées (vide = toutes)
+  PRESETS: [
+    ["Signes (Sterman)", ["trajectoire", "wei", "mobilisation", "depletion"]],
+    ["Signes + pouls", ["trajectoire", "wei", "mobilisation", "depletion", "pouls"]],
+    ["Twicken", ["primaire", "organe", "luo"]],
+    ["Tout", ["trajectoire", "wei", "mobilisation", "depletion", "pouls", "cles", "primaire", "organe", "luo"]]
+  ],
+
+  async load() {
+    try {
+      this.data = await Store.readJSON("reference/canaux_distincts/tableaux.json");
+    } catch (e) {
+      document.getElementById("cd-wrap").innerHTML = `<p class="muted">Tableaux pas encore générés (${escapeHtml(e.message)}).</p>`;
+      return;
+    }
+    this.champs = new Set(this.data.champs_par_defaut);
+    this.renderControls();
+    this.render();
+    this.renderExtras();
+  },
+
+  chip(host, label, active, onClick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "cat-chip" + (active ? " active" : "");
+    b.textContent = label;
+    b.addEventListener("click", onClick);
+    host.appendChild(b);
+  },
+
+  renderControls() {
+    const champs = document.getElementById("cd-champs");
+    champs.innerHTML = "";
+    this.data.champs.forEach(c => {
+      const on = this.champs.has(c.id);
+      this.chip(champs, (on ? "☑ " : "☐ ") + c.label + " · " + this.data.sources[c.source].court, on, () => {
+        if (on) this.champs.delete(c.id); else this.champs.add(c.id);
+        this.renderControls(); this.render();
+      });
+      champs.lastChild.title = c.aide;
+    });
+    const presets = document.getElementById("cd-presets");
+    presets.innerHTML = "";
+    this.PRESETS.forEach(([label, ids]) => this.chip(presets, label, false, () => {
+      this.champs = new Set(ids); this.renderControls(); this.render();
+    }));
+    const conf = document.getElementById("cd-confluences");
+    conf.innerHTML = "";
+    this.chip(conf, "Toutes", !this.rangs.size, () => { this.rangs.clear(); this.renderControls(); this.render(); });
+    this.data.confluences.forEach(c => {
+      const on = this.rangs.has(c.rang);
+      this.chip(conf, `${c.rang} · ${c.paire}`, on, () => {
+        if (on) this.rangs.delete(c.rang); else this.rangs.add(c.rang);
+        this.renderControls(); this.render();
+      });
+    });
+  },
+
+  longRef(ref) {
+    const court = (ref || "").split(",")[0].trim();
+    const s = Object.values(this.data.sources).find(x => x.court === court);
+    return s ? s.long : ref;
+  },
+
+  refHtml(ref) {
+    return `<span class="cd-ref" title="${escapeHtml(this.longRef(ref))}">${escapeHtml(ref)}</span>`;
+  },
+
+  cellHtml(c) {
+    if (!c) return `<td class="cd-vide">—</td>`;
+    const paras = c.texte.split("\n").filter(Boolean).map(p => `<p>${escapeHtml(p)}</p>`).join("");
+    return `<td>${paras}${this.refHtml(c.ref)}</td>`;
+  },
+
+  render() {
+    const d = this.data;
+    if (!d) return;
+    const wrap = document.getElementById("cd-wrap");
+    const cols = d.champs.filter(c => this.champs.has(c.id));
+    const confs = d.confluences.filter(c => !this.rangs.size || this.rangs.has(c.rang));
+    document.getElementById("cd-print-titre").textContent =
+      `${d.titre} — ${cols.map(c => c.label).join(" · ") || "aucun champ sélectionné"}`;
+    if (!cols.length || !confs.length) {
+      wrap.innerHTML = `<p class="muted">${!cols.length ? "Coche au moins un champ à afficher." : "Aucune confluence affichée."}</p>`;
+      return;
+    }
+    const head = cols.map(c => `<th>${escapeHtml(c.label)}<br><span class="cd-ref cd-ref-head">${escapeHtml(d.sources[c.source].court)}</span></th>`).join("");
+    let body = "";
+    confs.forEach(conf => {
+      body += `<tr class="cd-section"><th colspan="${cols.length + 1}">${conf.rang}${conf.rang === 1 ? "ʳᵉ" : "ᵉ"} confluence — ${escapeHtml(conf.paire)} · médium : ${escapeHtml(conf.medium)} ${this.refHtml(conf.ref_medium)}</th></tr>`;
+      conf.canaux.forEach(can => {
+        body += `<tr data-code="${escapeHtml(can.code)}"><th class="cd-canal">${escapeHtml(can.nom)} <span class="cd-code">(${escapeHtml(can.code)})</span><br><span class="cd-pol">${escapeHtml(can.polarite)}</span></th>` +
+          cols.map(c => this.cellHtml(can.champs[c.id])).join("") + `</tr>`;
+      });
+    });
+    wrap.innerHTML = `<table class="cd-table"><thead><tr><th>Canal distinct</th>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  },
+
+  renderExtras() {
+    const d = this.data;
+    const gen = document.getElementById("cd-generalites");
+    gen.innerHTML = `<summary>Catégories de signes et indications générales</summary>` +
+      `<p>${escapeHtml(d.categories_sterman.texte)} ${this.refHtml(d.categories_sterman.ref)}</p>` +
+      d.generalites.map(g => `<p><strong>${escapeHtml(g.titre)}</strong><br>${escapeHtml(g.texte)} ${this.refHtml(g.ref)}</p>`).join("");
+    const cas = document.getElementById("cd-cas");
+    cas.innerHTML = `<summary>Cas cliniques (${d.cas.length})</summary>` +
+      `<div class="cd-table-wrap"><table class="cd-table"><thead><tr><th>Cas</th><th>Présentation clinique</th><th>Diagnostic du livre</th></tr></thead><tbody>` +
+      d.cas.map(c => `<tr><th class="cd-canal">${escapeHtml(c.titre)}<br>${this.refHtml(c.ref)}</th><td><p>${escapeHtml(c.presentation)}</p></td><td><p>${escapeHtml(c.diagnostic)}</p></td></tr>`).join("") +
+      `</tbody></table></div>`;
+    document.getElementById("cd-limites").innerHTML = d.limites.map(l => `<li>${escapeHtml(l)}</li>`).join("");
+  },
+
+  // utilisé par la recherche globale : affiche la ligne du canal et la met en évidence
+  focusRow(code) {
+    if (!this.data) return;
+    this.rangs.clear();
+    if (!this.champs.size) this.champs = new Set(this.data.champs_par_defaut);
+    this.renderControls(); this.render();
+    const tr = document.querySelector(`#cd-wrap tr[data-code="${CSS.escape(code)}"]`);
+    if (!tr) return;
+    tr.scrollIntoView({ block: "center" });
+    tr.classList.add("cd-row-flash");
+    setTimeout(() => tr.classList.remove("cd-row-flash"), 2500);
+  }
+};
+CanauxDistincts.load();
+
+document.getElementById("pts-view-distincts").addEventListener("click", () => showPtsView("pts-view-distincts"));
+document.getElementById("cd-print").addEventListener("click", () => window.print());
+function cdPrintable() { return document.getElementById("pts-view-distincts-panel").style.display !== "none"; }
+window.addEventListener("beforeprint", () => { if (cdPrintable()) document.body.classList.add("print-cd"); });
+window.addEventListener("afterprint", () => document.body.classList.remove("print-cd"));
+
+document.getElementById("pts-view-fiches").addEventListener("click", () => showPtsView("pts-view-fiches"));
 document.getElementById("pts-view-croisements").addEventListener("click", () => {
-  document.getElementById("pts-view-croisements").classList.add("active");
-  document.getElementById("pts-view-fiches").classList.remove("active");
-  document.getElementById("pts-view-fiches-panel").style.display = "none";
-  document.getElementById("pts-view-croisements-panel").style.display = "";
+  showPtsView("pts-view-croisements");
   if (Croisement.data) Croisement.render(Croisement.data.points);
 });
 
@@ -3151,6 +3294,18 @@ const GlobalSearch = {
         }
       });
     });
+
+    ((CanauxDistincts.data && CanauxDistincts.data.confluences) || []).forEach(conf => conf.canaux.forEach(can => {
+      const hay = [can.nom, can.code, ...Object.values(can.champs).filter(Boolean).map(x => x.texte)].join(" ");
+      if (normalizeSearch(hay).includes(q)) out.push({
+        group: "Canaux distincts", title: `${can.nom} (${can.code}) — ${conf.rang}${conf.rang === 1 ? "ʳᵉ" : "ᵉ"} confluence`, sub: "Tableaux pathologiques · " + conf.paire,
+        go: () => {
+          this.gotoTab("points");
+          document.getElementById("pts-view-distincts").click();
+          setTimeout(() => CanauxDistincts.focusRow(can.code), 50);
+        }
+      });
+    }));
 
     return out.slice(0, 80);
   },

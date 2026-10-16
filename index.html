@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=36">
+<link rel="stylesheet" href="style.css?v=37">
 <script src="theme.js?v=2"></script>
 </head>
 <body>
@@ -336,6 +336,7 @@
     <div class="pts-view-toggle">
       <button type="button" id="pts-view-fiches" class="cat-chip active">Fiches par point</button>
       <button type="button" id="pts-view-croisements" class="cat-chip">Tableau des croisements de canaux</button>
+      <button type="button" id="pts-view-distincts" class="cat-chip">Canaux distincts : tableaux pathologiques</button>
       <button type="button" id="pts-load-local-images" class="cat-chip">📁 Charger les images depuis ce téléphone/dossier</button>
       <button type="button" id="pts-clear-local-images" class="cat-chip">🗑 Effacer les images locales enregistrées</button>
       <input type="file" id="pts-local-images-input" webkitdirectory multiple style="display:none;">
@@ -359,6 +360,22 @@
       <div id="croise-edit-zone"></div>
       <input type="search" id="croise-search" placeholder="Rechercher un point ou un canal (ex : DM 14, VB, chōng mài)...">
       <div id="croise-table-wrap"></div>
+    </div>
+    <div id="pts-view-distincts-panel" style="display:none;">
+      <p class="muted">Tableaux pathologiques des canaux distincts (Jīng Bié), repris tels quels des sources. Chaque case porte une référence discrète (auteur, page imprimée) ; survole-la pour voir l'ouvrage.</p>
+      <div class="tab-comp-options">
+        <div class="tab-comp-options-row"><strong>Champs à afficher</strong><div id="cd-champs" class="cat-chip-row"></div></div>
+        <div class="tab-comp-options-row"><span class="muted">Préréglages</span><div id="cd-presets" class="cat-chip-row"></div></div>
+        <div class="tab-comp-options-row"><strong>Confluences</strong><div id="cd-confluences" class="cat-chip-row"></div></div>
+        <button type="button" id="cd-print" class="edit-toggle-btn">🖨 Imprimer ce tableau (A4 paysage)</button>
+      </div>
+      <div id="cd-print-area">
+        <h3 id="cd-print-titre"></h3>
+        <div id="cd-wrap" class="cd-table-wrap"><p class="muted">Chargement...</p></div>
+      </div>
+      <details id="cd-generalites" class="cd-details"></details>
+      <details id="cd-cas" class="cd-details"></details>
+      <ul id="cd-limites" class="muted"></ul>
     </div>
   </section>
 
@@ -439,6 +456,6 @@
 
 </main>
 
-<script src="app.js?v=48"></script>
+<script src="app.js?v=49"></script>
 </body>
 </html>
