@@ -1365,8 +1365,17 @@ const DS_CATEGORIES = [
   ["Douleur", /douleur/i],
   ["Tête / vertiges", /vertige|céphalée|\btête\b|migraine/i],
   ["Teint / peau", /teint|\bpeau\b|éruption|dermatose|démangeaison/i],
-  ["Émotionnel / Shén", /shén|esprit|anxiété|dépression|agitation|dysphorie|irritabilité|colère|peur|frayeur|manie|pleurs/i],
-  ["Gynéco", /règles|menstru|gynéco|ménorragie/i],
+  ["Émotionnel / Shén", /shén|esprit|anxiété|dépression|agitation|dysphorie|irritabilité|colère|peur|frayeur|manie|pleurs|crainte|confusion|conscience|connaissance|mémoire|mentale?\b|psychose|phobie|\brires?\b|délire/i],
+  ["Gynéco / génital", /règles|menstru|gynéco|ménorragie|éjaculation|spermat|impuissance|libido|stérilité|testicule|génita|leucorrh|érection|priapisme|vagin|hernie|prostat|pubis|périnée|\boge\b/i],
+  ["Fièvre / chaleur / froid", /fi[eè]vre|frilosit|frisson|refroidiss|\bfroids?\b|chaleur|chaud|brûlure|bouffée/i],
+  ["Convulsions / raideurs", /convuls|spasme|crampe|contracture|tremblement|paralysie|raideur|opisthotonos|trismus|tressaut|\btics?\b|rigidité/i],
+  ["Membres / dos", /\bmembres?\b|\bbras\b|\bmains?\b|\bpieds?\b|jambe|genou|cuisse|coude|épaule|orteil|doigt|articulation|tendon|courbature|engourdissement|\blombes?\b|lombaire|\bdos\b|colonne|nuque|hanche|fessier|sciatique/i],
+  ["Bouche / gorge / nez", /bouche|gorge|gencive|\bdents?\b|dentaire|lèvres?|pharyn|larynx|aphonie|\bvoix\b|\bnez\b|nasale|rhinorrh|épistaxis|salive|goût|parler|parole|mucosit/i],
+  ["Yeux / oreilles", /yeux|\bœil|\boeil|vision|paupière|sourcil|canthus|oreille|surdité|acouphène|audition|\bbruits?\b/i],
+  ["Cœur / thorax", /palpitation|tachycardie|cœur|coeur|cardiaque|poitrine|thorax|thoracique|oppression|\bseins?\b|hypocondre|diaphragme|épigastr/i],
+  ["Saignements", /hémorragie|saignement|hémoptysie|épistaxis|hématurie|ecchymose|macules/i],
+  ["Œdèmes / mucosités", /[eé]d[eè]me|gonflement|tuméfaction|mucosit|expectoration|écoulement|rhinorrh|glaires|crachat/i],
+  ["Fatigue / énergie", /fatigue|épuisement|faiblesse|manque de force|apathie|abattement|asthénie|amaigrissement|\bpoids\b/i],
 ];
 
 function dsCategorize(sign) {
@@ -1386,9 +1395,29 @@ function dsCategories(sign) {
 // les morceaux (séparés par virgule, point-virgule, « / », tiret long) qui relèvent de la catégorie sont en gras.
 // Seul un morceau de continuation (« et gras », « voire inexistant », « ou sec »), sans mot d'aucune catégorie, suit le morceau qui le précède ;
 // les autres morceaux sans catégorie (« révulsion des yeux », « spasmes »…) restent en maigre.
-function dsEnGras(sign, cat) {
+// Normalisation caractère par caractère (même longueur que le texte) : minuscules, sans accents
+function dsNorm(t) {
+  return Array.from(String(t || ""), c => (c.normalize("NFD")[0] || c).toLowerCase()).join("");
+}
+
+// Texte échappé, avec le mot recherché souligné (<u>), sans tenir compte des accents ni de la casse
+function dsMarque(texte, q) {
+  const nq = dsNorm((q || "").trim());
+  if (!nq) return escapeHtml(texte);
+  const chars = Array.from(texte), nt = Array.from(dsNorm(texte));
+  if (chars.length !== nt.length) return escapeHtml(texte);
+  const nts = nt.join("");
+  let html = "", i = 0, j;
+  while ((j = nts.indexOf(nq, i)) >= 0) {
+    html += escapeHtml(chars.slice(i, j).join("")) + "<u>" + escapeHtml(chars.slice(j, j + nq.length).join("")) + "</u>";
+    i = j + nq.length;
+  }
+  return html + escapeHtml(chars.slice(i).join(""));
+}
+
+function dsEnGras(sign, cat, q) {
   const def = DS_CATEGORIES.find(c => c[0] === cat);
-  if (!def || DS_CATEGORIES.filter(([, re]) => re.test(sign)).length < 2) return escapeHtml(sign);
+  if (!def || DS_CATEGORIES.filter(([, re]) => re.test(sign)).length < 2) return dsMarque(sign, q);
   const parts = sign.split(/(\s*[,;]\s*|\.?\s+\/\s+|\s+—\s+|\.\s+)/);
   const ok = [];
   for (let i = 0; i < parts.length; i += 2) {
@@ -1400,9 +1429,9 @@ function dsEnGras(sign, cat) {
     if (i % 2 === 0 && ok[i]) {
       let j = i;
       while (j + 2 < parts.length && ok[j + 2]) j += 2;
-      html += "<strong>" + parts.slice(i, j + 1).map(escapeHtml).join("") + "</strong>";
+      html += "<strong>" + parts.slice(i, j + 1).map(p => dsMarque(p, q)).join("") + "</strong>";
       i = j + 1;
-    } else { html += escapeHtml(parts[i]); i++; }
+    } else { html += dsMarque(parts[i], q); i++; }
   }
   return html;
 }
@@ -1415,7 +1444,7 @@ const DS_FILTRES = [
 ];
 
 const DiagSignes = {
-  filtre: "tous",
+  portee: new Set(),      // types de syndromes retenus (vide = tous)
   _clesFiltre: {},
   loaded: false,
   syndromesData: [], // [{entry, detail, signKeys: Set<normalizedKey>}]
@@ -1452,42 +1481,54 @@ const DiagSignes = {
     this.renderResults();
   },
 
-  // ---- filtre : canaux / organes / qi-sang-liquides / externes (merveilleux vaisseaux : à venir)
+  // ---- portée de la recherche : un ou plusieurs types de syndromes (canaux, organes, qi-sang-liquides, externes ; merveilleux vaisseaux : à venir)
+  // portee vide = tous les types
   renderFiltre() {
     const el = document.getElementById("ds-filtre");
     if (!el) return;
     el.innerHTML = DS_FILTRES.map(([id, label]) => {
       const n = id === "tous" ? this.syndromesData.length : id === "mv" ? 0 : this.syndromesData.filter(sd => sd.entry.domaine === id).length;
-      const dispo = id === "mv" ? false : true;
-      return `<button type="button" class="cat-chip${this.filtre === id ? " active" : ""}" data-f="${id}" aria-pressed="${this.filtre === id}"` +
+      const dispo = id !== "mv";
+      const actif = id === "tous" ? !this.portee.size : this.portee.has(id);
+      return `<button type="button" class="cat-chip${actif ? " active" : ""}" data-f="${id}" aria-pressed="${actif}"` +
         `${dispo ? "" : ` disabled title="Pas encore disponible"`}>${escapeHtml(label)}${dispo ? ` (${n})` : ""}</button>`;
     }).join("");
     el.querySelectorAll("[data-f]:not([disabled])").forEach(b => b.addEventListener("click", () => this.setFiltre(b.dataset.f)));
     const zones = document.getElementById("zc-bloc");       // les zones ne concernent que les canaux
-    if (zones) zones.style.display = (this.filtre === "tous" || this.filtre === "canaux") ? "" : "none";
+    if (zones) zones.style.display = (!this.portee.size || this.portee.has("canaux")) ? "" : "none";
+    const noms = DS_FILTRES.filter(([id]) => this.portee.has(id)).map(f => f[1].toLowerCase());
+    const champ = document.getElementById("ds-search");
+    if (champ) champ.placeholder = noms.length
+      ? `Rechercher un signe parmi les syndromes : ${noms.join(", ")}`
+      : "Rechercher un signe (ex : insomnie, langue rouge, pouls fin...)";
   },
 
+  // « Tous » remet la portée à zéro ; un type la restreint (on peut en cocher plusieurs)
   setFiltre(id) {
-    this.filtre = id;
+    if (id === "tous") this.portee.clear();
+    else if (this.portee.has(id)) this.portee.delete(id);
+    else this.portee.add(id);
+    if (this.portee.size >= DS_FILTRES.length - 2) this.portee.clear();       // tous les types disponibles cochés = tous
     this.renderFiltre();
     this.renderAvailable(document.getElementById("ds-search").value);
     this.renderResults();
   },
 
-  // syndromes retenus par le filtre
+  // syndromes retenus par la portée
   syndromesFiltres() {
-    return this.filtre === "tous" ? this.syndromesData : this.syndromesData.filter(sd => sd.entry.domaine === this.filtre);
+    return this.portee.size ? this.syndromesData.filter(sd => this.portee.has(sd.entry.domaine)) : this.syndromesData;
   },
 
-  // signes appartenant à au moins un syndrome retenu par le filtre (null = pas de restriction)
+  // signes appartenant à au moins un syndrome retenu (null = pas de restriction)
   clesFiltre() {
-    if (this.filtre === "tous") return null;
-    if (!this._clesFiltre[this.filtre]) {
+    if (!this.portee.size) return null;
+    const cle = [...this.portee].sort().join("|");
+    if (!this._clesFiltre[cle]) {
       const s = new Set();
       this.syndromesFiltres().forEach(sd => sd.signKeys.forEach(k => s.add(k)));
-      this._clesFiltre[this.filtre] = s;
+      this._clesFiltre[cle] = s;
     }
-    return this._clesFiltre[this.filtre];
+    return this._clesFiltre[cle];
   },
 
   toggle(key) {
@@ -1518,7 +1559,7 @@ const DiagSignes = {
     const q = (query || "").trim().toLowerCase();
     const permis = this.clesFiltre();
     let pool = [...this.signIndex.entries()].filter(([key]) => !this.selected.has(key) && (!permis || permis.has(key)));
-    if (q) pool = pool.filter(([, label]) => label.toLowerCase().includes(q));
+    if (q) pool = pool.filter(([, label]) => dsNorm(label).includes(dsNorm(q)));
     if (!pool.length) { el.innerHTML = `<span class="muted">Aucun signe ne correspond à cette recherche.</span>`; return; }
 
     const byCategory = new Map();
@@ -1536,7 +1577,7 @@ const DiagSignes = {
       const items = byCategory.get(cat).sort((a, b) => a[1].localeCompare(b[1], "fr"));
       const shown = items.slice(0, CAP_PER_CATEGORY);
       html += `<div class="ds-cat-block"><h4 class="sec-sub">${escapeHtml(cat)} (${items.length})</h4><div class="ds-cat-chips">`;
-      html += shown.map(([key, label]) => `<button type="button" class="ds-chip" data-k="${escapeHtml(key)}">${dsEnGras(label, cat)}</button>`).join("");
+      html += shown.map(([key, label]) => `<button type="button" class="ds-chip" data-k="${escapeHtml(key)}">${dsEnGras(label, cat, q)}</button>`).join("");
       if (items.length > CAP_PER_CATEGORY) html += `<p class="muted" style="width:100%;">${items.length - CAP_PER_CATEGORY} de plus — cherche pour affiner.</p>`;
       html += `</div></div>`;
     });
@@ -1554,7 +1595,7 @@ const DiagSignes = {
       return { sd, matchedKeys, pct: Math.round((matchedKeys.length / sd.signKeys.size) * 100) };
     }).filter(x => x.matchedKeys.length > 0)
       .sort((a, b) => b.pct - a.pct || b.matchedKeys.length - a.matchedKeys.length);
-    if (!scored.length) { el.innerHTML = `<p class="muted">Aucun syndrome ${this.filtre === "tous" ? "de la base" : "de ce type"} ne recoupe les signes sélectionnés.</p>`; return; }
+    if (!scored.length) { el.innerHTML = `<p class="muted">Aucun syndrome ${this.portee.size ? "de ce type" : "de la base"} ne recoupe les signes sélectionnés.</p>`; return; }
     el.innerHTML = scored.slice(0, 40).map(({ sd, matchedKeys, pct }) => `
       <div class="ds-result" data-id="${escapeHtml(sd.entry.id)}" data-domaine="${escapeHtml(sd.entry.domaine)}">
         <div class="ds-result-top">
