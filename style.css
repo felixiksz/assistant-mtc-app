@@ -621,7 +621,7 @@ tr.syn-generique td { color: var(--muted); font-style: italic; }
 .aide-texte[hidden] { display: none; }
 @media print { .aide-btn { display: none; } }
 .syn-canal-section.postit-cible { outline: 3px solid var(--accent); outline-offset: 3px; }
-.ds-chip u { text-decoration-thickness: 2px; text-underline-offset: 3px; }
 #syn-list .fl-extrait { display: block; margin-top: 0.2rem; font-size: 0.78rem; font-style: italic; color: var(--muted); }
 #syn-list li.selected .fl-extrait { color: var(--on-accent); }
-#syn-detail u.trouve { text-decoration-thickness: 2px; text-underline-offset: 3px; background: var(--accent-soft); }
+/* Mot cherché : surlignage fluo (couleur fixe, texte noir : lisible sur tous les thèmes) */
+mark.surlignage { background: #f4ff00; color: #000; font-weight: inherit; padding: 0 0.12em; border-radius: 2px; box-shadow: 0 0 0 1px #c9d100; }

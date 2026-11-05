@@ -1141,7 +1141,7 @@ const Syndromes = {
     if (i < 0) return null;
     const t = e._searchText;
     const avant = t.slice(Math.max(0, i - 35), i), mot = t.slice(i, i + q.length), apres = t.slice(i + q.length, i + q.length + 45);
-    return (i > 35 ? "… " : "") + escapeHtml(avant) + "<u>" + escapeHtml(mot) + "</u>" + escapeHtml(apres) + " …";
+    return (i > 35 ? "… " : "") + escapeHtml(avant) + '<mark class="surlignage">' + escapeHtml(mot) + "</mark>" + escapeHtml(apres) + " …";
   },
 
   // souligne le mot cherché dans la fiche affichée et amène la première occurrence à l'écran
@@ -1155,10 +1155,10 @@ const Syndromes = {
       const t = n.nodeValue;
       if (!dsNorm(t).includes(q)) return;
       const frag = document.createElement("span");
-      frag.innerHTML = dsMarque(t, query).replace(/<u>/g, '<u class="trouve">');
+      frag.innerHTML = dsMarque(t, query).replace(/<mark class="surlignage">/g, '<mark class="surlignage trouve">');
       n.replaceWith(...frag.childNodes);
     });
-    const premier = racine.querySelector("u.trouve");
+    const premier = racine.querySelector("mark.trouve");
     if (premier) premier.scrollIntoView({ block: "center", behavior: "smooth" });
   },
 
@@ -1442,7 +1442,7 @@ function dsNorm(t) {
   return Array.from(String(t || ""), c => (c.normalize("NFD")[0] || c).toLowerCase()).join("");
 }
 
-// Texte échappé, avec le mot recherché souligné (<u>), sans tenir compte des accents ni de la casse
+// Texte échappé, avec le mot recherché surligné (<mark>), sans tenir compte des accents ni de la casse
 function dsMarque(texte, q) {
   const nq = dsNorm((q || "").trim());
   if (!nq) return escapeHtml(texte);
@@ -1451,7 +1451,7 @@ function dsMarque(texte, q) {
   const nts = nt.join("");
   let html = "", i = 0, j;
   while ((j = nts.indexOf(nq, i)) >= 0) {
-    html += escapeHtml(chars.slice(i, j).join("")) + "<u>" + escapeHtml(chars.slice(j, j + nq.length).join("")) + "</u>";
+    html += escapeHtml(chars.slice(i, j).join("")) + '<mark class="surlignage">' + escapeHtml(chars.slice(j, j + nq.length).join("")) + "</mark>";
     i = j + nq.length;
   }
   return html + escapeHtml(chars.slice(i).join(""));
@@ -3845,12 +3845,13 @@ const GlobalSearch = {
       if (!groups.has(it.group)) groups.set(it.group, []);
       groups.get(it.group).push(it);
     });
+    const qBrut = this.input.value;          // mot cherché, surligné dans les titres et sous-titres
     let html = "";
     let flat = [];
     groups.forEach((list, group) => {
       html += `<div class="gsr-group-label">${escapeHtml(group)} (${list.length})</div><ul>`;
       list.forEach(it => {
-        html += `<li><span class="gsr-title">${escapeHtml(it.title)}</span>${it.sub ? `<span class="gsr-sub">${escapeHtml(it.sub)}</span>` : ""}</li>`;
+        html += `<li><span class="gsr-title">${dsMarque(it.title, qBrut)}</span>${it.sub ? `<span class="gsr-sub">${dsMarque(it.sub, qBrut)}</span>` : ""}</li>`;
       });
       html += `</ul>`;
       flat = flat.concat(list);
