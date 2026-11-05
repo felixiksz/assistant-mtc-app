@@ -1384,15 +1384,16 @@ function dsCategories(sign) {
 
 // Texte d'un signe pour une catégorie donnée : si le signe est mixte (plusieurs catégories),
 // les morceaux (séparés par virgule, point-virgule, « / », tiret long) qui relèvent de la catégorie sont en gras.
-// Un morceau qui ne relève d'aucune catégorie (« voire inexistant », « et gras ») suit le morceau qui le précède.
+// Seul un morceau de continuation (« et gras », « voire inexistant », « ou sec »), sans mot d'aucune catégorie, suit le morceau qui le précède ;
+// les autres morceaux sans catégorie (« révulsion des yeux », « spasmes »…) restent en maigre.
 function dsEnGras(sign, cat) {
   const def = DS_CATEGORIES.find(c => c[0] === cat);
   if (!def || DS_CATEGORIES.filter(([, re]) => re.test(sign)).length < 2) return escapeHtml(sign);
   const parts = sign.split(/(\s*[,;]\s*|\.?\s+\/\s+|\s+—\s+|\.\s+)/);
   const ok = [];
   for (let i = 0; i < parts.length; i += 2) {
-    const aucune = !DS_CATEGORIES.some(([, re]) => re.test(parts[i]));
-    ok[i] = def[1].test(parts[i]) || (aucune && i > 0 && ok[i - 2] === true);
+    const suite = !DS_CATEGORIES.some(([, re]) => re.test(parts[i])) && /^\s*(?:et|ou|voire|mais|même|puis|ainsi que|parfois)\b/i.test(parts[i]);
+    ok[i] = def[1].test(parts[i]) || (suite && i > 0 && ok[i - 2] === true);
   }
   let html = "", i = 0;
   while (i < parts.length) {
