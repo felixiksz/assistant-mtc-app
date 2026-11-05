@@ -1062,6 +1062,8 @@ const Syndromes = {
     }));
     this._deepIndexed = true;
     this._deepIndexing = false;
+    const champ = document.getElementById("syn-search");
+    if (champ && champ.value.trim()) this.applyFilters();       // une recherche déjà saisie profite de l'index complet
   },
 
   async loadDomaine(domaine, relPath) {
@@ -1118,18 +1120,57 @@ const Syndromes = {
   search(query) {
     let pool = this.entries;
     if (this.activeDomaine) pool = pool.filter(e => e.domaine === this.activeDomaine);
-    const q = (query || "").trim().toLowerCase();
+    const q = dsNorm((query || "").trim());
     if (!q) return pool;
-    return pool.filter(e => (e.nom || "").toLowerCase().includes(q) || (e.sousLabel || "").toLowerCase().includes(q));
+    // nom, sous-titre, puis texte complet de la fiche (signes, mécanismes, traitement…) une fois les fiches indexées
+    return pool.filter(e => dsNorm(e.nom).includes(q) || dsNorm(e.sousLabel).includes(q) || this.texteNorm(e).includes(q));
   },
 
-  renderList(list) {
+  // texte complet de la fiche, normalisé une seule fois (sans accents, minuscules)
+  texteNorm(e) {
+    if (!e._searchText) return "";
+    if (e._searchNormSrc !== e._searchText) { e._searchNorm = dsNorm(e._searchText); e._searchNormSrc = e._searchText; }
+    return e._searchNorm;
+  },
+
+  // extrait du texte de la fiche autour du mot cherché (null si le mot est déjà dans le nom)
+  extrait(e, query) {
+    const q = dsNorm((query || "").trim());
+    if (!q || dsNorm(e.nom).includes(q) || dsNorm(e.sousLabel).includes(q)) return null;
+    const i = this.texteNorm(e).indexOf(q);
+    if (i < 0) return null;
+    const t = e._searchText;
+    const avant = t.slice(Math.max(0, i - 35), i), mot = t.slice(i, i + q.length), apres = t.slice(i + q.length, i + q.length + 45);
+    return (i > 35 ? "… " : "") + escapeHtml(avant) + "<u>" + escapeHtml(mot) + "</u>" + escapeHtml(apres) + " …";
+  },
+
+  // souligne le mot cherché dans la fiche affichée et amène la première occurrence à l'écran
+  surligner(racine, query) {
+    const q = dsNorm((query || "").trim());
+    if (!q) return;
+    const noeuds = [];
+    const marche = document.createTreeWalker(racine, NodeFilter.SHOW_TEXT);
+    while (marche.nextNode()) noeuds.push(marche.currentNode);
+    noeuds.forEach(n => {
+      const t = n.nodeValue;
+      if (!dsNorm(t).includes(q)) return;
+      const frag = document.createElement("span");
+      frag.innerHTML = dsMarque(t, query).replace(/<u>/g, '<u class="trouve">');
+      n.replaceWith(...frag.childNodes);
+    });
+    const premier = racine.querySelector("u.trouve");
+    if (premier) premier.scrollIntoView({ block: "center", behavior: "smooth" });
+  },
+
+  renderList(list, query) {
     const ul = document.getElementById("syn-list");
     ul.innerHTML = "";
     list.forEach(e => {
       const li = document.createElement("li");
+      const ex = this.extrait(e, query);
       li.innerHTML = `<span class="fl-pinyin">${escapeHtml(e.nom)}</span>
-        <span class="fl-syndrome">${escapeHtml(this.domaineLabels[e.domaine])}${e.sousLabel ? " · " + escapeHtml(e.sousLabel) : ""}</span>`;
+        <span class="fl-syndrome">${escapeHtml(this.domaineLabels[e.domaine])}${e.sousLabel ? " · " + escapeHtml(e.sousLabel) : ""}</span>` +
+        (ex ? `<span class="fl-extrait">${ex}</span>` : "");
       li.addEventListener("click", () => this.showDetail(e, li));
       ul.appendChild(li);
     });
@@ -1144,6 +1185,7 @@ const Syndromes = {
     try {
       const d = await Store.readJSON(`syndromes/${entry.domaine}/${entry.chemin}`);
       detail.innerHTML = this.renderSyndrome(d, entry.domaine);
+      this.surligner(detail, document.getElementById("syn-search").value);
       addEditControls(detail, "syndromes/" + entry.domaine + "/" + entry.chemin, d, {
         onSaved: async (parsed) => {
           const arr = this.rawIndexByDomaine[entry.domaine] || (this.rawIndexByDomaine[entry.domaine] = []);
@@ -1329,7 +1371,7 @@ const Syndromes = {
   }
 };
 
-document.getElementById("syn-search").addEventListener("input", (e) => Syndromes.renderList(Syndromes.search(e.target.value)));
+document.getElementById("syn-search").addEventListener("input", (e) => Syndromes.renderList(Syndromes.search(e.target.value), e.target.value));
 Syndromes.load().then(() => Syndromes.ensureDeepIndexed());
 
 /* ============================= Diagnostic par signes (pourcentage) ============================= */

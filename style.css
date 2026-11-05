@@ -622,3 +622,6 @@ tr.syn-generique td { color: var(--muted); font-style: italic; }
 @media print { .aide-btn { display: none; } }
 .syn-canal-section.postit-cible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .ds-chip u { text-decoration-thickness: 2px; text-underline-offset: 3px; }
+#syn-list .fl-extrait { display: block; margin-top: 0.2rem; font-size: 0.78rem; font-style: italic; color: var(--muted); }
+#syn-list li.selected .fl-extrait { color: var(--on-accent); }
+#syn-detail u.trouve { text-decoration-thickness: 2px; text-underline-offset: 3px; background: var(--accent-soft); }
