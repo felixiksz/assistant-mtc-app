@@ -620,3 +620,4 @@ tr.syn-generique td { color: var(--muted); font-style: italic; }
 .aide-texte { max-width: 70ch; padding: 0.5rem 0.75rem; margin: 0.25rem 0 0.6rem; border-left: 3px solid var(--accent, var(--muted)); }
 .aide-texte[hidden] { display: none; }
 @media print { .aide-btn { display: none; } }
+.syn-canal-section.postit-cible { outline: 3px solid var(--accent); outline-offset: 3px; }

@@ -1267,13 +1267,22 @@ const Syndromes = {
       `${toutes.length ? `<p><strong>Pour toutes les situations</strong> : ${escapeHtml(toutes.join(" · "))}</p>` : ""}</div>`;
   },
 
+  // sections d'une fiche de canal (regulier, luo, grand_luo, tendineux) dont une ligne correspond à l'un des signes cochés
+  sectionsPourSignes(d, cles) {
+    return ["regulier", "luo", "grand_luo", "tendineux"].filter(k => ((d[k] || {}).lignes || []).some(l => {
+      if (l.generique || !l.symptome) return false;
+      const [txt] = dsSplitSigns(l.symptome);
+      return txt && cles.has(dsNormalizeKey(txt));
+    }));
+  },
+
   renderCanal(d) {
     const noms = { regulier: "Canal régulier", luo: "Vaisseau liaison (luo)", grand_luo: "Grand vaisseau liaison (grand luo)", tendineux: "Canal tendineux" };
     const sections = ["regulier", "luo", "grand_luo", "tendineux"].filter(k => d[k] && (d[k].lignes || d[k].shen)).map(k => {
       const sec = d[k];
       const trajet = (sec.trajet && sec.trajet.length)
         ? `<details class="syn-trajet"><summary>${escapeHtml(sec.trajet_titre || "Trajet")}</summary><ul class="tcm-list">${sec.trajet.map(t => `<li>${tcmHighlightInline(escapeHtml(t))}</li>`).join("")}</ul></details>` : "";
-      return `<section class="syn-canal-section"><h3>${noms[k]} <span class="muted">${escapeHtml((sec.titre || "").replace(/^[^(]*/, ""))}</span></h3>` +
+      return `<section class="syn-canal-section" data-section="${k}"><h3>${noms[k]} <span class="muted">${escapeHtml((sec.titre || "").replace(/^[^(]*/, ""))}</span></h3>` +
         `${trajet}${this.tableCanal(sec.lignes)}${this.renderShen(sec.shen)}${this.renderTraitementCanal(sec)}</section>`;
     }).join("");
     const gen = (d.signes_de_trajet && d.signes_de_trajet.length)
@@ -1367,6 +1376,36 @@ function dsCategorize(sign) {
   return "Autres signes";
 }
 
+// Toutes les catégories d'un signe : un signe mixte (« langue rouge, pouls rapide ») figure dans chacune de ses catégories.
+function dsCategories(sign) {
+  const r = DS_CATEGORIES.filter(([, re]) => re.test(sign)).map(c => c[0]);
+  return r.length ? r : ["Autres signes"];
+}
+
+// Texte d'un signe pour une catégorie donnée : si le signe est mixte (plusieurs catégories),
+// les morceaux (séparés par virgule, point-virgule, « / », tiret long) qui relèvent de la catégorie sont en gras.
+// Un morceau qui ne relève d'aucune catégorie (« voire inexistant », « et gras ») suit le morceau qui le précède.
+function dsEnGras(sign, cat) {
+  const def = DS_CATEGORIES.find(c => c[0] === cat);
+  if (!def || DS_CATEGORIES.filter(([, re]) => re.test(sign)).length < 2) return escapeHtml(sign);
+  const parts = sign.split(/(\s*[,;]\s*|\.?\s+\/\s+|\s+—\s+|\.\s+)/);
+  const ok = [];
+  for (let i = 0; i < parts.length; i += 2) {
+    const aucune = !DS_CATEGORIES.some(([, re]) => re.test(parts[i]));
+    ok[i] = def[1].test(parts[i]) || (aucune && i > 0 && ok[i - 2] === true);
+  }
+  let html = "", i = 0;
+  while (i < parts.length) {
+    if (i % 2 === 0 && ok[i]) {
+      let j = i;
+      while (j + 2 < parts.length && ok[j + 2]) j += 2;
+      html += "<strong>" + parts.slice(i, j + 1).map(escapeHtml).join("") + "</strong>";
+      i = j + 1;
+    } else { html += escapeHtml(parts[i]); i++; }
+  }
+  return html;
+}
+
 const DiagSignes = {
   loaded: false,
   syndromesData: [], // [{entry, detail, signKeys: Set<normalizedKey>}]
@@ -1434,9 +1473,10 @@ const DiagSignes = {
 
     const byCategory = new Map();
     pool.forEach(([key, label]) => {
-      const cat = dsCategorize(label);
-      if (!byCategory.has(cat)) byCategory.set(cat, []);
-      byCategory.get(cat).push([key, label]);
+      dsCategories(label).forEach(cat => {
+        if (!byCategory.has(cat)) byCategory.set(cat, []);
+        byCategory.get(cat).push([key, label]);
+      });
     });
     const orderedCats = [...DS_CATEGORIES.map(c => c[0]), "Autres signes"].filter(c => byCategory.has(c));
 
@@ -1446,7 +1486,7 @@ const DiagSignes = {
       const items = byCategory.get(cat).sort((a, b) => a[1].localeCompare(b[1], "fr"));
       const shown = items.slice(0, CAP_PER_CATEGORY);
       html += `<div class="ds-cat-block"><h4 class="sec-sub">${escapeHtml(cat)} (${items.length})</h4><div class="ds-cat-chips">`;
-      html += shown.map(([key, label]) => `<button type="button" class="ds-chip" data-k="${escapeHtml(key)}">${escapeHtml(label)}</button>`).join("");
+      html += shown.map(([key, label]) => `<button type="button" class="ds-chip" data-k="${escapeHtml(key)}">${dsEnGras(label, cat)}</button>`).join("");
       if (items.length > CAP_PER_CATEGORY) html += `<p class="muted" style="width:100%;">${items.length - CAP_PER_CATEGORY} de plus — cherche pour affiner.</p>`;
       html += `</div></div>`;
     });
@@ -1481,7 +1521,10 @@ const DiagSignes = {
       div.addEventListener("click", () => {
         const entry = Syndromes.entries.find(e => e.id === div.dataset.id && e.domaine === div.dataset.domaine);
         if (!entry) return;
-        PostIt.open(entry);       // fiche flottante (plusieurs possibles, pour comparer)
+        // fiche flottante (plusieurs possibles, pour comparer) ; pour un canal, elle s'ouvre sur la section (luo, tendineux…) qui contient le signe
+        const sd = this.syndromesData.find(x => x.entry === entry);
+        const sections = entry.domaine === "canaux" && sd ? Syndromes.sectionsPourSignes(sd.detail, this.selected) : [];
+        PostIt.open(entry, { sections });
       });
     });
   }
@@ -1626,7 +1669,16 @@ const ZonesCorps = {
       if (ev.target.closest("details")) return;
       const entry = Syndromes.entries.find(e => e.id === div.dataset.id && e.domaine === "canaux");
       if (!entry) return;
-      PostIt.open(entry);
+      // section à montrer : celle des signes cochés s'il y en a pour ce canal, sinon celle(s) des types de trajet qui passent par les zones choisies
+      const sd = DiagSignes.syndromesData.find(x => x.entry === entry);
+      let sections = sd && DiagSignes.selected.size ? Syndromes.sectionsPourSignes(sd.detail, DiagSignes.selected) : [];
+      if (!sections.length) {
+        const c = this.data.canaux[entry.id];
+        const types = new Set([...this.selected].filter(z => c && c.zones[z]).flatMap(z => c.zones[z].map(t => t.type)));
+        sections = [["regulier", t => t.startsWith("régulier")], ["luo", t => t === "luo"], ["grand_luo", t => t === "grand luo"], ["tendineux", t => t === "tendineux"]]
+          .filter(([, test]) => [...types].some(test)).map(([k]) => k);
+      }
+      PostIt.open(entry, { sections });
     }));
   }
 };
@@ -1636,9 +1688,24 @@ const PostIt = {
   ouverts: new Map(),     // "domaine/id" -> élément
   zMax: 300,
 
-  async open(entry) {
+  // Montre dans la fiche la/les section(s) demandée(s) (canal régulier, luo, grand luo, tendineux) : défilement + cadre
+  cibler(el, sections) {
+    const corps = el.querySelector(".postit-corps");
+    corps.querySelectorAll(".postit-cible").forEach(s => s.classList.remove("postit-cible"));
+    const cibles = (sections || []).map(k => corps.querySelector(`[data-section="${k}"]`)).filter(Boolean);
+    if (!cibles.length) return;
+    cibles.forEach(s => s.classList.add("postit-cible"));
+    corps.scrollTop += cibles[0].getBoundingClientRect().top - corps.getBoundingClientRect().top - 8;
+  },
+
+  async open(entry, opts = {}) {
     const cle = `${entry.domaine}/${entry.id}`;
-    if (this.ouverts.has(cle)) { this.devant(this.ouverts.get(cle)); return; }
+    if (this.ouverts.has(cle)) {
+      const el = this.ouverts.get(cle);
+      this.devant(el);
+      this.cibler(el, opts.sections);
+      return;
+    }
     const n = this.ouverts.size;
     const el = document.createElement("div");
     el.className = "postit";
@@ -1665,6 +1732,7 @@ const PostIt = {
     try {
       const d = await Store.readJSON(`syndromes/${entry.domaine}/${entry.chemin}`);
       el.querySelector(".postit-corps").innerHTML = Syndromes.renderSyndrome(d, entry.domaine);
+      this.cibler(el, opts.sections);
     } catch (e) {
       el.querySelector(".postit-corps").innerHTML = `<p class="muted">Impossible de charger la fiche (${escapeHtml(e.message)}).</p>`;
     }
