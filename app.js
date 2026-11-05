@@ -1408,6 +1408,7 @@ const DiagSignes = {
     this.renderSelected();
     this.renderAvailable(document.getElementById("ds-search").value);
     this.renderResults();
+    if (typeof ZonesCorps !== "undefined" && ZonesCorps.data) ZonesCorps.renderSousOptions();   // garde les cases des sous-options à jour
   },
 
   renderSelected() {
@@ -1504,15 +1505,65 @@ const ZonesCorps = {
       document.getElementById("zc-chips").innerHTML = `<p class="muted">Zones pas encore générées (${escapeHtml(e.message)}).</p>`;
       return;
     }
+    await DiagSignes.ensureLoaded();       // les signes des fiches de canaux servent aux sous-options
+    this.buildSignIndex();
     this.renderChips();
+    this.renderSousOptions();
     this.renderResults();
   },
 
   labelOf(id) { return (this.data.zones.find(z => z.id === id) || {}).label || id; },
 
+  norm(t) {
+    return String(t || "").toLowerCase().replace(/œ/g, "oe").replace(/[’‘]/g, "'").normalize("NFD").replace(/[̀-ͯ]/g, "");
+  },
+
+  // zone -> signes précis des tableaux du carnet (canaux : régulier, luo, tendineux) qui citent cette zone
+  buildSignIndex() {
+    this.signesParZone = {};
+    const motifs = this.data.zones.map(z => [z.id, z.motifs.map(p => new RegExp(p))]);
+    const types = [["regulier", "régulier"], ["luo", "luo"], ["grand_luo", "grand luo"], ["tendineux", "tendineux"]];
+    DiagSignes.syndromesData.filter(sd => sd.entry.domaine === "canaux").forEach(sd => {
+      const d = sd.detail;
+      types.forEach(([cle, nomType]) => {
+        ((d[cle] || {}).lignes || []).forEach(l => {
+          if (l.generique || !l.symptome) return;
+          const [txt] = dsSplitSigns(l.symptome);
+          const key = txt && dsNormalizeKey(txt);
+          if (!key || !DiagSignes.signIndex.has(key)) return;
+          const n = this.norm(l.symptome);
+          motifs.forEach(([zid, res]) => {
+            if (!res.some(r => r.test(n))) return;
+            const liste = this.signesParZone[zid] || (this.signesParZone[zid] = new Map());
+            const ent = liste.get(key) || { key, label: DiagSignes.signIndex.get(key), origines: [], mecanismes: [] };
+            ent.origines.push(`${d.code} · ${nomType}`);
+            if (l.mecanisme) ent.mecanismes.push(l.mecanisme);
+            liste.set(key, ent);
+          });
+        });
+      });
+    });
+  },
+
+  // sous-options : pour chaque zone choisie, les signes précis du carnet qui la citent (cochables, partagés avec « Signes cliniques »)
+  renderSousOptions() {
+    const el = document.getElementById("zc-signes");
+    if (!el) return;
+    if (!this.selected.size) { el.innerHTML = ""; return; }
+    el.innerHTML = `<h4 class="sec-sub">Précise le signe (tableaux du carnet)</h4>` + [...this.selected].map(zid => {
+      const liste = [...((this.signesParZone || {})[zid] || new Map()).values()].sort((a, b) => a.label.localeCompare(b.label, "fr"));
+      const corps = liste.length
+        ? `<div class="ds-cat-chips">${liste.map(s => `<button type="button" class="ds-chip${DiagSignes.selected.has(s.key) ? " on" : ""}" data-k="${escapeHtml(s.key)}" aria-pressed="${DiagSignes.selected.has(s.key)}" title="${escapeHtml(s.mecanismes.join(" ; "))}">${escapeHtml(s.label)} <span class="tag-gen">${escapeHtml([...new Set(s.origines)].join(", "))}</span></button>`).join("")}</div>`
+        : `<p class="muted">Aucun signe des tableaux du carnet ne cite cette zone.</p>`;
+      return `<details class="zc-sous" open><summary>${escapeHtml(this.labelOf(zid))} (${liste.length})</summary>${corps}</details>`;
+    }).join("");
+    el.querySelectorAll("[data-k]").forEach(b => b.addEventListener("click", () => DiagSignes.toggle(b.dataset.k)));
+  },
+
   toggle(id) {
     if (this.selected.has(id)) this.selected.delete(id); else this.selected.add(id);
     this.renderChips();
+    this.renderSousOptions();
     this.renderResults();
     if (DiagSignes.loaded) DiagSignes.renderResults();
   },
@@ -1520,6 +1571,7 @@ const ZonesCorps = {
   clear() {
     this.selected.clear();
     this.renderChips();
+    this.renderSousOptions();
     this.renderResults();
     if (DiagSignes.loaded) DiagSignes.renderResults();
   },

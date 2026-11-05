@@ -585,3 +585,7 @@ tr.syn-generique td { color: var(--muted); font-style: italic; }
 #zc-results { margin-top: 1rem; }
 .zc-extraits { margin-top: 0.4rem; font-size: 0.8rem; }
 .zc-extraits summary { cursor: pointer; }
+#zc-signes { margin-top: 1rem; }
+.zc-sous { margin: 0.5rem 0; border: 1px solid var(--line); padding: 0.4rem 0.7rem; background: var(--panel); }
+.zc-sous summary { cursor: pointer; font-weight: 700; margin-bottom: 0.4rem; }
+.zc-sous .ds-chip .tag-gen { margin-left: 0.4rem; }
