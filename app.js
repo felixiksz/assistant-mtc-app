@@ -287,7 +287,7 @@ const Formules = {
       <a href="${escapeHtml(src)}" target="_blank" rel="noopener" class="schema-image-link">
         <img src="${escapeHtml(src)}" alt="Analyse de la formule : rôles et interactions des substances" class="schema-image">
       </a>
-      <p class="muted">Clique sur l'image pour l'agrandir dans un nouvel onglet.</p>
+      <p class="muted" data-aide>Clique sur l'image pour l'agrandir dans un nouvel onglet.</p>
     </section>`;
   },
 
@@ -1621,7 +1621,7 @@ const ZonesCorps = {
           c.zones[z].map(t => `<p class="muted"><strong>${escapeHtml(this.labelOf(z))}</strong> — ${escapeHtml(t.type)} : ${escapeHtml(t.extrait)}</p>`).join("")).join("")}</details>
       </div>`;
     }).join("") +
-      `<p class="muted">${escapeHtml(this.data.note || "")}</p>`;
+      `<p class="muted" data-aide>${escapeHtml(this.data.note || "")}</p>`;
     el.querySelectorAll(".zc-result").forEach(div => div.addEventListener("click", ev => {
       if (ev.target.closest("details")) return;
       const entry = Syndromes.entries.find(e => e.id === div.dataset.id && e.domaine === "canaux");
@@ -2250,7 +2250,8 @@ const Croisement = {
     const header = `<tr><th>Point</th>${allCols.map(c => `<th>${escapeHtml(c)}</th>`).join("")}</tr>`;
     const rows = points.map(p => `<tr><th class="croise-point-label">${escapeHtml(p.point)}</th>${allCols.map(c => this.cellFor(p, c)).join("")}</tr>`).join("");
     wrap.innerHTML = `<div class="croise-table-scroll"><table class="croise-table">${header}${rows}</table></div>
-      <p class="muted">${points.length} point(s) de croisement affiché(s). Case sombre = recoupement confirmé (noir dans la source). Case claire = recoupement secondaire (gris dans la source, sans légende explicite — à vérifier).</p>`;
+      <p class="muted">${points.length} point(s) de croisement affiché(s).</p>
+      <p class="muted" data-aide>Case sombre = recoupement confirmé (noir dans la source). Case claire = recoupement secondaire (gris dans la source, sans légende explicite — à vérifier).</p>`;
   },
 
   search(query) {
@@ -3732,6 +3733,46 @@ if (Store._needsTokenPrompt) {
   SyncSettings.open();
   document.getElementById("sync-status").textContent = "Cette copie hébergée n'a pas d'accès disque local : colle ton token GitHub (permission Contents) pour charger tes données, puis « Enregistrer ».";
 }
+
+/* ============================= Aide « ? » : les textes d'explication sont masqués derrière un bouton ============================= */
+/* Tout élément portant l'attribut data-aide (présent dans la page ou ajouté plus tard) est caché ;
+   un petit bouton « ? » placé juste avant le montre / le cache. */
+const Aide = {
+  scan(racine) {
+    if (!racine || racine.nodeType !== 1) return;
+    const cibles = racine.matches && racine.matches("[data-aide]:not([data-aide-ok])") ? [racine] : [];
+    racine.querySelectorAll("[data-aide]:not([data-aide-ok])").forEach(e => cibles.push(e));
+    cibles.forEach(e => this.brancher(e));
+  },
+  brancher(texte) {
+    texte.setAttribute("data-aide-ok", "1");
+    texte.hidden = true;
+    texte.classList.add("aide-texte");
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "aide-btn";
+    b.textContent = "?";
+    b.title = "Afficher l'aide";
+    b.setAttribute("aria-label", "Afficher l'aide");
+    b.setAttribute("aria-expanded", "false");
+    b.addEventListener("click", ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const ouvert = texte.hidden;
+      texte.hidden = !ouvert;
+      b.classList.toggle("on", ouvert);
+      b.setAttribute("aria-expanded", String(ouvert));
+      b.title = ouvert ? "Masquer l'aide" : "Afficher l'aide";
+      b.setAttribute("aria-label", b.title);
+    });
+    texte.parentNode.insertBefore(b, texte);
+  },
+  init() {
+    this.scan(document.body);
+    new MutationObserver(muts => muts.forEach(m => m.addedNodes.forEach(n => this.scan(n))))
+      .observe(document.body, { childList: true, subtree: true });
+  },
+};
+Aide.init();
 
 /* ============================= PWA (installation Android + hors-ligne) ============================= */
 if ("serviceWorker" in navigator) {

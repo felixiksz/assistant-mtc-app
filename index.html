@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=42">
+<link rel="stylesheet" href="style.css?v=43">
 <script src="theme.js?v=2"></script>
 </head>
 <body>
@@ -37,7 +37,7 @@
 
 <div id="theme-panel" class="sync-panel" style="display:none;">
   <h2>Thèmes de couleurs</h2>
-  <p class="muted">Les mêmes paires fond / lettres que le jeu. Le contraste est renforcé automatiquement : lettres visées à 7:1 sur le fond, texte atténué et couleurs d'indication (vent, chaleur, froid…) à 4,5:1 au minimum.</p>
+  <p class="muted" data-aide>Les mêmes paires fond / lettres que le jeu. Le contraste est renforcé automatiquement : lettres visées à 7:1 sur le fond, texte atténué et couleurs d'indication (vent, chaleur, froid…) à 4,5:1 au minimum.</p>
   <label id="theme-boost-row"><input type="checkbox" id="theme-boost" checked> Contraste renforcé (recommandé)</label>
   <div id="theme-grid" role="group" aria-label="Choix du thème"></div>
   <p id="theme-info" aria-live="polite"></p>
@@ -45,7 +45,7 @@
 
 <div id="sync-settings-panel" class="sync-panel" style="display:none;">
   <h2>Synchronisation des données</h2>
-  <p class="muted">Choisis où l'app lit et écrit ses fichiers de données (formules, syndromes, points, etc.). Les images restent toujours sur ton disque, quel que soit le mode.</p>
+  <p class="muted" data-aide>Choisis où l'app lit et écrit ses fichiers de données (formules, syndromes, points, etc.). Les images restent toujours sur ton disque, quel que soit le mode.</p>
   <div class="sync-mode-row">
     <label><input type="radio" name="sync-mode" id="sync-mode-local" value="local"> Dossier local (File System Access API) — un seul appareil</label>
     <label><input type="radio" name="sync-mode" id="sync-mode-github" value="github"> Dépôt GitHub privé — accessible depuis plusieurs appareils</label>
@@ -81,7 +81,7 @@
         <details class="tab-comp-formules-details"><summary>Formules affichées</summary><div id="tab-comp-formules-choix" class="cat-chip-row"></div></details>
         <button type="button" id="tab-comp-print" class="edit-toggle-btn">🖨 Imprimer ce tableau (A4 paysage)</button>
       </div>
-      <p class="muted" id="tab-comp-aide">Clique sur le nom d'une formule (en-tête) pour ouvrir sa fiche. Les lignes communes au plus de formules sont en haut.</p>
+      <p class="muted" data-aide id="tab-comp-aide">Clique sur le nom d'une formule (en-tête) pour ouvrir sa fiche. Les lignes communes au plus de formules sont en haut.</p>
       <div id="tab-comp-print-area">
         <h3 id="tab-comp-print-titre"></h3>
         <div id="tab-comp-wrap" class="tab-comp-scroll"><p class="muted">Chargement...</p></div>
@@ -163,7 +163,7 @@
 
       <fieldset>
         <legend>3bis. Différenciation psycho-émotionnelle (Farrell) — si pertinent</legend>
-        <p class="muted">Cadre distinct de Zang-Fu : à quel niveau se situe la latence, et faut-il la libérer ou la maintenir selon les ressources du patient.</p>
+        <p class="muted" data-aide>Cadre distinct de Zang-Fu : à quel niveau se situe la latence, et faut-il la libérer ou la maintenir selon les ressources du patient.</p>
         <div class="bagang-grid">
           <label>Niveau de latence identifié
             <select name="psy_niveau">
@@ -207,7 +207,7 @@
         <input type="search" id="cas-formule-search" placeholder="Chercher dans la base de formules...">
         <ul id="cas-formule-results"></ul>
         <div id="cas-formules-choisies"></div>
-        <p class="muted">Seules les formules déjà présentes dans ta base vérifiée apparaissent ici. Si rien ne correspond, c'est que ce chapitre n'est pas encore dans la base — ne pas inventer, marquer "à revoir avec le cours".</p>
+        <p class="muted" data-aide>Seules les formules déjà présentes dans ta base vérifiée apparaissent ici. Si rien ne correspond, c'est que ce chapitre n'est pas encore dans la base — ne pas inventer, marquer "à revoir avec le cours".</p>
       </fieldset>
 
       <fieldset>
@@ -224,7 +224,7 @@
 
   <!-- ===================== ONGLET PRINCIPES TAOÏSTES (Farrell + Sterman) ===================== -->
   <section id="tab-psy" class="tab-panel">
-    <p class="muted">Farrell (psycho-émotionnel, Merveilleux Vaisseaux), Sterman (protocoles cliniques Sinew/Luo/Divergent/8EV) et Jeffrey Yuen (Luo, leur enseignant commun) — filtre par autrice/type ci-dessous.</p>
+    <p class="muted" data-aide>Farrell (psycho-émotionnel, Merveilleux Vaisseaux), Sterman (protocoles cliniques Sinew/Luo/Divergent/8EV) et Jeffrey Yuen (Luo, leur enseignant commun) — filtre par autrice/type ci-dessous.</p>
     <p class="muted psy-status"></p>
     <div class="formules-layout">
       <aside class="formules-sidebar">
@@ -246,7 +246,7 @@
   <section id="tab-tuteur" class="tab-panel">
     <button type="button" class="tab-btn" data-tab="psy">← Retour à Principes Taoïstes</button>
     <h2>Quiz</h2>
-    <p class="muted">Quiz généré à partir de ta base vérifiée (Farrell — niveaux de latence + vaisseaux/confluences ; Sterman et Jeffrey Yuen — principes cliniques pratiquables) — jamais inventé : les questions et les corrigés viennent directement des fiches de l'onglet Principes Taoïstes.</p>
+    <p class="muted" data-aide>Quiz généré à partir de ta base vérifiée (Farrell — niveaux de latence + vaisseaux/confluences ; Sterman et Jeffrey Yuen — principes cliniques pratiquables) — jamais inventé : les questions et les corrigés viennent directement des fiches de l'onglet Principes Taoïstes.</p>
     <div class="cas-toolbar">
       <button type="button" id="tut-next">Nouvelle question</button>
       <span id="tut-score" class="muted"></span>
@@ -258,7 +258,7 @@
 
   <!-- ===================== ONGLET SYNDROMES ===================== -->
   <section id="tab-syndromes" class="tab-panel">
-    <p class="muted">Dictionnaire des syndromes extrait de tes aide-mémoires (organes, syndromes externes, qi/sang/liquides). Quand un traitement (réseau, points, pharmacopée) est documenté dans la source, il est affiché.</p>
+    <p class="muted" data-aide>Dictionnaire des syndromes extrait de tes aide-mémoires (organes, syndromes externes, qi/sang/liquides). Quand un traitement (réseau, points, pharmacopée) est documenté dans la source, il est affiché.</p>
     <div class="formules-layout">
       <aside class="formules-sidebar">
         <input type="search" id="syn-search" placeholder="Rechercher un syndrome, un organe, un signe...">
@@ -274,11 +274,11 @@
 
   <!-- ===================== ONGLET DIAGNOSTIC PAR SIGNES (pourcentage) ===================== -->
   <section id="tab-diag-signes" class="tab-panel">
-    <p class="muted">Clique sur les signes cliniques que tu observes ; les syndromes de ta base vérifiée sont classés par pourcentage de signes correspondants. <strong>Ce pourcentage n'est pas une statistique clinique</strong> — c'est un simple ratio (signes que tu as cochés ÷ nombre total de signes documentés pour ce syndrome dans la source). Deux formulations différentes du même signe dans deux syndromes ne seront pas reconnues comme identiques (comparaison sur le texte exact extrait des sources) : c'est un outil de révision, pas un outil de diagnostic clinique autonome.</p>
+    <p class="muted" data-aide>Clique sur les signes cliniques que tu observes ; les syndromes de ta base vérifiée sont classés par pourcentage de signes correspondants. <strong>Ce pourcentage n'est pas une statistique clinique</strong> — c'est un simple ratio (signes que tu as cochés ÷ nombre total de signes documentés pour ce syndrome dans la source). Deux formulations différentes du même signe dans deux syndromes ne seront pas reconnues comme identiques (comparaison sur le texte exact extrait des sources) : c'est un outil de révision, pas un outil de diagnostic clinique autonome.</p>
     <div id="diag-signes-loading" class="muted">Chargement de la base de syndromes...</div>
     <div id="diag-signes-body" style="display:none;">
       <h3 class="sec-sub">Quelle zone du corps est touchée ?</h3>
-      <p class="muted">Choisis la ou les zones concernées par le trouble : douleur, gêne, tension, contracture, engourdissement, pathogène installé… Les canaux dont le trajet passe par là sont listés, classés par nombre de zones couvertes. Si tu coches aussi des signes, les résultats par signes indiquent les zones traversées.</p>
+      <p class="muted" data-aide>Choisis la ou les zones concernées par le trouble : douleur, gêne, tension, contracture, engourdissement, pathogène installé… Les canaux dont le trajet passe par là sont listés, classés par nombre de zones couvertes. Si tu coches aussi des signes, les résultats par signes indiquent les zones traversées.</p>
       <div id="zc-chips" class="ds-chips"><p class="muted">Chargement des zones...</p></div>
       <div id="zc-signes"></div>
       <div id="zc-results"></div>
@@ -293,7 +293,7 @@
 
   <!-- ===================== ONGLET CAS PRATIQUE ===================== -->
   <section id="tab-cas-pratique" class="tab-panel">
-    <p class="muted">Cas réels tirés des livres de référence. Lis l'énoncé, pose ton diagnostic (sur papier ou dans l'onglet Fiche de cas), puis révèle le corrigé de l'auteur pour comparer.</p>
+    <p class="muted" data-aide>Cas réels tirés des livres de référence. Lis l'énoncé, pose ton diagnostic (sur papier ou dans l'onglet Fiche de cas), puis révèle le corrigé de l'auteur pour comparer.</p>
     <div class="formules-layout">
       <aside class="formules-sidebar">
         <input type="search" id="casp-search" placeholder="Rechercher (sans spoiler)...">
@@ -338,7 +338,7 @@
 
   <!-- ===================== ONGLET POINTS (base Jeu) ===================== -->
   <section id="tab-points" class="tab-panel">
-    <p class="muted">Base de points par canal (localisation, méthode de travail, indications, actions, images), importée depuis le projet Jeu.</p>
+    <p class="muted" data-aide>Base de points par canal (localisation, méthode de travail, indications, actions, images), importée depuis le projet Jeu.</p>
     <div class="pts-view-toggle">
       <button type="button" id="pts-view-fiches" class="cat-chip active">Fiches par point</button>
       <button type="button" id="pts-view-croisements" class="cat-chip">Tableau des croisements de canaux</button>
@@ -362,13 +362,13 @@
       </div>
     </div>
     <div id="pts-view-croisements-panel" style="display:none;">
-      <p class="muted">Points où plusieurs canaux (et/ou vaisseaux extraordinaires) se rencontrent — transcrit du tableau des pages 37-40 de l'aide-mémoire acu. Les cases grisées dans la source n'ont pas de légende textuelle explicite (recoupement secondaire probable, à vérifier).</p>
+      <p class="muted" data-aide>Points où plusieurs canaux (et/ou vaisseaux extraordinaires) se rencontrent — transcrit du tableau des pages 37-40 de l'aide-mémoire acu. Les cases grisées dans la source n'ont pas de légende textuelle explicite (recoupement secondaire probable, à vérifier).</p>
       <div id="croise-edit-zone"></div>
       <input type="search" id="croise-search" placeholder="Rechercher un point ou un canal (ex : DM 14, VB, chōng mài)...">
       <div id="croise-table-wrap"></div>
     </div>
     <div id="pts-view-distincts-panel" style="display:none;">
-      <p class="muted">Tableaux pathologiques des canaux distincts (Jīng Bié), repris tels quels des sources. Chaque case porte une référence discrète (auteur, page imprimée) ; survole-la pour voir l'ouvrage.</p>
+      <p class="muted" data-aide>Tableaux pathologiques des canaux distincts (Jīng Bié), repris tels quels des sources. Chaque case porte une référence discrète (auteur, page imprimée) ; survole-la pour voir l'ouvrage.</p>
       <div class="tab-comp-options">
         <div class="tab-comp-options-row"><strong>Champs à afficher</strong><div id="cd-champs" class="cat-chip-row"></div></div>
         <div class="tab-comp-options-row"><span class="muted">Préréglages</span><div id="cd-presets" class="cat-chip-row"></div></div>
@@ -390,7 +390,7 @@
     <div class="apropos" style="max-width:900px;">
       <button type="button" class="tab-btn" data-tab="formules">← Retour aux formules</button>
       <h2>Ajouter une formule dans la base de données</h2>
-      <p class="muted">Remplis les champs (colle le texte de ton cours), puis choisis comment enregistrer.</p>
+      <p class="muted" data-aide>Remplis les champs (colle le texte de ton cours), puis choisis comment enregistrer.</p>
     </div>
     <form id="ajout-form" class="cas-form" style="max-width:900px;">
       <fieldset>
@@ -426,7 +426,7 @@
 
       <fieldset>
         <legend>Composition</legend>
-        <p class="muted">Une ligne par substance — remplis les champs, pas besoin de syntaxe à respecter.</p>
+        <p class="muted" data-aide>Une ligne par substance — remplis les champs, pas besoin de syntaxe à respecter.</p>
         <div id="aj-composition-editor"></div>
       </fieldset>
 
@@ -462,6 +462,6 @@
 
 </main>
 
-<script src="app.js?v=57"></script>
+<script src="app.js?v=58"></script>
 </body>
 </html>
