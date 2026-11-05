@@ -1471,6 +1471,7 @@ const DiagSignes = {
           <span class="ds-result-pct">${pct}%</span>
         </div>
         <p class="muted">${escapeHtml(Syndromes.domaineLabels[sd.entry.domaine] || "")}${sd.entry.sousLabel ? " · " + escapeHtml(sd.entry.sousLabel) : ""}</p>
+        ${sd.entry.domaine === "canaux" && ZonesCorps.couvertes(sd.entry.id).length ? `<p class="ds-result-matched">Trajet : ${escapeHtml(ZonesCorps.couvertes(sd.entry.id).join(", "))}</p>` : ""}
         <div class="ds-result-bar-wrap"><div class="ds-result-bar" style="width:${pct}%;"></div></div>
         <p class="ds-result-matched">${matchedKeys.length} / ${sd.signKeys.size} signe(s) documenté(s) correspondent</p>
       </div>
@@ -1487,7 +1488,94 @@ const DiagSignes = {
 };
 
 document.getElementById("ds-search").addEventListener("input", (e) => DiagSignes.renderAvailable(e.target.value));
-document.querySelector('.tab-btn[data-tab="diag-signes"]').addEventListener("click", () => DiagSignes.ensureLoaded());
+document.querySelector('.tab-btn[data-tab="diag-signes"]').addEventListener("click", () => { DiagSignes.ensureLoaded(); ZonesCorps.ensureLoaded(); });
+
+/* ===== « Où est la douleur ? » : zones du corps -> canaux dont le trajet passe par là =====
+   Données : syndromes/canaux/zones.json (généré par zones_canaux.py d'après les trajets des fiches du carnet). */
+const ZonesCorps = {
+  data: null,
+  selected: new Set(),
+
+  async ensureLoaded() {
+    if (this.data) return;
+    try {
+      this.data = await Store.readJSON("syndromes/canaux/zones.json");
+    } catch (e) {
+      document.getElementById("zc-chips").innerHTML = `<p class="muted">Zones pas encore générées (${escapeHtml(e.message)}).</p>`;
+      return;
+    }
+    this.renderChips();
+    this.renderResults();
+  },
+
+  labelOf(id) { return (this.data.zones.find(z => z.id === id) || {}).label || id; },
+
+  toggle(id) {
+    if (this.selected.has(id)) this.selected.delete(id); else this.selected.add(id);
+    this.renderChips();
+    this.renderResults();
+    if (DiagSignes.loaded) DiagSignes.renderResults();
+  },
+
+  clear() {
+    this.selected.clear();
+    this.renderChips();
+    this.renderResults();
+    if (DiagSignes.loaded) DiagSignes.renderResults();
+  },
+
+  renderChips() {
+    const host = document.getElementById("zc-chips");
+    host.innerHTML = this.data.groupes.map(g =>
+      `<div class="ds-cat-block"><h4 class="sec-sub">${escapeHtml(g.label)}</h4><div class="ds-cat-chips">` +
+      g.zones.map(id => `<button type="button" class="ds-chip${this.selected.has(id) ? " on" : ""}" data-z="${escapeHtml(id)}" aria-pressed="${this.selected.has(id)}">${escapeHtml(this.labelOf(id))}</button>`).join("") +
+      `</div></div>`).join("") +
+      (this.selected.size ? `<button type="button" class="edit-toggle-btn" id="zc-clear">Effacer les zones</button>` : "");
+    host.querySelectorAll("[data-z]").forEach(b => b.addEventListener("click", () => this.toggle(b.dataset.z)));
+    const c = document.getElementById("zc-clear");
+    if (c) c.addEventListener("click", () => this.clear());
+  },
+
+  // zones sélectionnées traversées par le canal (labels), pour l'affichage dans les résultats par signes
+  couvertes(canalId) {
+    if (!this.data || !this.selected.size) return [];
+    const c = this.data.canaux[canalId];
+    return c ? [...this.selected].filter(z => c.zones[z]).map(z => this.labelOf(z)) : [];
+  },
+
+  renderResults() {
+    const el = document.getElementById("zc-results");
+    if (!this.selected.size) { el.innerHTML = `<p class="muted">Aucune zone sélectionnée.</p>`; return; }
+    const lignes = Object.entries(this.data.canaux).map(([id, c]) => {
+      const trouvees = [...this.selected].filter(z => c.zones[z]);
+      return { id, c, trouvees };
+    }).filter(x => x.trouvees.length)
+      .sort((a, b) => b.trouvees.length - a.trouvees.length || a.c.nom.localeCompare(b.c.nom, "fr"));
+    if (!lignes.length) { el.innerHTML = `<p class="muted">Aucun canal du carnet ne passe par ces zones.</p>`; return; }
+    const n = this.selected.size;
+    el.innerHTML = lignes.map(({ id, c, trouvees }) => `
+      <div class="ds-result zc-result" data-id="${escapeHtml(id)}">
+        <div class="ds-result-top">
+          <span class="ds-result-name">Canal ${escapeHtml(c.nom)} (${escapeHtml(c.code)})</span>
+          <span class="ds-result-pct">${trouvees.length} / ${n}</span>
+        </div>
+        <p class="ds-result-matched">${trouvees.map(z => {
+          const types = [...new Set(c.zones[z].map(t => t.type))].join(", ");
+          return `<strong>${escapeHtml(this.labelOf(z))}</strong> <span class="muted">(${escapeHtml(types)})</span>`;
+        }).join(" · ")}</p>
+        <details class="zc-extraits"><summary>Passages du trajet</summary>${trouvees.map(z =>
+          c.zones[z].map(t => `<p class="muted"><strong>${escapeHtml(this.labelOf(z))}</strong> — ${escapeHtml(t.type)} : ${escapeHtml(t.extrait)}</p>`).join("")).join("")}</details>
+      </div>`).join("") +
+      `<p class="muted">Zones tirées des trajets du vaisseau liaison (luo), du grand luo et du canal tendineux décrits dans le carnet ; le trajet du canal régulier n'y est pas décrit.</p>`;
+    el.querySelectorAll(".zc-result").forEach(div => div.addEventListener("click", ev => {
+      if (ev.target.closest("details")) return;
+      const entry = Syndromes.entries.find(e => e.id === div.dataset.id && e.domaine === "canaux");
+      if (!entry) return;
+      document.querySelector('.tab-btn[data-tab="syndromes"]').click();
+      Syndromes.showDetail(entry);
+    }));
+  }
+};
 
 /* ============================= Cas pratique ============================= */
 const CasPratique = {

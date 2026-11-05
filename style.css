@@ -577,3 +577,11 @@ tr.syn-generique td { color: var(--muted); font-style: italic; }
 .syn-trajet summary { cursor: pointer; font-weight: 700; }
 .syn-trait { border: 1px solid var(--line); background: var(--panel); padding: 0.5rem 0.7rem; font-size: 0.85rem; }
 .syn-trait p { margin: 0.2rem 0; }
+
+/* --- Où est la douleur ? (zones du corps) --- */
+.ds-chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
+#zc-chips { max-height: none; }
+#zc-clear { margin-top: 0.8rem; }
+#zc-results { margin-top: 1rem; }
+.zc-extraits { margin-top: 0.4rem; font-size: 0.8rem; }
+.zc-extraits summary { cursor: pointer; }
