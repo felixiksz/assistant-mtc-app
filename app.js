@@ -1553,19 +1553,23 @@ const ZonesCorps = {
       .sort((a, b) => b.trouvees.length - a.trouvees.length || a.c.nom.localeCompare(b.c.nom, "fr"));
     if (!lignes.length) { el.innerHTML = `<p class="muted">Aucun canal du carnet ne passe par ces zones.</p>`; return; }
     const n = this.selected.size;
-    el.innerHTML = lignes.map(({ id, c, trouvees }) => `
+    el.innerHTML = lignes.map(({ id, c, trouvees }) => {
+      const pct = Math.round((trouvees.length / n) * 100);
+      return `
       <div class="ds-result zc-result" data-id="${escapeHtml(id)}">
         <div class="ds-result-top">
           <span class="ds-result-name">Canal ${escapeHtml(c.nom)} (${escapeHtml(c.code)})</span>
-          <span class="ds-result-pct">${trouvees.length} / ${n}</span>
+          <span class="ds-result-pct" title="${trouvees.length} zone(s) sélectionnée(s) sur ${n} traversée(s) par ce canal">${pct}%</span>
         </div>
+        <div class="ds-result-bar-wrap"><div class="ds-result-bar" style="width:${pct}%;"></div></div>
         <p class="ds-result-matched">${trouvees.map(z => {
           const types = [...new Set(c.zones[z].map(t => t.type))].join(", ");
           return `<strong>${escapeHtml(this.labelOf(z))}</strong> <span class="muted">(${escapeHtml(types)})</span>`;
         }).join(" · ")}</p>
         <details class="zc-extraits"><summary>Passages du trajet</summary>${trouvees.map(z =>
           c.zones[z].map(t => `<p class="muted"><strong>${escapeHtml(this.labelOf(z))}</strong> — ${escapeHtml(t.type)} : ${escapeHtml(t.extrait)}</p>`).join("")).join("")}</details>
-      </div>`).join("") +
+      </div>`;
+    }).join("") +
       `<p class="muted">${escapeHtml(this.data.note || "")}</p>`;
     el.querySelectorAll(".zc-result").forEach(div => div.addEventListener("click", ev => {
       if (ev.target.closest("details")) return;
