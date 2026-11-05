@@ -563,3 +563,17 @@ table.cd-table td.cd-vide { color: var(--muted); text-align: center; vertical-al
 #cd-print-titre { margin: 0.4rem 0 0; font-size: 0.95rem; }
 tr.cd-conf > td { background: var(--panel); }
 tr.cd-conf > th.cd-canal { font-weight: 700; }
+
+/* --- Syndromes des canaux (domaine « canaux ») --- */
+.syn-canal-section { margin: 1.2rem 0; }
+.syn-canal-section h3 .muted { font-weight: 400; font-size: 0.8rem; text-transform: none; }
+.syn-canal-section table { width: 100%; border-collapse: collapse; margin: 0.5rem 0 0.8rem; font-size: 0.85rem; }
+.syn-canal-section th, .syn-canal-section td { border: 1px solid var(--line); padding: 0.4rem 0.55rem; vertical-align: top; text-align: left; }
+.syn-canal-section thead th { background: var(--row-section); }
+.syn-canal-section td p { margin: 0 0 0.4rem; }
+tr.syn-generique td { color: var(--muted); font-style: italic; }
+.tag-gen { display: inline-block; font-size: 0.62rem; font-style: normal; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid var(--line); padding: 0 0.3rem; margin-left: 0.3rem; color: var(--ink); }
+.syn-trajet { margin: 0.4rem 0; font-size: 0.85rem; }
+.syn-trajet summary { cursor: pointer; font-weight: 700; }
+.syn-trait { border: 1px solid var(--line); background: var(--panel); padding: 0.5rem 0.7rem; font-size: 0.85rem; }
+.syn-trait p { margin: 0.2rem 0; }

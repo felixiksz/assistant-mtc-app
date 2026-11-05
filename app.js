@@ -1046,7 +1046,7 @@ document.querySelector('.tab-btn[data-tab="tuteur"]').addEventListener("click", 
 const Syndromes = {
   entries: [], // {id, domaine, nom, sousLabel, chemin}
   activeDomaine: null,
-  domaineLabels: { organes: "Organes", externes: "Externes", qi_sang_liquides: "Qi / Sang / Liquides" },
+  domaineLabels: { organes: "Organes", externes: "Externes", qi_sang_liquides: "Qi / Sang / Liquides", canaux: "Canaux" },
   rawIndexByDomaine: {},
   _deepIndexed: false,
   _deepIndexing: false,
@@ -1079,12 +1079,13 @@ const Syndromes = {
   },
 
   async load() {
-    const [organes, externes, qsl] = await Promise.all([
+    const [organes, externes, qsl, canaux] = await Promise.all([
       this.loadDomaine("organes", "syndromes/organes/index.json"),
       this.loadDomaine("externes", "syndromes/externes/index.json"),
-      this.loadDomaine("qi_sang_liquides", "syndromes/qi_sang_liquides/index.json")
+      this.loadDomaine("qi_sang_liquides", "syndromes/qi_sang_liquides/index.json"),
+      this.loadDomaine("canaux", "syndromes/canaux/index.json")
     ]);
-    this.entries = [...organes, ...externes, ...qsl];
+    this.entries = [...organes, ...externes, ...qsl, ...canaux];
     if (this.entries.length === 0) {
       document.getElementById("syn-list").innerHTML = `<li class="muted">Base pas encore prête — l'extraction tourne peut-être encore en tâche de fond.</li>`;
       return;
@@ -1227,7 +1228,65 @@ const Syndromes = {
       ${synthese}${baseJeu}${reseau}${maciocia}${pharma}${verif}</section>`;
   },
 
+  /* ---- Canaux : fiche issue du carnet « Syndromes des canaux » (régulier, luo + shen, tendineux) ---- */
+  signeGras(l) {
+    const hl = t => tcmHighlightInline(escapeHtml(t));
+    const texte = l.symptome || "";
+    if (l.cle) return `<strong>${hl(texte)}</strong>`;
+    let reste = texte, html = "";
+    (l.gras || []).forEach(f => {
+      const i = reste.indexOf(f);
+      if (i < 0) return;
+      html += hl(reste.slice(0, i)) + `<strong>${hl(f)}</strong>`;
+      reste = reste.slice(i + f.length);
+    });
+    return html + hl(reste);
+  },
+
+  tableCanal(lignes) {
+    if (!lignes || !lignes.length) return "";
+    const corps = lignes.map(l => `<tr${l.generique ? ' class="syn-generique"' : ""}><td>${this.signeGras(l)}${l.generique ? ` <span class="tag-gen" title="Signe générique : il décrit le trajet du canal, pas un syndrome précis">trajet</span>` : ""}</td>` +
+      `<td>${tcmHighlightInline(escapeHtml(l.mecanisme || ""))}</td></tr>`).join("");
+    return `<table><thead><tr><th>Symptôme</th><th>Mécanisme pathologique</th></tr></thead><tbody>${corps}</tbody></table>`;
+  },
+
+  renderShen(s) {
+    if (!s) return "";
+    const patho = (s.pathologique || []).map(p => `<p>${tcmHighlightInline(escapeHtml(p))}</p>`).join("");
+    const pv = (s.plenitude ? `<p><strong>Plénitude</strong> : ${tcmHighlightInline(escapeHtml(s.plenitude))}</p>` : "") +
+      (s.vide ? `<p><strong>Vide</strong> : ${tcmHighlightInline(escapeHtml(s.vide))}</p>` : "");
+    return `<table class="syn-shen"><thead><tr><th>Canal luo sain (shen)</th><th>Canal luo pathologique (shen)</th></tr></thead>` +
+      `<tbody><tr><td>${tcmHighlightInline(escapeHtml(s.sain || ""))}</td><td>${patho}${pv}</td></tr></tbody></table>`;
+  },
+
+  renderTraitementCanal(sec) {
+    const cases = ((sec.acupuncture_classique || {}).cases || []).flat().filter(Boolean);
+    const toutes = (sec.pour_toutes_situations || []).filter(Boolean);
+    if (!cases.length && !toutes.length) return "";
+    return `<div class="syn-trait">${cases.length ? `<p><strong>Acupuncture classique</strong> : ${escapeHtml(cases.join(" · "))}</p>` : ""}` +
+      `${toutes.length ? `<p><strong>Pour toutes les situations</strong> : ${escapeHtml(toutes.join(" · "))}</p>` : ""}</div>`;
+  },
+
+  renderCanal(d) {
+    const noms = { regulier: "Canal régulier", luo: "Vaisseau liaison (luo)", grand_luo: "Grand vaisseau liaison (grand luo)", tendineux: "Canal tendineux" };
+    const sections = ["regulier", "luo", "grand_luo", "tendineux"].filter(k => d[k] && (d[k].lignes || d[k].shen)).map(k => {
+      const sec = d[k];
+      const trajet = (sec.trajet && sec.trajet.length)
+        ? `<details class="syn-trajet"><summary>${escapeHtml(sec.trajet_titre || "Trajet")}</summary><ul class="tcm-list">${sec.trajet.map(t => `<li>${tcmHighlightInline(escapeHtml(t))}</li>`).join("")}</ul></details>` : "";
+      return `<section class="syn-canal-section"><h3>${noms[k]} <span class="muted">${escapeHtml((sec.titre || "").replace(/^[^(]*/, ""))}</span></h3>` +
+        `${trajet}${this.tableCanal(sec.lignes)}${this.renderShen(sec.shen)}${this.renderTraitementCanal(sec)}</section>`;
+    }).join("");
+    const gen = (d.signes_de_trajet && d.signes_de_trajet.length)
+      ? `<p class="muted">Signes génériques de trajet (non discriminants, exclus du diagnostic par signes) : ${d.signes_de_trajet.map(s => escapeHtml(s.symptome)).join(" ; ")}</p>` : "";
+    return `<h2>${escapeHtml(d.nom_syndrome || d.id)}</h2>` +
+      `<p class="muted">${escapeHtml(d.hanzi || "")} · ${escapeHtml(d.pinyin || "")}</p>${sections}${gen}`;
+  },
+
   renderSyndrome(d, domaine) {
+    if (domaine === "canaux") {
+      const v = (d.a_verifier && d.a_verifier.length) ? `<section><h3>À vérifier contre la source</h3>${d.a_verifier.map(x => `<span class="tag-verifier">⚠ ${escapeHtml(x)}</span>`).join("")}</section>` : "";
+      return this.renderCanal(d) + v + `<p class="muted">Source : ${escapeHtml((d.source && d.source.fichier) || "?")}</p>`;
+    }
     const verif = (d.a_verifier && d.a_verifier.length)
       ? `<section><h3>À vérifier contre la source</h3>${d.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("")}</section>`
       : "";
