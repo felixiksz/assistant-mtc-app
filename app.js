@@ -1481,8 +1481,7 @@ const DiagSignes = {
       div.addEventListener("click", () => {
         const entry = Syndromes.entries.find(e => e.id === div.dataset.id && e.domaine === div.dataset.domaine);
         if (!entry) return;
-        document.querySelector('.tab-btn[data-tab="syndromes"]').click();
-        Syndromes.showDetail(entry);
+        PostIt.open(entry);       // fiche flottante (plusieurs possibles, pour comparer)
       });
     });
   }
@@ -1627,11 +1626,104 @@ const ZonesCorps = {
       if (ev.target.closest("details")) return;
       const entry = Syndromes.entries.find(e => e.id === div.dataset.id && e.domaine === "canaux");
       if (!entry) return;
-      document.querySelector('.tab-btn[data-tab="syndromes"]').click();
-      Syndromes.showDetail(entry);
+      PostIt.open(entry);
     }));
   }
 };
+
+/* ===== Fiches flottantes (« post-it ») : la fiche d'un syndrome s'ouvre par-dessus la page, déplaçable, plusieurs à la fois ===== */
+const PostIt = {
+  ouverts: new Map(),     // "domaine/id" -> élément
+  zMax: 300,
+
+  async open(entry) {
+    const cle = `${entry.domaine}/${entry.id}`;
+    if (this.ouverts.has(cle)) { this.devant(this.ouverts.get(cle)); return; }
+    const n = this.ouverts.size;
+    const el = document.createElement("div");
+    el.className = "postit";
+    el.setAttribute("role", "dialog");
+    el.setAttribute("aria-label", entry.nom);
+    const etroit = window.innerWidth < 640;
+    el.style.top = (Math.min(70 + n * 28, window.innerHeight - 200)) + "px";
+    el.style.left = etroit ? "3vw" : Math.max(8, window.innerWidth - Math.min(560, window.innerWidth * 0.94) - 20 - n * 30) + "px";
+    el.innerHTML = `<div class="postit-tete"><span class="postit-titre">${escapeHtml(entry.nom)}</span>` +
+      `<button type="button" class="postit-ouvrir" title="Ouvrir dans l'onglet Syndromes">↗</button>` +
+      `<button type="button" class="postit-fermer" title="Fermer" aria-label="Fermer">✕</button></div>` +
+      `<div class="postit-corps formule-detail"><p class="muted">Chargement...</p></div>`;
+    document.body.appendChild(el);
+    this.ouverts.set(cle, el);
+    this.devant(el);
+    this.deplacable(el);
+    el.querySelector(".postit-fermer").addEventListener("click", () => this.fermer(cle));
+    el.querySelector(".postit-ouvrir").addEventListener("click", () => {
+      document.querySelector('.tab-btn[data-tab="syndromes"]').click();
+      Syndromes.showDetail(entry);
+    });
+    el.addEventListener("pointerdown", () => this.devant(el));
+    this.barre();
+    try {
+      const d = await Store.readJSON(`syndromes/${entry.domaine}/${entry.chemin}`);
+      el.querySelector(".postit-corps").innerHTML = Syndromes.renderSyndrome(d, entry.domaine);
+    } catch (e) {
+      el.querySelector(".postit-corps").innerHTML = `<p class="muted">Impossible de charger la fiche (${escapeHtml(e.message)}).</p>`;
+    }
+  },
+
+  devant(el) { el.style.zIndex = ++this.zMax; },
+
+  fermer(cle) {
+    const el = this.ouverts.get(cle);
+    if (el) el.remove();
+    this.ouverts.delete(cle);
+    this.barre();
+  },
+
+  toutFermer() { [...this.ouverts.keys()].forEach(k => this.fermer(k)); },
+
+  // barre flottante « Fermer les fiches (n) », visible dès qu'une fiche est ouverte
+  barre() {
+    let b = document.getElementById("postit-barre");
+    if (!this.ouverts.size) { if (b) b.remove(); return; }
+    if (!b) {
+      b = document.createElement("button");
+      b.id = "postit-barre";
+      b.type = "button";
+      b.addEventListener("click", () => this.toutFermer());
+      document.body.appendChild(b);
+    }
+    b.textContent = `Fermer les fiches (${this.ouverts.size})`;
+    b.style.zIndex = this.zMax + 1;
+  },
+
+  deplacable(el) {
+    const tete = el.querySelector(".postit-tete");
+    let dx = 0, dy = 0, actif = false;
+    tete.addEventListener("pointerdown", e => {
+      if (e.target.closest("button")) return;
+      actif = true;
+      dx = e.clientX - el.offsetLeft;
+      dy = e.clientY - el.offsetTop;
+      tete.setPointerCapture(e.pointerId);
+      this.devant(el);
+    });
+    tete.addEventListener("pointermove", e => {
+      if (!actif) return;
+      const x = Math.min(Math.max(e.clientX - dx, 4 - el.offsetWidth + 80), window.innerWidth - 80);
+      const y = Math.min(Math.max(e.clientY - dy, 0), window.innerHeight - 40);
+      el.style.left = x + "px";
+      el.style.top = y + "px";
+    });
+    const fin = () => { actif = false; };
+    tete.addEventListener("pointerup", fin);
+    tete.addEventListener("pointercancel", fin);
+  }
+};
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape" || !PostIt.ouverts.size) return;
+  const haut = [...PostIt.ouverts.entries()].sort((a, b) => b[1].style.zIndex - a[1].style.zIndex)[0];
+  if (haut) PostIt.fermer(haut[0]);
+});
 
 /* ============================= Cas pratique ============================= */
 const CasPratique = {
