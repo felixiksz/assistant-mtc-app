@@ -1406,7 +1406,16 @@ function dsEnGras(sign, cat) {
   return html;
 }
 
+// Types de syndromes parmi lesquels chercher (filtre de « Diagnostic par signes »)
+const DS_FILTRES = [
+  ["tous", "Tous"], ["canaux", "Canaux"], ["organes", "Organes"],
+  ["qi_sang_liquides", "Qi, sang, liquides"], ["externes", "Syndromes externes"],
+  ["mv", "Merveilleux vaisseaux (à venir)"],
+];
+
 const DiagSignes = {
+  filtre: "tous",
+  _clesFiltre: {},
   loaded: false,
   syndromesData: [], // [{entry, detail, signKeys: Set<normalizedKey>}]
   signIndex: new Map(), // normalizedKey -> display text (first-seen original wording)
@@ -1436,9 +1445,48 @@ const DiagSignes = {
     this.loaded = true;
     document.getElementById("diag-signes-loading").style.display = "none";
     document.getElementById("diag-signes-body").style.display = "block";
+    this.renderFiltre();
     this.renderSelected();
     this.renderAvailable("");
     this.renderResults();
+  },
+
+  // ---- filtre : canaux / organes / qi-sang-liquides / externes (merveilleux vaisseaux : à venir)
+  renderFiltre() {
+    const el = document.getElementById("ds-filtre");
+    if (!el) return;
+    el.innerHTML = DS_FILTRES.map(([id, label]) => {
+      const n = id === "tous" ? this.syndromesData.length : id === "mv" ? 0 : this.syndromesData.filter(sd => sd.entry.domaine === id).length;
+      const dispo = id === "mv" ? false : true;
+      return `<button type="button" class="cat-chip${this.filtre === id ? " active" : ""}" data-f="${id}" aria-pressed="${this.filtre === id}"` +
+        `${dispo ? "" : ` disabled title="Pas encore disponible"`}>${escapeHtml(label)}${dispo ? ` (${n})` : ""}</button>`;
+    }).join("");
+    el.querySelectorAll("[data-f]:not([disabled])").forEach(b => b.addEventListener("click", () => this.setFiltre(b.dataset.f)));
+    const zones = document.getElementById("zc-bloc");       // les zones ne concernent que les canaux
+    if (zones) zones.style.display = (this.filtre === "tous" || this.filtre === "canaux") ? "" : "none";
+  },
+
+  setFiltre(id) {
+    this.filtre = id;
+    this.renderFiltre();
+    this.renderAvailable(document.getElementById("ds-search").value);
+    this.renderResults();
+  },
+
+  // syndromes retenus par le filtre
+  syndromesFiltres() {
+    return this.filtre === "tous" ? this.syndromesData : this.syndromesData.filter(sd => sd.entry.domaine === this.filtre);
+  },
+
+  // signes appartenant à au moins un syndrome retenu par le filtre (null = pas de restriction)
+  clesFiltre() {
+    if (this.filtre === "tous") return null;
+    if (!this._clesFiltre[this.filtre]) {
+      const s = new Set();
+      this.syndromesFiltres().forEach(sd => sd.signKeys.forEach(k => s.add(k)));
+      this._clesFiltre[this.filtre] = s;
+    }
+    return this._clesFiltre[this.filtre];
   },
 
   toggle(key) {
@@ -1467,7 +1515,8 @@ const DiagSignes = {
   renderAvailable(query) {
     const el = document.getElementById("ds-available");
     const q = (query || "").trim().toLowerCase();
-    let pool = [...this.signIndex.entries()].filter(([key]) => !this.selected.has(key));
+    const permis = this.clesFiltre();
+    let pool = [...this.signIndex.entries()].filter(([key]) => !this.selected.has(key) && (!permis || permis.has(key)));
     if (q) pool = pool.filter(([, label]) => label.toLowerCase().includes(q));
     if (!pool.length) { el.innerHTML = `<span class="muted">Aucun signe ne correspond à cette recherche.</span>`; return; }
 
@@ -1499,12 +1548,12 @@ const DiagSignes = {
   renderResults() {
     const el = document.getElementById("ds-results");
     if (!this.selected.size) { el.innerHTML = `<p class="muted">Sélectionne au moins un signe pour voir les syndromes correspondants.</p>`; return; }
-    const scored = this.syndromesData.map(sd => {
+    const scored = this.syndromesFiltres().map(sd => {
       const matchedKeys = [...sd.signKeys].filter(k => this.selected.has(k));
       return { sd, matchedKeys, pct: Math.round((matchedKeys.length / sd.signKeys.size) * 100) };
     }).filter(x => x.matchedKeys.length > 0)
       .sort((a, b) => b.pct - a.pct || b.matchedKeys.length - a.matchedKeys.length);
-    if (!scored.length) { el.innerHTML = `<p class="muted">Aucun syndrome de la base ne recoupe les signes sélectionnés.</p>`; return; }
+    if (!scored.length) { el.innerHTML = `<p class="muted">Aucun syndrome ${this.filtre === "tous" ? "de la base" : "de ce type"} ne recoupe les signes sélectionnés.</p>`; return; }
     el.innerHTML = scored.slice(0, 40).map(({ sd, matchedKeys, pct }) => `
       <div class="ds-result" data-id="${escapeHtml(sd.entry.id)}" data-domaine="${escapeHtml(sd.entry.domaine)}">
         <div class="ds-result-top">
@@ -1563,7 +1612,8 @@ const ZonesCorps = {
   // zone -> signes précis des tableaux du carnet (canaux : régulier, luo, tendineux) qui citent cette zone
   buildSignIndex() {
     this.signesParZone = {};
-    const motifs = this.data.zones.map(z => [z.id, z.motifs.map(p => new RegExp(p))]);
+    // motifs explicites (zone nommée dans le signe) + motifs déduits (« miction » -> bas-ventre, « tympanisme » -> abdomen…)
+    const motifs = this.data.zones.map(z => [z.id, z.motifs.map(p => new RegExp(p)), (z.motifs_implicites || []).map(p => new RegExp(p))]);
     const types = [["regulier", "régulier"], ["luo", "luo"], ["grand_luo", "grand luo"], ["tendineux", "tendineux"]];
     DiagSignes.syndromesData.filter(sd => sd.entry.domaine === "canaux").forEach(sd => {
       const d = sd.detail;
@@ -1574,10 +1624,12 @@ const ZonesCorps = {
           const key = txt && dsNormalizeKey(txt);
           if (!key || !DiagSignes.signIndex.has(key)) return;
           const n = this.norm(l.symptome);
-          motifs.forEach(([zid, res]) => {
-            if (!res.some(r => r.test(n))) return;
+          motifs.forEach(([zid, res, resImp]) => {
+            const explicite = res.some(r => r.test(n));
+            if (!explicite && !resImp.some(r => r.test(n))) return;
             const liste = this.signesParZone[zid] || (this.signesParZone[zid] = new Map());
-            const ent = liste.get(key) || { key, label: DiagSignes.signIndex.get(key), origines: [], mecanismes: [] };
+            const ent = liste.get(key) || { key, label: DiagSignes.signIndex.get(key), origines: [], mecanismes: [], implicite: true };
+            if (explicite) ent.implicite = false;
             ent.origines.push(`${d.code} · ${nomType}`);
             if (l.mecanisme) ent.mecanismes.push(l.mecanisme);
             liste.set(key, ent);
@@ -1595,7 +1647,7 @@ const ZonesCorps = {
     el.innerHTML = `<h4 class="sec-sub">Précise le signe (tableaux du carnet)</h4>` + [...this.selected].map(zid => {
       const liste = [...((this.signesParZone || {})[zid] || new Map()).values()].sort((a, b) => a.label.localeCompare(b.label, "fr"));
       const corps = liste.length
-        ? `<div class="ds-cat-chips">${liste.map(s => `<button type="button" class="ds-chip${DiagSignes.selected.has(s.key) ? " on" : ""}" data-k="${escapeHtml(s.key)}" aria-pressed="${DiagSignes.selected.has(s.key)}" title="${escapeHtml(s.mecanismes.join(" ; "))}">${escapeHtml(s.label)} <span class="tag-gen">${escapeHtml([...new Set(s.origines)].join(", "))}</span></button>`).join("")}</div>`
+        ? `<div class="ds-cat-chips">${liste.map(s => `<button type="button" class="ds-chip${DiagSignes.selected.has(s.key) ? " on" : ""}" data-k="${escapeHtml(s.key)}" aria-pressed="${DiagSignes.selected.has(s.key)}" title="${escapeHtml(s.mecanismes.join(" ; "))}">${escapeHtml(s.label)} <span class="tag-gen">${escapeHtml([...new Set(s.origines)].join(", "))}${s.implicite ? " · zone déduite" : ""}</span></button>`).join("")}</div>`
         : `<p class="muted">Aucun signe des tableaux du carnet ne cite cette zone.</p>`;
       return `<details class="zc-sous" open><summary>${escapeHtml(this.labelOf(zid))} (${liste.length})</summary>${corps}</details>`;
     }).join("");
@@ -3813,6 +3865,7 @@ const Aide = {
     cibles.forEach(e => this.brancher(e));
   },
   brancher(texte) {
+    if (!texte.parentNode) return;          // élément déjà retiré de la page (contenu réécrit entre-temps)
     texte.setAttribute("data-aide-ok", "1");
     texte.hidden = true;
     texte.classList.add("aide-texte");
