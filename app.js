@@ -1490,7 +1490,7 @@ const DiagSignes = {
 document.getElementById("ds-search").addEventListener("input", (e) => DiagSignes.renderAvailable(e.target.value));
 document.querySelector('.tab-btn[data-tab="diag-signes"]').addEventListener("click", () => { DiagSignes.ensureLoaded(); ZonesCorps.ensureLoaded(); });
 
-/* ===== « Où est la douleur ? » : zones du corps -> canaux dont le trajet passe par là =====
+/* ===== « Quelle zone du corps est touchée ? » : zones -> canaux dont le trajet passe par là =====
    Données : syndromes/canaux/zones.json (généré par zones_canaux.py d'après les trajets des fiches du carnet). */
 const ZonesCorps = {
   data: null,
@@ -1566,7 +1566,7 @@ const ZonesCorps = {
         <details class="zc-extraits"><summary>Passages du trajet</summary>${trouvees.map(z =>
           c.zones[z].map(t => `<p class="muted"><strong>${escapeHtml(this.labelOf(z))}</strong> — ${escapeHtml(t.type)} : ${escapeHtml(t.extrait)}</p>`).join("")).join("")}</details>
       </div>`).join("") +
-      `<p class="muted">Zones tirées des trajets du vaisseau liaison (luo), du grand luo et du canal tendineux décrits dans le carnet ; le trajet du canal régulier n'y est pas décrit.</p>`;
+      `<p class="muted">${escapeHtml(this.data.note || "")}</p>`;
     el.querySelectorAll(".zc-result").forEach(div => div.addEventListener("click", ev => {
       if (ev.target.closest("details")) return;
       const entry = Syndromes.entries.find(e => e.id === div.dataset.id && e.domaine === "canaux");
