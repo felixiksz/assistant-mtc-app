@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=48">
+<link rel="stylesheet" href="style.css?v=52">
 <script src="theme.js?v=2"></script>
 </head>
 <body>
@@ -289,9 +289,22 @@
       <h3 class="sec-sub" style="margin-top:1.5rem;">Signes cliniques</h3>
       <div class="ds-selected" id="ds-selected"></div>
       <input type="search" id="ds-search" placeholder="Rechercher un signe (ex : insomnie, langue rouge, pouls fin...)">
-      <div id="ds-available" class="ds-chips"></div>
+      <h4 class="sec-sub">Signes courts</h4>
+      <p class="muted" data-aide>Les signes courts (« langue rouge », « pouls rapide », « soif »…) sont reconnus automatiquement dans toutes les lignes des tableaux. Cocher un signe court sélectionne toutes les lignes qui le contiennent, dans tous les syndromes. Le nombre à droite est le nombre de syndromes où il apparaît.</p>
+      <div id="ds-courts"></div>
+      <details id="ds-phrases" class="ds-details">
+        <summary id="ds-phrases-titre">Autres lignes des tableaux (phrases complètes)</summary>
+        <p class="muted" data-aide>Ces lignes n'ont pas encore été décomposées en signes courts : elles restent cochables telles quelles, en phrase entière.</p>
+        <div id="ds-available" class="ds-chips"></div>
+      </details>
       <h3 class="sec-sub" style="margin-top:1.5rem;">Syndromes correspondants</h3>
+      <div class="pts-view-toggle">
+        <button type="button" id="ds-vue-liste" class="cat-chip active">Liste</button>
+        <button type="button" id="ds-vue-graphe" class="cat-chip">Graphe</button>
+      </div>
+      <div id="ds-exclus"></div>
       <div id="ds-results"></div>
+      <div id="ds-graphe" style="display:none;"></div>
     </div>
   </section>
 
@@ -466,6 +479,6 @@
 
 </main>
 
-<script src="app.js?v=66"></script>
+<script src="app.js?v=73"></script>
 </body>
 </html>

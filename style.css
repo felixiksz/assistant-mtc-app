@@ -625,3 +625,64 @@ tr.syn-generique td { color: var(--muted); font-style: italic; }
 #syn-list li.selected .fl-extrait { color: var(--on-accent); }
 /* Mot cherché : surlignage fluo (couleur fixe, texte noir : lisible sur tous les thèmes) */
 mark.surlignage { background: #f4ff00; color: #000; font-weight: inherit; padding: 0 0.12em; border-radius: 2px; box-shadow: 0 0 0 1px #c9d100; }
+
+/* Signes courts, syndromes écartés, vue graphe */
+.chosen-court { border-style: solid; font-weight: 600; }
+.ds-sous { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.6rem; margin: 0.2rem 0 0.5rem; }
+.ds-sous-nom { min-width: 6.5rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+.ds-chip.ds-court .tag-gen { margin-left: 0.25rem; }
+.ds-exclure { margin-left: auto; background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 50%; width: 1.5rem; height: 1.5rem; padding: 0; line-height: 1; cursor: pointer; }
+.ds-exclure:hover { background: var(--danger); color: var(--on-danger); border-color: var(--danger); }
+#ds-exclus { margin: 0.4rem 0; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+#ds-graphe .g-barre { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-bottom: 0.4rem; }
+#g-cadre { border: 1px solid var(--line); background: var(--panel); overflow: hidden; }
+#g-svg { display: block; touch-action: none; cursor: grab; user-select: none; }
+#g-svg:active { cursor: grabbing; }
+.g-lien { stroke: var(--line); stroke-width: 1; opacity: 0.7; }
+.g-lien-sel { stroke: var(--accent); stroke-width: 1.8; opacity: 1; }
+.g-lien-in { stroke: var(--accent); opacity: 0.35; }
+.g-pt-c { fill: var(--panel); stroke: var(--muted); stroke-width: 1.6; cursor: pointer; }
+.g-pt-c.sel { fill: var(--accent); stroke: var(--accent); }
+.g-pt-c.com { stroke: var(--ink); stroke-width: 2; }
+.g-ligne:hover .g-pt-c { stroke: var(--ink); stroke-width: 2; }
+.g-lab-r { display: none; font-size: 9px; fill: var(--ink); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; pointer-events: none; }
+#g-svg.z2 .g-lab-r { display: inline; }
+#g-svg.z3 .g-lab-r { font-size: 7px; }
+.g-syn { cursor: pointer; }
+.g-syn rect { fill: var(--panel); stroke-width: 2.4; }
+.g-syn:hover rect { fill: var(--accent-soft); }
+.g-syn-nom { font-size: 12px; font-weight: 700; fill: var(--ink); }
+.g-syn-pct { font-size: 11px; fill: var(--muted); }
+.g-x circle { fill: transparent; stroke: var(--muted); stroke-width: 1; }
+.g-x text { font-size: 9px; fill: var(--muted); }
+.g-x:hover circle { fill: var(--danger); stroke: var(--danger); }
+.g-x:hover text { fill: var(--on-danger); }
+.g-in rect { fill: var(--accent); }
+.g-in.court rect { stroke: var(--ink); stroke-width: 1.5; }
+.g-in text { font-size: 12px; font-weight: 700; fill: var(--on-accent); }
+.g-in { cursor: pointer; }
+.g-vide { font-size: 14px; fill: var(--muted); }
+#g-info { min-height: 3.2rem; margin: 0.5rem 0; padding: 0.4rem 0.6rem; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+.g-legende { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: 0.78rem; align-items: center; }
+.g-pt { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--panel); border: 1.6px solid var(--muted); vertical-align: middle; }
+.g-pt-sel { background: var(--accent); border-color: var(--accent); }
+.g-pt-com { box-shadow: 0 0 0 2px var(--ink); }
+.g-carre { display: inline-block; width: 14px; height: 10px; border: 2.4px solid; border-radius: 3px; vertical-align: middle; }
+@media print { #ds-graphe .g-barre { display: none; } }
+
+/* Téléphone : une fiche à la fois, plein écran sous une rangée d'onglets */
+#postit-onglets { position: fixed; top: 0; left: 0; right: 0; display: flex; gap: 0; overflow-x: auto; background: var(--ink); border-bottom: 2px solid var(--ink); }
+.postit-onglet { flex: 0 0 auto; max-width: 70vw; padding: 0.55rem 0.8rem; background: var(--ink); color: var(--bg); border: 0; border-right: 1px solid var(--bg); font: inherit; font-size: 0.85rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.postit-onglet.actif { background: var(--accent); color: var(--on-accent); }
+.postit-onglet.postit-tout { margin-left: auto; opacity: 0.85; }
+.postit-cache { visibility: hidden; pointer-events: none; }
+@media (max-width: 639px) {
+  .postit { left: 0 !important; right: 0 !important; width: 100vw !important; top: 2.7rem !important; bottom: 0 !important; max-height: none !important; height: auto !important; min-width: 0; resize: none; border-width: 2px 0 0 0; box-shadow: none; }
+  .postit-tete { cursor: default; }
+}
+
+/* Signes cochés : toujours visibles en haut de l'écran pendant qu'on fait défiler la liste des signes */
+.ds-selected { position: sticky; top: 0; z-index: 30; background: var(--bg); padding: 0.5rem; border: 2px solid var(--line); max-height: 30vh; overflow: auto; box-shadow: 0 4px 0 var(--bg); }
+.ds-details > summary { cursor: pointer; font-weight: 700; padding: 0.4rem 0; }
+.g-syn, .g-in, .g-ligne { cursor: grab; }
+.g-syn:active, .g-in:active, .g-ligne:active { cursor: grabbing; }

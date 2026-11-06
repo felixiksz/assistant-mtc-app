@@ -1492,6 +1492,12 @@ const DiagSignes = {
   syndromesData: [], // [{entry, detail, signKeys: Set<normalizedKey>}]
   signIndex: new Map(), // normalizedKey -> display text (first-seen original wording)
   selected: new Set(), // normalized keys
+  selectedCourts: new Set(),   // signes courts cochés (« Langue rouge », « Pouls rapide »…)
+  exclus: new Set(),           // syndromes écartés des résultats (« domaine/id »)
+  courtsData: null,            // syndromes/signes_courts/signes_courts.json
+  courtsInfo: new Map(),       // id -> {id, label, categorie, sous}
+
+  cleSynd(sd) { return `${sd.entry.domaine}/${sd.entry.chemin}`; },     // unique : plusieurs organes ont un syndrome de même id (vide_qi, vide_yin…)
 
   async ensureLoaded() {
     if (this.loaded) return;
@@ -1504,16 +1510,33 @@ const DiagSignes = {
         const rawTexts = rawList.map(s => (typeof s === "string" ? s : s.symptome)).filter(Boolean);
         const atomicSigns = rawTexts.flatMap(dsSplitSigns);
         const signKeys = new Set();
+        const rows = [];       // lignes du tableau, une par signe documenté
         atomicSigns.forEach(sign => {
           const key = dsNormalizeKey(sign);
           if (!key) return;
+          if (!signKeys.has(key)) rows.push({ key, text: sign });
           signKeys.add(key);
           if (!this.signIndex.has(key)) this.signIndex.set(key, sign);
         });
-        return { entry: e, detail: d, signKeys };
+        return { entry: e, detail: d, signKeys, rows, courtsParCle: new Map() };
       } catch (err) { return null; }
     }));
     this.syndromesData = details.filter(x => x && x.signKeys.size);
+    // signes courts : rattachement ligne -> signes courts (calculé par data/syndromes/signes_courts/generer.py)
+    try {
+      this.courtsData = await Store.readJSON("syndromes/signes_courts/signes_courts.json");
+      this.courtsInfo = new Map(this.courtsData.signes.map(s => [s.id, s]));
+      this.syndromesData.forEach(sd => {
+        (this.courtsData.lignes[this.cleSynd(sd)] || []).forEach(l => {
+          const [t] = dsSplitSigns(l.t);
+          const k = t && dsNormalizeKey(t);
+          if (!k) return;
+          const s = sd.courtsParCle.get(k) || new Set();
+          l.c.forEach(c => s.add(c));
+          sd.courtsParCle.set(k, s);
+        });
+      });
+    } catch (err) { this.courtsData = null; }
     this.loaded = true;
     document.getElementById("diag-signes-loading").style.display = "none";
     document.getElementById("diag-signes-body").style.display = "block";
@@ -1582,27 +1605,113 @@ const DiagSignes = {
     if (typeof ZonesCorps !== "undefined" && ZonesCorps.data) ZonesCorps.renderSousOptions();   // garde les cases des sous-options à jour
   },
 
+  // signe court coché / décoché
+  toggleCourt(id) {
+    if (this.selectedCourts.has(id)) this.selectedCourts.delete(id);
+    else this.selectedCourts.add(id);
+    this.renderSelected();
+    this.renderAvailable(document.getElementById("ds-search").value);
+    this.renderResults();
+  },
+
+  // syndrome écarté / rétabli
+  basculerExclu(cle) {
+    if (this.exclus.has(cle)) this.exclus.delete(cle); else this.exclus.add(cle);
+    this.renderResults();
+  },
+
+  aSelection() { return this.selected.size > 0 || this.selectedCourts.size > 0; },
+
+  // lignes (clés) qui portent au moins un signe court : seules les AUTRES restent proposées en phrase entière
+  clesCouvertes() {
+    if (!this._couvertes) {
+      this._couvertes = new Set();
+      this.syndromesData.forEach(sd => sd.courtsParCle.forEach((ids, k) => { if (ids.size) this._couvertes.add(k); }));
+    }
+    return this._couvertes;
+  },
+
+  // lignes (clés) d'un syndrome touchées par la sélection : signe complet coché, ou ligne contenant un signe court coché
+  clesActives(sd) {
+    return new Set([...sd.signKeys].filter(k => this.selected.has(k) ||
+      [...(sd.courtsParCle.get(k) || [])].some(c => this.selectedCourts.has(c))));
+  },
+
+  // syndromes correspondants, du plus au moins couvert (hors syndromes écartés)
+  resultats() {
+    return this.syndromesFiltres().filter(sd => !this.exclus.has(this.cleSynd(sd))).map(sd => {
+      const m = this.clesActives(sd);
+      return { sd, matchedKeys: [...m], pct: Math.round((m.size / sd.signKeys.size) * 100) };
+    }).filter(x => x.matchedKeys.length > 0)
+      .sort((a, b) => b.pct - a.pct || b.matchedKeys.length - a.matchedKeys.length);
+  },
+
   renderSelected() {
     const el = document.getElementById("ds-selected");
-    if (!this.selected.size) { el.innerHTML = `<span class="muted">Aucun signe sélectionné pour l'instant.</span>`; return; }
-    el.innerHTML = [...this.selected].map(key => {
+    if (!this.aSelection()) { el.innerHTML = `<span class="muted">Aucun signe sélectionné pour l'instant.</span>`; return; }
+    const courts = [...this.selectedCourts].map(id => {
+      const s = this.courtsInfo.get(id);
+      return `<span class="chosen-item chosen-court">${escapeHtml(s ? s.label : id)}
+        <button type="button" data-court="${escapeHtml(id)}" aria-label="Retirer">✕</button>
+      </span>`;
+    });
+    const phrases = [...this.selected].map(key => {
       const label = this.signIndex.get(key) || key;
       return `<span class="chosen-item">${escapeHtml(label)}
-        <button type="button" data-k="${escapeHtml(key)}">✕</button>
+        <button type="button" data-k="${escapeHtml(key)}" aria-label="Retirer">✕</button>
       </span>`;
-    }).join("");
-    el.querySelectorAll("button").forEach(btn => {
-      btn.addEventListener("click", () => this.toggle(btn.dataset.k));
     });
+    el.innerHTML = courts.concat(phrases).join("");
+    el.querySelectorAll("button[data-k]").forEach(btn => btn.addEventListener("click", () => this.toggle(btn.dataset.k)));
+    el.querySelectorAll("button[data-court]").forEach(btn => btn.addEventListener("click", () => this.toggleCourt(btn.dataset.court)));
+  },
+
+  // signes courts proposés, rangés par catégorie puis sous-catégorie (seuls ceux présents dans les syndromes retenus)
+  renderCourts(query) {
+    const el = document.getElementById("ds-courts");
+    if (!el) return;
+    if (!this.courtsData) { el.innerHTML = `<p class="muted">Signes courts indisponibles pour l'instant.</p>`; return; }
+    const q = (query || "").trim();
+    const nq = dsNorm(q);
+    const nb = new Map();
+    this.syndromesFiltres().forEach(sd => {
+      const vus = new Set();
+      sd.courtsParCle.forEach(s => s.forEach(c => vus.add(c)));
+      vus.forEach(c => nb.set(c, (nb.get(c) || 0) + 1));
+    });
+    const cats = new Map();
+    this.courtsData.signes.forEach(s => {
+      if (!nb.get(s.id) || this.selectedCourts.has(s.id)) return;
+      if (nq && !dsNorm(s.label).includes(nq)) return;
+      if (!cats.has(s.categorie)) cats.set(s.categorie, new Map());
+      const sous = cats.get(s.categorie);
+      if (!sous.has(s.sous)) sous.set(s.sous, []);
+      sous.get(s.sous).push(s);
+    });
+    if (!cats.size) { el.innerHTML = `<p class="muted">Aucun signe court ne correspond.</p>`; return; }
+    el.innerHTML = [...cats.entries()].map(([cat, sous]) => {
+      const total = [...sous.values()].reduce((a, l) => a + l.length, 0);
+      return `<div class="ds-cat-block"><h4 class="sec-sub">${escapeHtml(cat)} (${total})</h4>` +
+        [...sous.entries()].map(([nom, liste]) => `<div class="ds-sous"><span class="ds-sous-nom">${escapeHtml(nom)}</span><span class="ds-cat-chips">` +
+          liste.map(s => `<button type="button" class="ds-chip ds-court" data-court="${escapeHtml(s.id)}" title="Présent dans ${nb.get(s.id)} syndrome(s)">${dsMarque(s.label, q)} <span class="tag-gen">${nb.get(s.id)}</span></button>`).join("") +
+          `</span></div>`).join("") + `</div>`;
+    }).join("");
+    el.querySelectorAll("[data-court]").forEach(b => b.addEventListener("click", () => this.toggleCourt(b.dataset.court)));
   },
 
   renderAvailable(query) {
+    this.renderCourts(query);
     const el = document.getElementById("ds-available");
     const q = (query || "").trim().toLowerCase();
     const permis = this.clesFiltre();
-    let pool = [...this.signIndex.entries()].filter(([key]) => !this.selected.has(key) && (!permis || permis.has(key)));
+    const couvertes = this.clesCouvertes();       // lignes déjà décomposées en signes courts : on ne les propose plus en phrase entière
+    let pool = [...this.signIndex.entries()].filter(([key]) => !this.selected.has(key) && !couvertes.has(key) && (!permis || permis.has(key)));
     if (q) pool = pool.filter(([, label]) => dsNorm(label).includes(dsNorm(q)));
-    if (!pool.length) { el.innerHTML = `<span class="muted">Aucun signe ne correspond à cette recherche.</span>`; return; }
+    const titre = document.getElementById("ds-phrases-titre");
+    if (titre) titre.textContent = `Autres lignes des tableaux, phrases complètes (${pool.length})`;
+    const det = document.getElementById("ds-phrases");
+    if (det && q) det.open = true;                // une recherche en cours ouvre la section
+    if (!pool.length) { el.innerHTML = `<span class="muted">Aucune autre ligne ne correspond.</span>`; return; }
 
     const byCategory = new Map();
     pool.forEach(([key, label]) => {
@@ -1631,18 +1740,17 @@ const DiagSignes = {
 
   renderResults() {
     const el = document.getElementById("ds-results");
-    if (!this.selected.size) { el.innerHTML = `<p class="muted">Sélectionne au moins un signe pour voir les syndromes correspondants.</p>`; return; }
-    const scored = this.syndromesFiltres().map(sd => {
-      const matchedKeys = [...sd.signKeys].filter(k => this.selected.has(k));
-      return { sd, matchedKeys, pct: Math.round((matchedKeys.length / sd.signKeys.size) * 100) };
-    }).filter(x => x.matchedKeys.length > 0)
-      .sort((a, b) => b.pct - a.pct || b.matchedKeys.length - a.matchedKeys.length);
+    this.renderExclus();
+    if (typeof GrapheSignes !== "undefined") GrapheSignes.maj();
+    if (!this.aSelection()) { el.innerHTML = `<p class="muted">Sélectionne au moins un signe pour voir les syndromes correspondants.</p>`; return; }
+    const scored = this.resultats();
     if (!scored.length) { el.innerHTML = `<p class="muted">Aucun syndrome ${this.portee.size ? "de ce type" : "de la base"} ne recoupe les signes sélectionnés.</p>`; return; }
     el.innerHTML = scored.slice(0, 40).map(({ sd, matchedKeys, pct }) => `
-      <div class="ds-result" data-id="${escapeHtml(sd.entry.id)}" data-domaine="${escapeHtml(sd.entry.domaine)}">
+      <div class="ds-result" data-cle="${escapeHtml(this.cleSynd(sd))}">
         <div class="ds-result-top">
           <span class="ds-result-name">${escapeHtml(sd.entry.nom)}</span>
           <span class="ds-result-pct">${pct}%</span>
+          <button type="button" class="ds-exclure" data-exclure="${escapeHtml(this.cleSynd(sd))}" title="Écarter ce syndrome des résultats" aria-label="Écarter ce syndrome">✕</button>
         </div>
         <p class="muted">${escapeHtml(Syndromes.domaineLabels[sd.entry.domaine] || "")}${sd.entry.sousLabel ? " · " + escapeHtml(sd.entry.sousLabel) : ""}</p>
         ${sd.entry.domaine === "canaux" && ZonesCorps.couvertes(sd.entry.id).length ? `<p class="ds-result-matched">Trajet : ${escapeHtml(ZonesCorps.couvertes(sd.entry.id).join(", "))}</p>` : ""}
@@ -1650,18 +1758,428 @@ const DiagSignes = {
         <p class="ds-result-matched">${matchedKeys.length} / ${sd.signKeys.size} signe(s) documenté(s) correspondent</p>
       </div>
     `).join("");
+    el.querySelectorAll(".ds-exclure").forEach(b => b.addEventListener("click", ev => { ev.stopPropagation(); this.basculerExclu(b.dataset.exclure); }));
     el.querySelectorAll(".ds-result").forEach(div => {
       div.addEventListener("click", () => {
-        const entry = Syndromes.entries.find(e => e.id === div.dataset.id && e.domaine === div.dataset.domaine);
-        if (!entry) return;
-        // fiche flottante (plusieurs possibles, pour comparer) ; pour un canal, elle s'ouvre sur la section (luo, tendineux…) qui contient le signe
-        const sd = this.syndromesData.find(x => x.entry === entry);
-        const sections = entry.domaine === "canaux" && sd ? Syndromes.sectionsPourSignes(sd.detail, this.selected) : [];
-        PostIt.open(entry, { sections });
+        const sd = this.syndromesData.find(x => this.cleSynd(x) === div.dataset.cle);
+        if (sd) this.ouvrirFiche(sd.entry);
       });
     });
+  },
+
+  // fiche flottante (plusieurs possibles, pour comparer) ; pour un canal, elle s'ouvre sur la section (luo, tendineux…) qui contient le signe
+  ouvrirFiche(entry) {
+    const sd = this.syndromesData.find(x => x.entry === entry);
+    const sections = entry.domaine === "canaux" && sd ? Syndromes.sectionsPourSignes(sd.detail, this.clesActives(sd)) : [];
+    PostIt.open(entry, { sections });
+  },
+
+  // syndromes écartés : pastilles pour les rétablir
+  renderExclus() {
+    const el = document.getElementById("ds-exclus");
+    if (!el) return;
+    if (!this.exclus.size) { el.innerHTML = ""; return; }
+    const nom = cle => { const sd = this.syndromesData.find(x => this.cleSynd(x) === cle); return sd ? sd.entry.nom : cle; };
+    el.innerHTML = `<span class="muted">Écartés :</span> ` + [...this.exclus].map(cle =>
+      `<button type="button" class="ds-chip ds-exclu" data-r="${escapeHtml(cle)}" title="Rétablir ce syndrome">↺ ${escapeHtml(nom(cle))}</button>`).join("") +
+      ` <button type="button" class="edit-toggle-btn" id="ds-exclus-tous">Tout rétablir</button>`;
+    el.querySelectorAll("[data-r]").forEach(b => b.addEventListener("click", () => this.basculerExclu(b.dataset.r)));
+    document.getElementById("ds-exclus-tous").addEventListener("click", () => { this.exclus.clear(); this.renderResults(); });
   }
 };
+
+/* ===== Vue graphe (zoomable à la molette ou au doigt) : signes cochés -> syndromes qui les contiennent -> autres lignes du même tableau =====
+   Les lignes partagées par plusieurs syndromes sont un seul point relié à chacun d'eux : on voit tout de suite ce qui est commun. */
+const DOM_COUL = { organes: "#378ADD", externes: "#BA7517", canaux: "#1D9E75", qi_sang_liquides: "#7F77DD" };
+const dsCut = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+
+const GrapheSignes = {
+  actif: false,
+  max: 12,                       // nombre de syndromes affichés (bouton « Plus de syndromes »)
+  vue: { x: 0, y: 0, k: 1 },
+  noeuds: [], liens: [],
+  largeur: 800, hauteur: 560,
+
+  init() {
+    this.zone = document.getElementById("ds-graphe");
+    if (!this.zone) return;
+    this.zone.innerHTML = `
+      <div class="g-barre">
+        <button type="button" class="edit-toggle-btn" id="g-plus" aria-label="Zoom avant" title="Zoom avant">+</button>
+        <button type="button" class="edit-toggle-btn" id="g-moins" aria-label="Zoom arrière" title="Zoom arrière">−</button>
+        <button type="button" class="edit-toggle-btn" id="g-ajuster" title="Tout voir">Tout voir</button>
+        <button type="button" class="edit-toggle-btn" id="g-plus-synd">Plus de syndromes</button>
+        <span id="g-etat" class="muted"></span>
+        <span class="g-aide-zone"><span class="muted g-astuce">Molette ou deux doigts pour zoomer ; glisse le fond pour déplacer la vue, ou glisse un point, un syndrome ou un signe pour le déplacer et mieux lire les textes.</span></span>
+      </div>
+      <p class="muted" data-aide>Au centre, les signes que tu as cochés (pastilles pleines). Autour, les syndromes qui les contiennent (rectangles : la couleur du cadre indique le type, ✕ pour écarter un syndrome, clic pour ouvrir sa fiche en post-it). Les petits points sont les autres lignes du même tableau : un point plein de ta couleur est une ligne qui correspond à ta sélection, un gros point relié à plusieurs syndromes est une ligne qu'ils ont en commun. Zoome pour lire le texte des lignes ; survole ou touche un point pour le lire en entier.</p>
+      <div id="g-cadre"><svg id="g-svg" width="100%" role="img" aria-label="Graphe des signes et des syndromes"><g id="g-vp"></g></svg></div>
+      <div id="g-info" class="muted" aria-live="polite">Survole ou touche un point pour lire la ligne du tableau.</div>
+      <div class="g-legende muted">
+        <span><i class="g-pt g-pt-sel"></i> ligne qui correspond à ta sélection</span>
+        <span><i class="g-pt"></i> autre ligne du tableau</span>
+        <span><i class="g-pt g-pt-com"></i> ligne commune à plusieurs syndromes</span>
+        ${Object.entries(DOM_COUL).map(([d, c]) => `<span><i class="g-carre" style="border-color:${c}"></i> ${escapeHtml(Syndromes.domaineLabels[d] || d)}</span>`).join("")}
+      </div>`;
+    this.svg = document.getElementById("g-svg");
+    this.vp = document.getElementById("g-vp");
+    this.info = document.getElementById("g-info");
+    document.getElementById("ds-vue-liste").addEventListener("click", () => this.afficher(false));
+    document.getElementById("ds-vue-graphe").addEventListener("click", () => this.afficher(true));
+    document.getElementById("g-plus").addEventListener("click", () => this.zoomer(this.largeur / 2, this.hauteur / 2, 1.35));
+    document.getElementById("g-moins").addEventListener("click", () => this.zoomer(this.largeur / 2, this.hauteur / 2, 1 / 1.35));
+    document.getElementById("g-ajuster").addEventListener("click", () => { this.ajuster(); this.appliquer(); });
+    document.getElementById("g-plus-synd").addEventListener("click", () => { this.max += 8; this.maj(true); });
+    this.gestes();
+    window.addEventListener("resize", () => { if (this.actif) this.maj(true); });
+  },
+
+  afficher(on) {
+    this.actif = on;
+    document.getElementById("ds-vue-liste").classList.toggle("active", !on);
+    document.getElementById("ds-vue-graphe").classList.toggle("active", on);
+    document.getElementById("ds-results").style.display = on ? "none" : "";
+    this.zone.style.display = on ? "" : "none";
+    if (on) this.maj(true);
+  },
+
+  // appelé à chaque changement de sélection / de filtre / d'exclusion
+  maj(refit) {
+    if (!this.actif || !this.zone) return;
+    this.mesurer();
+    this.construire();
+    this.placer();
+    if (refit !== false) this.ajuster();
+    this.dessiner();
+  },
+
+  mesurer() {
+    const cadre = document.getElementById("g-cadre");
+    this.largeur = Math.max(280, cadre.clientWidth || 800);
+    this.hauteur = Math.round(Math.min(780, Math.max(420, window.innerHeight * 0.76)));
+    this.svg.setAttribute("viewBox", `0 0 ${this.largeur} ${this.hauteur}`);
+    this.svg.setAttribute("height", this.hauteur);
+  },
+
+  construire() {
+    const D = DiagSignes;
+    const tous = D.resultats();
+    const res = tous.slice(0, this.max);
+    this.total = tous.length;
+    const N = [], L = [], idx = new Map();
+    const ajouter = n => { idx.set(n.id, N.length); N.push(n); return n; };
+    D.selectedCourts.forEach(id => { const s = D.courtsInfo.get(id); ajouter({ id: "c:" + id, type: "in", label: s ? s.label : id, court: id }); });
+    D.selected.forEach(k => { const t = D.signIndex.get(k) || k; ajouter({ id: "p:" + k, type: "in", label: dsCut(t, 34), plein: t, phrase: k }); });
+    res.forEach(({ sd, matchedKeys, pct }) => ajouter({ id: "s:" + D.cleSynd(sd), type: "syn", sd, pct, label: sd.entry.nom, matched: new Set(matchedKeys) }));
+    // lignes du tableau : un point par ligne (commun aux syndromes qui la contiennent)
+    res.forEach(({ sd, matchedKeys }) => {
+      const sn = N[idx.get("s:" + D.cleSynd(sd))], m = new Set(matchedKeys);
+      sd.rows.forEach(r => {
+        let n = N[idx.get("r:" + r.key)];
+        if (!n) n = ajouter({ id: "r:" + r.key, type: "row", text: r.text, courts: new Set(), syns: [], sel: false });
+        (sd.courtsParCle.get(r.key) || []).forEach(c => n.courts.add(c));
+        n.syns.push(sd.entry.nom);
+        if (m.has(r.key)) n.sel = true;
+        L.push({ a: n, b: sn, type: "row", sel: m.has(r.key) });
+      });
+    });
+    // signes cochés -> syndromes
+    N.filter(n => n.type === "in").forEach(inn => {
+      N.filter(n => n.type === "syn").forEach(sn => {
+        let c = 0;
+        sn.sd.rows.forEach(r => {
+          if (inn.court ? (sn.sd.courtsParCle.get(r.key) || new Set()).has(inn.court) : r.key === inn.phrase) c++;
+        });
+        if (c) L.push({ a: inn, b: sn, type: "in", n: c });
+      });
+    });
+    N.forEach(n => {
+      if (n.type === "row") {
+        const noms = [...n.courts].map(c => (D.courtsInfo.get(c) || {}).label || c);
+        n.lab = noms.length ? noms.slice(0, 3).join(" · ") + (noms.length > 3 ? " …" : "") : dsCut(n.text, 46);
+      } else if (n.type === "syn") {
+        n.nom = dsCut(n.label, 30); n.w = Math.max(110, n.nom.length * 7.4 + 60); n.h = 30;
+      } else { n.w = Math.max(76, n.label.length * 7.2 + 32); n.h = 32; }
+    });
+    this.noeuds = N; this.liens = L;
+  },
+
+  // disposition par forces (déterministe : même sélection = même dessin)
+  placer() {
+    const N = this.noeuds, n = N.length;
+    let rs = 11;
+    const rnd = () => { rs = (rs * 16807) % 2147483647; return rs / 2147483647; };
+    const ins = N.filter(x => x.type === "in"), syn = N.filter(x => x.type === "syn");
+    ins.forEach((x, i) => { x.x = -260; x.y = (i - (ins.length - 1) / 2) * 52; });
+    syn.forEach((x, i) => { const a = (i / Math.max(1, syn.length)) * 2 * Math.PI; x.x = Math.cos(a) * 330; x.y = Math.sin(a) * 270; });
+    N.filter(x => x.type === "row").forEach(x => { x.x = (rnd() - 0.5) * 500; x.y = (rnd() - 0.5) * 420; });
+    N.forEach(x => { x.vx = 0; x.vy = 0; x.r = x.type === "syn" ? 46 : x.type === "in" ? 40 : (x.syns && x.syns.length > 1 ? 7 : 5); });
+    const iters = n > 220 ? 220 : 320;
+    for (let it = 0; it < iters; it++) {
+      const refroidir = 1 - it / iters;
+      for (let a = 0; a < n; a++) {
+        for (let b = a + 1; b < n; b++) {
+          const A = N[a], B = N[b];
+          let dx = A.x - B.x, dy = A.y - B.y, d2 = dx * dx + dy * dy + 0.5;
+          const grand = A.type !== "row" && B.type !== "row";
+          const k = (grand ? 16000 : (A.type !== "row" || B.type !== "row") ? 3200 : 760) / d2;
+          const d = Math.sqrt(d2);
+          dx = (dx / d) * k; dy = (dy / d) * k;
+          A.vx += dx; A.vy += dy; B.vx -= dx; B.vy -= dy;
+        }
+      }
+      this.liens.forEach(l => {
+        const A = l.a, B = l.b;
+        let dx = B.x - A.x, dy = B.y - A.y;
+        const d = Math.sqrt(dx * dx + dy * dy) + 0.1;
+        const repos = l.type === "in" ? 270 : l.sel ? 56 : 76;
+        const force = (d - repos) * (l.type === "in" ? 0.01 : 0.03);
+        dx = (dx / d) * force; dy = (dy / d) * force;
+        A.vx += dx; A.vy += dy; B.vx -= dx; B.vy -= dy;
+      });
+      N.forEach(x => {
+        x.vx -= x.x * 0.004; x.vy -= x.y * 0.004;
+        const v = Math.sqrt(x.vx * x.vx + x.vy * x.vy), lim = 12 * refroidir + 1;
+        if (v > lim) { x.vx = (x.vx / v) * lim; x.vy = (x.vy / v) * lim; }
+        x.x += x.vx; x.y += x.vy; x.vx *= 0.6; x.vy *= 0.6;
+      });
+    }
+    this.separer();
+  },
+
+  // les rectangles (syndromes, signes cochés) ne doivent jamais se chevaucher ; les points sortent des rectangles
+  separer() {
+    const R = this.noeuds.filter(n => n.type !== "row"), P = this.noeuds.filter(n => n.type === "row");
+    for (let it = 0; it < 220; it++) {
+      let bouge = false;
+      for (let a = 0; a < R.length; a++) {
+        for (let b = a + 1; b < R.length; b++) {
+          const A = R[a], B = R[b];
+          const ox = (A.w + B.w) / 2 + 10 - Math.abs(A.x - B.x), oy = (A.h + B.h) / 2 + 8 - Math.abs(A.y - B.y);
+          if (ox > 0 && oy > 0) {
+            bouge = true;
+            if (oy < ox) { const s = A.y <= B.y ? -1 : 1; A.y += s * oy / 2; B.y -= s * oy / 2; }
+            else { const s = A.x <= B.x ? -1 : 1; A.x += s * ox / 2; B.x -= s * ox / 2; }
+          }
+        }
+      }
+      P.forEach(p => R.forEach(A => {
+        const dx = p.x - A.x, dy = p.y - A.y, hx = A.w / 2 + 8, hy = A.h / 2 + 8;
+        if (Math.abs(dx) < hx && Math.abs(dy) < hy) {
+          bouge = true;
+          if (hx - Math.abs(dx) < hy - Math.abs(dy)) p.x = A.x + (dx >= 0 ? hx : -hx); else p.y = A.y + (dy >= 0 ? hy : -hy);
+        }
+      }));
+      if (!bouge) break;
+    }
+  },
+
+  ajuster() {
+    const N = this.noeuds;
+    if (!N.length) { this.vue = { x: this.largeur / 2, y: this.hauteur / 2, k: 1 }; return; }
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    N.forEach(n => {
+      const w = n.type === "row" ? 8 : n.w / 2;
+      x0 = Math.min(x0, n.x - w); x1 = Math.max(x1, n.x + w); y0 = Math.min(y0, n.y - 20); y1 = Math.max(y1, n.y + 20);
+    });
+    const k = Math.min(2.2, Math.max(0.3, Math.min((this.largeur - 20) / (x1 - x0), (this.hauteur - 20) / (y1 - y0))));
+    this.vue = { k, x: this.largeur / 2 - ((x0 + x1) / 2) * k, y: this.hauteur / 2 - ((y0 + y1) / 2) * k };
+    this.appliquer();
+  },
+
+  appliquer() {
+    const v = this.vue;
+    this.vp.setAttribute("transform", `translate(${v.x.toFixed(1)},${v.y.toFixed(1)}) scale(${v.k.toFixed(3)})`);
+    this.svg.classList.toggle("z2", v.k >= 1.0);
+    this.svg.classList.toggle("z3", v.k >= 2.2);
+    if (!this.attente) this.attente = requestAnimationFrame(() => { this.attente = 0; this.declutter(); });
+  },
+
+  zoomer(cx, cy, f) {
+    const v = this.vue, k2 = Math.min(8, Math.max(0.2, v.k * f));
+    v.x = cx - (cx - v.x) * (k2 / v.k);
+    v.y = cy - (cy - v.y) * (k2 / v.k);
+    v.k = k2;
+    this.appliquer();
+  },
+
+  // molette, glisser (déplacer), pincement à deux doigts
+  gestes() {
+    const svg = this.svg, ptrs = new Map();
+    let dernier = null, dist0 = 0, deplace = false;
+    const pos = e => { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left) * (this.largeur / r.width), (e.clientY - r.top) * (this.hauteur / r.height)]; };
+    svg.addEventListener("wheel", e => {
+      e.preventDefault();
+      const [x, y] = pos(e);
+      this.zoomer(x, y, Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0016)));
+    }, { passive: false });
+    let glisse = null;        // nœud en cours de déplacement
+    svg.addEventListener("pointerdown", e => {
+      ptrs.set(e.pointerId, pos(e));
+      deplace = false;
+      glisse = null;
+      if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; dist0 = Math.hypot(a[0] - b[0], a[1] - b[1]); }
+      else {
+        const g = e.target.closest("[data-nid]");
+        if (g && !e.target.closest("[data-x]")) glisse = { n: this.noeuds.find(x => x.id === g.dataset.nid), debut: pos(e), capture: false };
+      }
+      dernier = pos(e);
+    });
+    svg.addEventListener("pointermove", e => {
+      if (!ptrs.has(e.pointerId)) return;
+      const p = pos(e);
+      ptrs.set(e.pointerId, p);
+      if (ptrs.size === 2) {
+        glisse = null;
+        const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        if (dist0 > 0) this.zoomer((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, d / dist0);
+        dist0 = d; deplace = true;
+      } else if (ptrs.size === 1 && glisse && glisse.n) {
+        // déplacer un nœud (pour mieux lire les textes) : il suit le doigt / la souris, ses traits aussi
+        if (!deplace && Math.hypot(p[0] - glisse.debut[0], p[1] - glisse.debut[1]) <= 4) return;
+        if (!glisse.capture) { glisse.capture = true; try { svg.setPointerCapture(e.pointerId); } catch (err) { /* ignoré */ } }
+        deplace = true;
+        glisse.n.x += (p[0] - dernier[0]) / this.vue.k;
+        glisse.n.y += (p[1] - dernier[1]) / this.vue.k;
+        dernier = p;
+        this.majPos(glisse.n);
+        if (this.etiq) this.appliquer();
+      } else if (ptrs.size === 1 && dernier) {
+        const dx = p[0] - dernier[0], dy = p[1] - dernier[1];
+        if (deplace || Math.hypot(dx, dy) > 4) {
+          if (!deplace) { try { svg.setPointerCapture(e.pointerId); } catch (err) { /* ignoré */ } }
+          this.vue.x += dx; this.vue.y += dy; deplace = true; this.appliquer(); dernier = p;
+        }
+      }
+    });
+    const fin = e => { glisse = null; ptrs.delete(e.pointerId); dernier = ptrs.size === 1 ? [...ptrs.values()][0] : null; dist0 = 0; setTimeout(() => { deplace = false; }, 0); };
+    svg.addEventListener("pointerup", fin);
+    svg.addEventListener("pointercancel", fin);
+    // clics : ignorés si on vient de déplacer le fond
+    svg.addEventListener("click", e => {
+      if (deplace) return;
+      const x = e.target.closest("[data-x]");
+      if (x) { DiagSignes.basculerExclu(x.dataset.x); return; }
+      const s = e.target.closest("[data-syn]");
+      if (s) {
+        const entry = Syndromes.entries.find(en => DiagSignes.cleSynd({ entry: en }) === s.dataset.syn);
+        if (entry) DiagSignes.ouvrirFiche(entry);
+        return;
+      }
+      const i = e.target.closest("[data-in]");
+      if (i) { const v = i.dataset.in; if (v.startsWith("c:")) DiagSignes.toggleCourt(v.slice(2)); else DiagSignes.toggle(v.slice(2)); return; }
+      const r = e.target.closest("[data-r]");
+      if (r) this.montrerLigne(r.dataset.r);
+    });
+    svg.addEventListener("pointerover", e => {
+      const r = e.target.closest("[data-r]");
+      if (r) { this.montrerLigne(r.dataset.r); return; }
+      const s = e.target.closest("[data-syn]");
+      if (s) this.montrerSyndrome(s.dataset.syn);
+    });
+  },
+
+  // met à jour à l'écran la position d'un nœud et des traits qui y sont reliés
+  majPos(n) {
+    const g = this.elN && this.elN.get(n.id);
+    if (!g) return;
+    if (n.type === "row") {
+      const c = g.querySelector("circle"), t = g.querySelector("text");
+      c.setAttribute("cx", n.x.toFixed(1)); c.setAttribute("cy", n.y.toFixed(1));
+      t.setAttribute("x", (n.x + n.r + 3).toFixed(1)); t.setAttribute("y", (n.y + 3).toFixed(1));
+    } else g.setAttribute("transform", `translate(${n.x.toFixed(1)},${n.y.toFixed(1)})`);
+    (n.liensIdx || []).forEach(i => {
+      const l = this.liens[i], e = this.elL[i];
+      if (!e) return;
+      e.setAttribute("x1", l.a.x.toFixed(1)); e.setAttribute("y1", l.a.y.toFixed(1));
+      e.setAttribute("x2", l.b.x.toFixed(1)); e.setAttribute("y2", l.b.y.toFixed(1));
+    });
+  },
+
+  montrerSyndrome(cle) {
+    const n = this.noeuds.find(x => x.type === "syn" && DiagSignes.cleSynd(x.sd) === cle);
+    if (!n) return;
+    this.info.innerHTML = `<strong>${escapeHtml(n.label)}</strong> — ${escapeHtml(Syndromes.domaineLabels[n.sd.entry.domaine] || "")}` +
+      `<br>${n.matched.size} ligne(s) sur ${n.sd.signKeys.size} correspondent à ta sélection (${n.pct}%). Clic : ouvrir la fiche ; ✕ : écarter.`;
+  },
+
+  montrerLigne(id) {
+    const n = this.noeuds.find(x => x.id === id);
+    if (!n) return;
+    const courts = [...n.courts].map(c => (DiagSignes.courtsInfo.get(c) || {}).label || c);
+    this.info.innerHTML = `<strong>${escapeHtml(n.text)}</strong>` +
+      (courts.length ? `<br>Signes courts : ${escapeHtml(courts.join(" · "))}` : "") +
+      `<br>Dans : ${escapeHtml([...new Set(n.syns)].join(" ; "))}${n.sel ? " — <em>correspond à ta sélection</em>" : ""}`;
+  },
+
+  dessiner() {
+    const D = DiagSignes;
+    const etat = document.getElementById("g-etat");
+    if (!D.aSelection()) {
+      this.vp.innerHTML = `<text x="${this.largeur / 2}" y="${this.hauteur / 2}" text-anchor="middle" class="g-vide">Coche au moins un signe (court ou complet) pour voir le graphe.</text>`;
+      this.vp.removeAttribute("transform");
+      etat.textContent = "";
+      return;
+    }
+    const nbSyn = this.noeuds.filter(n => n.type === "syn").length;
+    etat.textContent = `${nbSyn} syndrome(s) affiché(s) sur ${this.total}`;
+    document.getElementById("g-plus-synd").style.display = this.total > nbSyn ? "" : "none";
+    if (!this.total) { this.vp.innerHTML = `<text x="0" y="0" text-anchor="middle" class="g-vide">Aucun syndrome ne correspond à cette sélection.</text>`; return; }
+    let h = "";
+    this.liens.forEach((l, i) => {
+      if (l.type === "in") h += `<line data-l="${i}" class="g-lien-in" x1="${l.a.x.toFixed(1)}" y1="${l.a.y.toFixed(1)}" x2="${l.b.x.toFixed(1)}" y2="${l.b.y.toFixed(1)}" stroke-width="${Math.min(6, 1 + l.n * 0.8).toFixed(1)}"/>`;
+      else h += `<line data-l="${i}" class="g-lien${l.sel ? " g-lien-sel" : ""}" x1="${l.a.x.toFixed(1)}" y1="${l.a.y.toFixed(1)}" x2="${l.b.x.toFixed(1)}" y2="${l.b.y.toFixed(1)}"/>`;
+    });
+    this.noeuds.filter(n => n.type === "row").forEach(n => {
+      const commun = n.syns.length > 1;
+      h += `<g data-r="${escapeHtml(n.id)}" data-nid="${escapeHtml(n.id)}" class="g-ligne"><circle class="g-pt-c${n.sel ? " sel" : ""}${commun ? " com" : ""}" cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${n.r}"/>` +
+        `<text class="g-lab-r" x="${(n.x + n.r + 3).toFixed(1)}" y="${(n.y + 3).toFixed(1)}">${escapeHtml(n.lab)}</text></g>`;
+    });
+    this.noeuds.filter(n => n.type === "syn").forEach(n => {
+      const nom = n.nom, w = n.w;
+      const coul = DOM_COUL[n.sd.entry.domaine] || "#888";
+      h += `<g class="g-syn" data-nid="${escapeHtml(n.id)}" data-syn="${escapeHtml(D.cleSynd(n.sd))}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})">` +
+        `<rect x="${-w / 2}" y="-13" width="${w}" height="26" rx="5" style="stroke:${coul}"/>` +
+        `<text class="g-syn-nom" x="${-w / 2 + 8}" y="4">${escapeHtml(nom)}</text>` +
+        `<text class="g-syn-pct" x="${w / 2 - 24}" y="4" text-anchor="end">${n.pct}%</text>` +
+        `<g class="g-x" data-x="${escapeHtml(D.cleSynd(n.sd))}"><title>Écarter ce syndrome</title><circle cx="${w / 2 - 11}" cy="0" r="8"/><text x="${w / 2 - 11}" y="3.5" text-anchor="middle">✕</text></g>` +
+        `<title>${escapeHtml(n.label)} — ${n.pct}% (${n.matched.size} ligne(s) sur ${n.sd.signKeys.size})</title></g>`;
+    });
+    this.noeuds.filter(n => n.type === "in").forEach(n => {
+      const nom = n.label, w = n.w;
+      h += `<g class="g-in${n.court ? " court" : ""}" data-nid="${escapeHtml(n.id)}" data-in="${escapeHtml(n.id)}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})"><rect x="${-w / 2}" y="-14" width="${w}" height="28" rx="14"/>` +
+        `<text x="0" y="4" text-anchor="middle">${escapeHtml(nom)}</text><title>${escapeHtml(n.plein || n.label)} — clic pour retirer de la sélection</title></g>`;
+    });
+    this.vp.innerHTML = h;
+    this.elN = new Map([...this.vp.querySelectorAll("[data-nid]")].map(e => [e.dataset.nid, e]));
+    this.elL = [...this.vp.querySelectorAll("line[data-l]")];
+    this.noeuds.forEach(n => { n.liensIdx = []; });
+    this.liens.forEach((l, i) => { l.a.liensIdx.push(i); l.b.liensIdx.push(i); });
+    // étiquettes des lignes : on retient les éléments pour pouvoir masquer celles qui se chevauchent
+    this.etiq = [...this.vp.querySelectorAll(".g-ligne")].map(g => {
+      const n = this.noeuds.find(x => x.id === g.dataset.r);
+      return { n, el: g.querySelector(".g-lab-r"), prio: (n.sel ? 100 : 0) + n.syns.length * 10 - (n.courts.size ? 0 : 5) };
+    });
+    this.appliquer();
+  },
+
+  // masque les étiquettes de lignes qui recouvriraient un rectangle ou une autre étiquette (calcul à partir des coordonnées, sans lire le DOM)
+  declutter() {
+    if (!this.etiq || !this.etiq.length) return;
+    const v = this.vue, W = this.largeur, H = this.hauteur;
+    if (v.k < 1.0) return;
+    const boites = this.noeuds.filter(n => n.type !== "row").map(n => [n.x * v.k + v.x - (n.w / 2) * v.k, n.y * v.k + v.y - (n.h / 2) * v.k, n.w * v.k, n.h * v.k]);
+    this.etiq.slice().sort((a, b) => b.prio - a.prio).forEach(e => {
+      const n = e.n, taille = (v.k >= 2.2 ? 7 : 9) * v.k, w = e.el.textContent.length * taille * 0.56 + 4, h = taille * 1.25;
+      const x = n.x * v.k + v.x + (n.r + 3) * v.k, y = n.y * v.k + v.y - h * 0.7;
+      let ok = x + w > 0 && x < W && y + h > 0 && y < H;
+      if (ok) for (const b of boites) if (x < b[0] + b[2] && x + w > b[0] && y < b[1] + b[3] && y + h > b[1]) { ok = false; break; }
+      if (ok) boites.push([x, y, w, h]);
+      e.el.style.display = ok ? "" : "none";
+    });
+  },
+};
+GrapheSignes.init();
 
 document.getElementById("ds-search").addEventListener("input", (e) => DiagSignes.renderAvailable(e.target.value));
 document.querySelector('.tab-btn[data-tab="diag-signes"]').addEventListener("click", () => { DiagSignes.ensureLoaded(); ZonesCorps.ensureLoaded(); });
@@ -1807,7 +2325,7 @@ const ZonesCorps = {
       if (!entry) return;
       // section à montrer : celle des signes cochés s'il y en a pour ce canal, sinon celle(s) des types de trajet qui passent par les zones choisies
       const sd = DiagSignes.syndromesData.find(x => x.entry === entry);
-      let sections = sd && DiagSignes.selected.size ? Syndromes.sectionsPourSignes(sd.detail, DiagSignes.selected) : [];
+      let sections = sd && DiagSignes.aSelection() ? Syndromes.sectionsPourSignes(sd.detail, DiagSignes.clesActives(sd)) : [];
       if (!sections.length) {
         const c = this.data.canaux[entry.id];
         const types = new Set([...this.selected].filter(z => c && c.zones[z]).flatMap(z => c.zones[z].map(t => t.type)));
@@ -1831,11 +2349,25 @@ const PostIt = {
     const cibles = (sections || []).map(k => corps.querySelector(`[data-section="${k}"]`)).filter(Boolean);
     if (!cibles.length) return;
     cibles.forEach(s => s.classList.add("postit-cible"));
-    corps.scrollTop += cibles[0].getBoundingClientRect().top - corps.getBoundingClientRect().top - 8;
+    const aller = () => {
+      if (el._interagi || !cibles[0].isConnected) return;
+      corps.scrollTop += cibles[0].getBoundingClientRect().top - corps.getBoundingClientRect().top - 8;
+    };
+    el._interagi = false;
+    if (!el._ecoute) {      // dès que l'utilisatrice touche / fait défiler la fiche, on ne la recale plus
+      el._ecoute = true;
+      ["wheel", "touchstart", "pointerdown", "keydown"].forEach(ev => corps.addEventListener(ev, () => { el._interagi = true; }, { passive: true }));
+    }
+    aller();
+    // sur téléphone, la mise en page bouge encore juste après l'ouverture (polices, tableaux) : on se recale
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(aller);
+    [120, 400, 1000].forEach(t => setTimeout(aller, t));
   },
 
+  mobile() { return window.innerWidth < 640; },
+
   async open(entry, opts = {}) {
-    const cle = `${entry.domaine}/${entry.id}`;
+    const cle = `${entry.domaine}/${entry.chemin}`;
     if (this.ouverts.has(cle)) {
       const el = this.ouverts.get(cle);
       this.devant(el);
@@ -1858,6 +2390,8 @@ const PostIt = {
     this.ouverts.set(cle, el);
     this.devant(el);
     this.deplacable(el);
+    el.dataset.cle = cle;
+    el.dataset.titre = entry.nom;
     el.querySelector(".postit-fermer").addEventListener("click", () => this.fermer(cle));
     el.querySelector(".postit-ouvrir").addEventListener("click", () => {
       document.querySelector('.tab-btn[data-tab="syndromes"]').click();
@@ -1865,6 +2399,7 @@ const PostIt = {
     });
     el.addEventListener("pointerdown", () => this.devant(el));
     this.barre();
+    this.synchro();
     try {
       const d = await Store.readJSON(`syndromes/${entry.domaine}/${entry.chemin}`);
       el.querySelector(".postit-corps").innerHTML = Syndromes.renderSyndrome(d, entry.domaine);
@@ -1874,13 +2409,42 @@ const PostIt = {
     }
   },
 
-  devant(el) { el.style.zIndex = ++this.zMax; },
+  devant(el) {
+    el.style.zIndex = ++this.zMax;
+    if (el.dataset.cle && this.actif !== el.dataset.cle) { this.actif = el.dataset.cle; this.synchro(); }
+  },
 
   fermer(cle) {
     const el = this.ouverts.get(cle);
     if (el) el.remove();
     this.ouverts.delete(cle);
+    if (this.actif === cle) this.actif = [...this.ouverts.keys()].pop() || null;
     this.barre();
+    this.synchro();
+  },
+
+  // Sur téléphone : une seule fiche visible à la fois, avec une rangée d'onglets (un par fiche ouverte) pour passer de l'une à l'autre.
+  // Sur grand écran : fiches flottantes, pas d'onglets.
+  synchro() {
+    let rang = document.getElementById("postit-onglets");
+    const mob = this.mobile() && this.ouverts.size > 0;
+    document.body.classList.toggle("postit-mobile", mob);
+    if (!mob) {
+      if (rang) rang.remove();
+      this.ouverts.forEach(el => el.classList.remove("postit-cache"));
+      return;
+    }
+    if (!this.actif || !this.ouverts.has(this.actif)) this.actif = [...this.ouverts.keys()].pop();
+    if (!rang) { rang = document.createElement("div"); rang.id = "postit-onglets"; rang.setAttribute("role", "tablist"); document.body.appendChild(rang); }
+    rang.style.zIndex = this.zMax + 5;
+    rang.innerHTML = [...this.ouverts.entries()].map(([cle, el]) =>
+      `<button type="button" role="tab" class="postit-onglet${cle === this.actif ? " actif" : ""}" aria-selected="${cle === this.actif}" data-cle="${escapeHtml(cle)}">${escapeHtml(dsCut(el.dataset.titre || cle, 22))}</button>`).join("") +
+      `<button type="button" class="postit-onglet postit-tout" aria-label="Fermer toutes les fiches">Tout fermer ✕</button>`;
+    rang.querySelectorAll("[data-cle]").forEach(b => b.addEventListener("click", () => { this.actif = b.dataset.cle; this.synchro(); }));
+    rang.querySelector(".postit-tout").addEventListener("click", () => this.toutFermer());
+    this.ouverts.forEach((el, cle) => el.classList.toggle("postit-cache", cle !== this.actif));
+    const a = rang.querySelector(".actif");
+    if (a && a.scrollIntoView) a.scrollIntoView({ inline: "nearest", block: "nearest" });
   },
 
   toutFermer() { [...this.ouverts.keys()].forEach(k => this.fermer(k)); },
@@ -1888,7 +2452,7 @@ const PostIt = {
   // barre flottante « Fermer les fiches (n) », visible dès qu'une fiche est ouverte
   barre() {
     let b = document.getElementById("postit-barre");
-    if (!this.ouverts.size) { if (b) b.remove(); return; }
+    if (!this.ouverts.size || this.mobile()) { if (b) b.remove(); return; }
     if (!b) {
       b = document.createElement("button");
       b.id = "postit-barre";
@@ -1904,7 +2468,7 @@ const PostIt = {
     const tete = el.querySelector(".postit-tete");
     let dx = 0, dy = 0, actif = false;
     tete.addEventListener("pointerdown", e => {
-      if (e.target.closest("button")) return;
+      if (e.target.closest("button") || this.mobile()) return;
       actif = true;
       dx = e.clientX - el.offsetLeft;
       dy = e.clientY - el.offsetTop;
@@ -1923,6 +2487,7 @@ const PostIt = {
     tete.addEventListener("pointercancel", fin);
   }
 };
+window.addEventListener("resize", () => { if (PostIt.ouverts.size) { PostIt.barre(); PostIt.synchro(); } });
 document.addEventListener("keydown", e => {
   if (e.key !== "Escape" || !PostIt.ouverts.size) return;
   const haut = [...PostIt.ouverts.entries()].sort((a, b) => b[1].style.zIndex - a[1].style.zIndex)[0];
