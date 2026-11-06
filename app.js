@@ -171,6 +171,92 @@ const DataDir = {
 };
 
 /* ============================= Base de formules ============================= */
+/* ===== Nature des substances (chaud / tiède / neutre / frais / froid) : coloration + échelle de la nature de la formule =====
+   Données : reference/substances_nature/nature.json (généré par generer.py d'après la pharmacopée du jeu). */
+const SubstanceNature = {
+  data: null,
+  parHanzi: new Map(),
+  parCle: new Map(),
+  _promesse: null,
+
+  cle(t) { return String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z]/g, ""); },
+
+  async ensureLoaded() {
+    if (this.data) return;
+    if (!this._promesse) {
+      this._promesse = Store.readJSON("reference/substances_nature/nature.json").then(d => {
+        this.data = d;
+        d.substances.forEach(s => { if (s.hanzi) this.parHanzi.set(s.hanzi, s); this.parCle.set(this.cle(s.pinyin), s); });
+      }).catch(() => { /* pas de données : les fiches s'affichent sans nature */ });
+    }
+    await this._promesse;
+  },
+
+  // substance de la composition -> fiche de pharmacopée ({ s, alias }) ou null
+  trouver(c) {
+    if (!this.data) return null;
+    const nom = this.cle(String(c.substance_pinyin || "").replace(/\(.*?\)/g, ""));
+    const direct = (c.hanzi && this.parHanzi.get(String(c.hanzi).trim())) || this.parCle.get(nom);
+    if (direct) return { s: direct, alias: null };
+    const a = this.data.alias[nom];
+    const base = a && this.parCle.get(a);
+    return base ? { s: base, alias: base.pinyin } : null;
+  },
+
+  classe(id) { return (this.data.echelle.find(e => e.id === id) || {}); },
+
+  // dose en grammes (milieu d'une fourchette) ; null si la dose n'est pas en grammes (tranches, fruits, QS…)
+  grammes(dose) {
+    const t = String(dose || "").replace(/\(.*?\)/g, "");
+    const num = x => parseFloat(x.replace(",", "."));
+    let m = t.match(/(\d+(?:[.,]\d+)?)\s*(?:à|-|–)\s*(\d+(?:[.,]\d+)?)\s*g\b/i);
+    if (m) return (num(m[1]) + num(m[2])) / 2;
+    m = t.match(/(\d+(?:[.,]\d+)?)\s*g\b/i);
+    return m ? num(m[1]) : null;
+  },
+
+  pastille(c) {
+    const r = this.trouver(c);
+    if (!r || !r.s.nature) return `<span class="nat nat-inconnue" title="Nature non renseignée dans ta pharmacopée">—</span>`;
+    const e = this.classe(r.s.nature);
+    const detail = [r.s.nature_brute && "Source : " + r.s.nature_brute, r.s.saveur && "Saveur : " + r.s.saveur, r.s.tropisme && "Tropisme : " + r.s.tropisme,
+      r.alias && "(nature de « " + r.alias + " », substance de base)"].filter(Boolean).join(" · ");
+    return `<span class="nat nat-${r.s.nature}" title="${escapeHtml(detail)}">${escapeHtml(e.label)}</span>`;
+  },
+
+  // petite échelle visuelle : proportions (en grammes) de chaque nature + position de la nature globale de la formule
+  echelle(composition) {
+    if (!this.data || !composition || !composition.length) return "";
+    const poids = {};
+    let somme = 0, pondere = 0, pris = 0;
+    const exclus = [];
+    composition.forEach(c => {
+      const r = this.trouver(c), g = this.grammes(c.dose);
+      if (r && r.s.nature && g != null && g > 0) {
+        poids[r.s.nature] = (poids[r.s.nature] || 0) + g;
+        somme += g; pondere += g * this.classe(r.s.nature).score; pris++;
+      } else exclus.push(String(c.substance_pinyin || "").replace(/\(.*?\)/g, "").trim() + (r && r.s.nature ? " (dose non chiffrée en g)" : " (nature inconnue)"));
+    });
+    if (!somme) return "";
+    const moy = pondere / somme;
+    const global = moy >= 1.5 ? "chaud" : moy >= 0.5 ? "tiede" : moy > -0.5 ? "neutre" : moy >= -1.5 ? "frais" : "froid";
+    const segments = [...this.data.echelle].reverse().filter(e => poids[e.id]).map(e => {
+      const part = Math.round((poids[e.id] / somme) * 100);
+      return `<span class="nat-seg nat-${e.id}" style="flex:${poids[e.id]}" title="${escapeHtml(e.label)} : ${part} % du poids">${part >= 12 ? escapeHtml(e.label) + " " + part + " %" : ""}</span>`;
+    }).join("");
+    const pos = Math.max(0, Math.min(100, ((moy + 2) / 4) * 100));
+    const note = `Calculée d'après les doses en grammes de ${pris} substance(s) sur ${composition.length}` +
+      (exclus.length ? ` ; non prises en compte : ${escapeHtml(exclus.join(", "))}` : "") + ".";
+    return `<div class="nat-globale">
+      <p class="nat-titre">Nature globale de la formule : <strong>${escapeHtml(this.classe(global).label)}</strong> <span class="muted">(${moy > 0 ? "+" : ""}${moy.toFixed(1).replace(".", ",")} sur une échelle de −2 à +2)</span></p>
+      <div class="nat-barre" role="img" aria-label="Répartition des natures de la formule, du froid au chaud">${segments}</div>
+      <div class="nat-echelle"><span class="nat-marqueur" style="left:${pos.toFixed(1)}%" title="Nature globale"></span></div>
+      <div class="nat-graduations"><span>froid</span><span>frais</span><span>neutre</span><span>tiède</span><span>chaud</span></div>
+      <p class="muted nat-note">${note}</p>
+    </div>`;
+  }
+};
+
 const Formules = {
   index: [],
   byId: new Map(),
@@ -256,6 +342,7 @@ const Formules = {
     detail.innerHTML = "<p class='muted'>Chargement...</p>";
     try {
       const f = await Store.readJSON("formules/" + entry.chemin);
+      await SubstanceNature.ensureLoaded();
       detail.innerHTML = this.renderFormule(f);
       addEditControls(detail, "formules/" + entry.chemin, f, {
         onSaved: async (parsed) => {
@@ -293,7 +380,7 @@ const Formules = {
 
   renderFormule(f) {
     const comp = (f.composition || []).map(c =>
-      `<tr><td>${escapeHtml(c.substance_pinyin || "")}</td><td>${escapeHtml(c.hanzi || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td></tr>`
+      `<tr><td>${escapeHtml(c.substance_pinyin || "")}</td><td>${escapeHtml(c.hanzi || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td><td>${SubstanceNature.pastille(c)}</td></tr>`
     ).join("");
     const verif = (f.a_verifier && f.a_verifier.length)
       ? `<section><h3>À vérifier contre la source</h3>${f.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("")}</section>`
@@ -303,7 +390,7 @@ const Formules = {
       <h2>${escapeHtml(f.pinyin || f.id)} <span class="hanzi">${escapeHtml(f.hanzi || "")}</span></h2>
       <p class="muted">${escapeHtml(f.categorie_nom || "")}${f.sous_type ? " · " + escapeHtml(f.sous_type) : ""}</p>
       ${f.nom_fr ? `<p><em>${escapeHtml(f.nom_fr)}</em></p>` : ""}
-      ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th></tr></thead><tbody>${comp}</tbody></table></section>` : ""}
+      ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th></tr></thead><tbody>${comp}</tbody></table>${SubstanceNature.echelle(f.composition)}</section>` : ""}
       ${this.renderSchemaImage(f.schema_image, f.categorie_id)}
       ${section("Préparation / posologie", f.mode_de_preparation_posologie)}
       ${section("Actions thérapeutiques", f.actions_therapeutiques)}
@@ -1046,7 +1133,7 @@ document.querySelector('.tab-btn[data-tab="tuteur"]').addEventListener("click", 
 const Syndromes = {
   entries: [], // {id, domaine, nom, sousLabel, chemin}
   activeDomaine: null,
-  domaineLabels: { organes: "Organes", externes: "Externes", qi_sang_liquides: "Qi / Sang / Liquides", canaux: "Canaux" },
+  domaineLabels: { organes: "Organes", externes: "Externes", qi_sang_liquides: "Qi / Sang / Liquides", canaux: "Canaux", merveilleux_vaisseaux: "Merveilleux vaisseaux" },
   rawIndexByDomaine: {},
   _deepIndexed: false,
   _deepIndexing: false,
@@ -1075,19 +1162,20 @@ const Syndromes = {
         domaine,
         nom: e.nom_syndrome || e.id,
         chemin: e.chemin || e.chemin_relatif,
-        sousLabel: e.organe || e.niveau_ou_couche || e.sous_categorie || ""
+        sousLabel: e.organe || e.niveau_ou_couche || e.sous_categorie || e.vaisseau || ""
       }));
     } catch (e) { return []; }
   },
 
   async load() {
-    const [organes, externes, qsl, canaux] = await Promise.all([
+    const [organes, externes, qsl, canaux, mv] = await Promise.all([
       this.loadDomaine("organes", "syndromes/organes/index.json"),
       this.loadDomaine("externes", "syndromes/externes/index.json"),
       this.loadDomaine("qi_sang_liquides", "syndromes/qi_sang_liquides/index.json"),
-      this.loadDomaine("canaux", "syndromes/canaux/index.json")
+      this.loadDomaine("canaux", "syndromes/canaux/index.json"),
+      this.loadDomaine("merveilleux_vaisseaux", "syndromes/merveilleux_vaisseaux/index.json")
     ]);
-    this.entries = [...organes, ...externes, ...qsl, ...canaux];
+    this.entries = [...organes, ...externes, ...qsl, ...canaux, ...mv];
     if (this.entries.length === 0) {
       document.getElementById("syn-list").innerHTML = `<li class="muted">Base pas encore prête — l'extraction tourne peut-être encore en tâche de fond.</li>`;
       return;
@@ -1333,7 +1421,24 @@ const Syndromes = {
       `<p class="muted">${escapeHtml(d.hanzi || "")} · ${escapeHtml(d.pinyin || "")}</p>${sections}${gen}`;
   },
 
+  /* ---- Merveilleux vaisseaux : une rubrique du tableau validé (symptômes, mécanisme, références) ---- */
+  renderMerveilleux(d) {
+    const lignes = (d.tableau_clinique || []).map(l => `<tr><td>${tcmHighlightInline(escapeHtml(l.symptome || ""))}</td></tr>`).join("");
+    const plan = d.plan ? ` <span class="tag-gen" title="Plan : classique (textes classiques), psycho-émotionnel (Farrell) ou mixte">${escapeHtml(d.plan)}</span>` : "";
+    const leg = d.source && d.source.legende ? Object.entries(d.source.legende).map(([k, v]) => `<strong>${escapeHtml(k)}</strong> : ${escapeHtml(v)}`).join("<br>") : "";
+    const verif = (d.a_verifier && d.a_verifier.length) ? `<section><h3>À vérifier contre la source</h3>${d.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("")}</section>` : "";
+    return `<h2>${escapeHtml(d.nom_syndrome || d.id)}</h2>` +
+      `<p class="muted"><strong>${escapeHtml(d.vaisseau || "")}</strong>${d.titre_vaisseau ? " — " + escapeHtml(d.titre_vaisseau) : ""}${plan}</p>` +
+      (d.image_fonction ? `<p class="muted">Image / fonction : ${escapeHtml(d.image_fonction)}</p>` : "") +
+      `<section><h3>Symptômes</h3><table><thead><tr><th>Symptôme</th></tr></thead><tbody>${lignes}</tbody></table></section>` +
+      (d.mecanisme_pathologique ? `<section><h3>Mécanisme pathologique</h3><div class="tcm-text">${formatTcmText(d.mecanisme_pathologique)}</div></section>` : "") +
+      (d.references ? `<p class="muted">Références : ${escapeHtml(d.references)}</p>` : "") +
+      verif +
+      `<details class="syn-legende"><summary>Source et sigles des références</summary><p class="muted">${leg}</p></details>`;
+  },
+
   renderSyndrome(d, domaine) {
+    if (domaine === "merveilleux_vaisseaux") return this.renderMerveilleux(d);
     if (domaine === "canaux") {
       const v = (d.a_verifier && d.a_verifier.length) ? `<section><h3>À vérifier contre la source</h3>${d.a_verifier.map(x => `<span class="tag-verifier">⚠ ${escapeHtml(x)}</span>`).join("")}</section>` : "";
       return this.renderCanal(d) + v + `<p class="muted">Source : ${escapeHtml((d.source && d.source.fichier) || "?")}</p>`;
@@ -1482,7 +1587,7 @@ function dsEnGras(sign, cat, q) {
 const DS_FILTRES = [
   ["tous", "Tous"], ["canaux", "Canaux"], ["organes", "Organes"],
   ["qi_sang_liquides", "Qi, sang, liquides"], ["externes", "Syndromes externes"],
-  ["mv", "Merveilleux vaisseaux (à venir)"],
+  ["merveilleux_vaisseaux", "Merveilleux vaisseaux"],
 ];
 
 const DiagSignes = {
@@ -1546,14 +1651,14 @@ const DiagSignes = {
     this.renderResults();
   },
 
-  // ---- portée de la recherche : un ou plusieurs types de syndromes (canaux, organes, qi-sang-liquides, externes ; merveilleux vaisseaux : à venir)
+  // ---- portée de la recherche : un ou plusieurs types de syndromes (canaux, organes, qi-sang-liquides, externes, merveilleux vaisseaux)
   // portee vide = tous les types
   renderFiltre() {
     const el = document.getElementById("ds-filtre");
     if (!el) return;
     el.innerHTML = DS_FILTRES.map(([id, label]) => {
-      const n = id === "tous" ? this.syndromesData.length : id === "mv" ? 0 : this.syndromesData.filter(sd => sd.entry.domaine === id).length;
-      const dispo = id !== "mv";
+      const n = id === "tous" ? this.syndromesData.length : this.syndromesData.filter(sd => sd.entry.domaine === id).length;
+      const dispo = true;
       const actif = id === "tous" ? !this.portee.size : this.portee.has(id);
       return `<button type="button" class="cat-chip${actif ? " active" : ""}" data-f="${id}" aria-pressed="${actif}"` +
         `${dispo ? "" : ` disabled title="Pas encore disponible"`}>${escapeHtml(label)}${dispo ? ` (${n})` : ""}</button>`;
@@ -1573,7 +1678,7 @@ const DiagSignes = {
     if (id === "tous") this.portee.clear();
     else if (this.portee.has(id)) this.portee.delete(id);
     else this.portee.add(id);
-    if (this.portee.size >= DS_FILTRES.length - 2) this.portee.clear();       // tous les types disponibles cochés = tous
+    if (this.portee.size >= DS_FILTRES.length - 1) this.portee.clear();       // tous les types disponibles cochés = tous
     this.renderFiltre();
     this.renderAvailable(document.getElementById("ds-search").value);
     this.renderResults();
@@ -1790,7 +1895,7 @@ const DiagSignes = {
 
 /* ===== Vue graphe (zoomable à la molette ou au doigt) : signes cochés -> syndromes qui les contiennent -> autres lignes du même tableau =====
    Les lignes partagées par plusieurs syndromes sont un seul point relié à chacun d'eux : on voit tout de suite ce qui est commun. */
-const DOM_COUL = { organes: "#378ADD", externes: "#BA7517", canaux: "#1D9E75", qi_sang_liquides: "#7F77DD" };
+const DOM_COUL = { organes: "#378ADD", externes: "#BA7517", canaux: "#1D9E75", qi_sang_liquides: "#7F77DD", merveilleux_vaisseaux: "#D4537E" };
 const dsCut = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
 
 const GrapheSignes = {
