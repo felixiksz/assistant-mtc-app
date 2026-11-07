@@ -667,7 +667,7 @@ const ProchesFormules = {
     for (const e of enBase) { try { fiches.push({ e, g: await Store.readJSON("formules/" + e.base.chemin) }); } catch (err) { horsBase.push(e); } }
     if (!Comparateur._norm) { try { Comparateur._norm = await Store.readJSON("formules/tableaux/normalisation.json"); } catch (err) { Comparateur._norm = {}; } }
     let html = "";
-    if (fiches.length) html += `<div class="pf-vues"><div class="pf-onglets"><button type="button" class="cat-chip" data-vue="mm">Mindmap</button><button type="button" class="cat-chip" data-vue="mat">Matrice</button></div>` +
+    if (fiches.length) html += `<div class="pf-vues"><div class="pf-onglets"><button type="button" class="cat-chip" data-vue="mm">Arbre signes → formules</button><button type="button" class="cat-chip" data-vue="mat">Matrice</button></div>` +
       `<div class="pf-vue" data-vue="mm">${this.mindmap(f, fiches, texte)}</div><div class="pf-vue" data-vue="mat">${this.matrice(f, fiches, texte)}</div></div>`;
     if (horsBase.length) html += `<details class="proches-horsbase"><summary>Variantes citées dans le cours, absentes de ta base (${horsBase.length})</summary><div class="proches-grille">${horsBase.map(e => this.carteHorsBase(e, texte)).join("")}</div></details>`;
     html += `<details class="proches-texte"><summary>Texte intégral du cours</summary><div class="tcm-text">${formatFormuleField(texte)}</div></details>`;
@@ -687,50 +687,84 @@ const ProchesFormules = {
     };
     sec.querySelectorAll(".pf-onglets button").forEach(b => b.addEventListener("click", () => montrer(b.dataset.vue)));
     sec.querySelectorAll(".pf-mm details").forEach(d => d.addEventListener("toggle", () => this.tracer(sec)));
+    this.survol(sec);
     window.addEventListener("resize", () => { if (sec.isConnected) this.tracer(sec); });
     if (!fiches.length) return;
     montrer(sec.querySelector('.pf-vue[data-vue="' + vue + '"]') ? vue : "mm");
   },
 
-  // traits du mindmap : du centre vers chaque branche (courbes), recalculés à l'ouverture et au redimensionnement
+  // traits de l'arbre : du syndrome (trait foncé) et de chaque signe (trait clair) vers les formules concernées
   tracer(sec) {
     const mm = sec.querySelector(".pf-mm"), svg = mm && mm.querySelector("svg.pf-traits");
     if (!svg || mm.offsetParent === null) return;
-    const r = mm.getBoundingClientRect(), hub = mm.querySelector(".pf-hub").getBoundingClientRect();
-    const x1 = hub.right - r.left, y1 = hub.top + hub.height / 2 - r.top;
+    const r = mm.getBoundingClientRect();
     svg.setAttribute("width", r.width); svg.setAttribute("height", r.height);
-    svg.innerHTML = [...mm.querySelectorAll(".pf-noeud")].map(n => {
-      const b = n.getBoundingClientRect(), x2 = b.left - r.left, y2 = b.top + 22 - r.top, mx = (x1 + x2) / 2;
-      return `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.55"/>`;
-    }).join("");
+    const noeuds = {};
+    mm.querySelectorAll(".pf-noeud[data-forme]").forEach(n => { noeuds[n.dataset.forme] = n.getBoundingClientRect(); });
+    let h = "";
+    mm.querySelectorAll("[data-formes]").forEach(src => {
+      const b = src.getBoundingClientRect(), x1 = b.right - r.left, y1 = b.top + b.height / 2 - r.top, syn = src.classList.contains("pf-syn-t");
+      src.dataset.formes.split(",").filter(x => x !== "").forEach(fi => {
+        const n = noeuds[fi]; if (!n) return;
+        const x2 = n.left - r.left, y2 = n.top + 20 - r.top, mx = (x1 + x2) / 2;
+        h += `<path class="pf-trait ${syn ? "pf-t-syn" : "pf-t-sig"}" data-src="${escapeHtml(src.dataset.id || "")}" data-forme="${fi}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="currentColor" stroke-width="${syn ? 1.8 : 1}" opacity="${syn ? 0.7 : 0.28}"/>`;
+      });
+    });
+    svg.innerHTML = h;
   },
 
-  // mindmap : au centre ce que les formules partagent ; une branche par formule (quand la choisir, plantes, actions, précaution)
+  // survol : met en avant les traits et les formules reliés à un signe, un syndrome ou une formule
+  survol(sec) {
+    const mm = sec.querySelector(".pf-mm"); if (!mm) return;
+    const allumer = (id, forme) => {
+      mm.classList.add("pf-focus");
+      mm.querySelectorAll(".pf-trait").forEach(t => { const on = (id && t.dataset.src === id) || (forme != null && t.dataset.forme === forme); t.style.opacity = on ? 0.95 : 0.06; t.style.strokeWidth = on ? 2.2 : ""; });
+      mm.querySelectorAll(".pf-noeud").forEach(n => { const lies = id ? [...mm.querySelectorAll(`.pf-trait[data-src="${id}"]`)].some(t => t.dataset.forme === n.dataset.forme) : n.dataset.forme === forme; n.classList.toggle("pf-lie", lies); });
+    };
+    const eteindre = () => { mm.classList.remove("pf-focus"); this.tracer(sec); mm.querySelectorAll(".pf-noeud").forEach(n => n.classList.remove("pf-lie")); };
+    mm.querySelectorAll("[data-id]").forEach(el => { el.addEventListener("mouseenter", () => allumer(el.dataset.id, null)); el.addEventListener("mouseleave", eteindre); });
+    mm.querySelectorAll(".pf-noeud[data-forme]").forEach(n => { n.addEventListener("mouseenter", () => allumer(null, n.dataset.forme)); n.addEventListener("mouseleave", eteindre); });
+  },
+
+  // arbre : syndromes -> signes qui les distinguent -> formules (reliées par des traits) ; les plantes en petit dans chaque formule
   mindmap(f, fiches, texte) {
     const norm = g => ((Comparateur._norm || {})[g.categorie_id] || {})[g.id] || {};
     const cols = [{ g: f, moi: true }].concat(fiches.map(x => ({ g: x.g, id: x.e.base.id, nom: x.e.nom })));
-    cols.forEach(c => { c.n = norm(c.g); c.lig = this.lignes(c.g); c.sig = (c.n.signes || []); });
-    const cleSigne = t => dsNorm(String(t)).replace(/[^a-z0-9]/g, "");
+    cols.forEach(c => { c.n = norm(c.g); c.lig = this.lignes(c.g); c.sig = c.n.signes || []; });
+    const cs = t => dsNorm(String(t)).replace(/[^a-z0-9]/g, "");
     const nomHerbe = c => String(c.substance_pinyin || "").replace(/\(.*?\)/g, "").trim();
-    // plantes et signes communs à toutes les formules affichées
-    const herbesCommunes = cols[0].lig.filter(a => cols.every(c => c.lig.some(b => this.memes(a, b))));
-    // plantes de cette formule qui reviennent dans d'autres formules du groupe, avec le nombre de formules qui les contiennent
-    const partagees = cols[0].lig.map(a => ({ a, n: cols.filter(c => c.lig.some(b => this.memes(a, b))).length })).filter(x => x.n >= 2).sort((x, y) => y.n - x.n);
-    const signesCommuns = cols[0].sig.filter(t => cols.every(c => c.sig.some(u => cleSigne(u) === cleSigne(t))));
+    // signes : quelles formules les citent
+    const signes = new Map();
+    cols.forEach((c, ci) => c.sig.forEach(t => { const k = cs(t); if (!signes.has(k)) signes.set(k, { t, formes: new Set() }); signes.get(k).formes.add(ci); }));
+    const communs = [...signes.values()].filter(x => x.formes.size === cols.length);
+    // pour chaque formule : 3 signes qui n'appartiennent qu'à elle + 2 signes partagés avec d'autres formules (reliés à chacune)
+    cols.forEach((c, ci) => {
+      const siens = [...signes.entries()].filter(([k, x]) => x.formes.has(ci) && x.formes.size < cols.length);
+      c.choisis = siens.filter(([k, x]) => x.formes.size === 1).slice(0, 3).concat(siens.filter(([k, x]) => x.formes.size > 1).slice(0, 2)).map(([k]) => k);
+    });
+    // syndromes (regroupés par nom) : chacun porte les signes choisis par ses formules, sans doublon
+    const syn = new Map();
+    cols.forEach((c, ci) => {
+      let noms = (c.n.syndromes || []).map(x => x.nom);
+      if (!noms.length) noms = [c.n.syndrome_court || String(c.g.indications_syndrome || "").slice(0, 90) || "Syndrome non renseigné"];
+      noms.forEach(nm => { const k = cs(nm); if (!syn.has(k)) syn.set(k, { nom: nm, formes: new Set(), signes: [] }); syn.get(k).formes.add(ci); });
+    });
+    const places = new Set();
+    syn.forEach(sy => [...sy.formes].forEach(ci => cols[ci].choisis.forEach(k => { if (!places.has(k)) { places.add(k); sy.signes.push(k); } })));
+    const nomForme = ci => cols[ci].g.pinyin;
+    const gauche = [...syn.entries()].sort((a, b) => Math.min(...a[1].formes) - Math.min(...b[1].formes)).map(([k, sy]) =>
+      `<div class="pf-syn"><div class="pf-syn-t" data-id="syn:${k}" data-formes="${[...sy.formes].join(",")}"><span class="pf-tit">Syndrome</span>${escapeHtml(sy.nom)}</div>` +
+      (sy.signes.length ? `<ul class="pf-sigl">${sy.signes.map(sk => { const x = signes.get(sk); return `<li data-id="sig:${sk}" data-formes="${[...x.formes].join(",")}"><span>${escapeHtml(x.t)}</span> <span class="pf-vers">→ ${[...x.formes].map(nomForme).map(escapeHtml).join(", ")}</span></li>`; }).join("")}</ul>` : "") + `</div>`).join("");
     const noeuds = cols.map((c, ci) => {
       const autres = cols.filter((_, k) => k !== ci);
-      const propres = c.sig.filter(t => !autres.some(o => o.sig.some(u => cleSigne(u) === cleSigne(t))));
-      const choix = (propres.length ? propres : c.sig).slice(0, 4);
       const herbes = c.lig.map(l => {
-        // gras (formules proches seulement) : plante que cette formule n'a pas
         const distincte = !c.moi && !cols[0].lig.some(b => this.memes(l, b));
         return `<span class="pf-plante${distincte ? " pf-dist" : ""}" title="${escapeHtml(l.c.dose || "")}">${escapeHtml(nomHerbe(l.c))}</span>`;
       }).join(" ");
       const sans = c.moi ? [] : cols[0].lig.filter(l => !c.lig.some(b => this.memes(l, b)));
       const ex = c.moi ? "" : this.extraits(texte, c.nom || c.g.pinyin);
-      return `<article class="pf-noeud${c.moi ? " pf-moi" : ""}">` +
+      return `<article class="pf-noeud${c.moi ? " pf-moi" : ""}" data-forme="${ci}">` +
         `<header><strong>${escapeHtml(c.g.pinyin)}</strong> <span class="hanzi">${escapeHtml(c.g.hanzi || "")}</span>${c.moi ? ' <span class="pf-etiq-moi">cette formule</span>' : ` <button type="button" class="edit-toggle-btn" data-pf-fiche="${escapeHtml(c.id)}">Fiche</button> <button type="button" class="cmp-add cmp-mini" data-pf-cmp="${escapeHtml(c.id)}" title="Ajouter au comparateur">⇄</button>`}</header>` +
-        `<div class="pf-bloc pf-b-syn"><span class="pf-tit">On la choisit si</span>${c.n.syndrome_court ? `<div>${escapeHtml(c.n.syndrome_court)}</div>` : ""}${choix.length ? `<div class="pf-signes">${choix.map(t => `<span>${escapeHtml(t)}</span>`).join("")}</div>` : ""}</div>` +
         `<div class="pf-bloc pf-b-pl"><span class="pf-tit">Plantes${c.moi ? "" : " <small>(en gras : absentes de la formule de départ)</small>"}</span><div class="pf-plantes">${herbes}</div>${sans.length ? `<div class="pf-sans">Sans : ${sans.map(l => escapeHtml(nomHerbe(l.c))).join(", ")}</div>` : ""}</div>` +
         ((c.n.actions || []).length ? `<div class="pf-bloc pf-b-act"><span class="pf-tit">Actions</span>${escapeHtml(c.n.actions.slice(0, 4).join(" · "))}</div>` : "") +
         ((c.n.contre_indications || []).length ? `<div class="pf-bloc pf-b-ci"><span class="pf-tit">Attention</span>${escapeHtml(c.n.contre_indications.slice(0, 2).join(" ; "))}</div>` : "") +
@@ -738,9 +772,7 @@ const ProchesFormules = {
         `</article>`;
     }).join("");
     return `<div class="pf-mm"><svg class="pf-traits" aria-hidden="true"></svg>` +
-      `<div class="pf-hub"><strong>Choisir entre ces formules</strong>` +
-      `<div class="pf-bloc"><span class="pf-tit">${herbesCommunes.length ? "Plantes communes à toutes" : "Plantes qui reviennent"}</span>${herbesCommunes.length ? herbesCommunes.map(l => `<span class="pf-plante">${escapeHtml(nomHerbe(l.c))}</span>`).join(" ") : (partagees.length ? partagees.map(x => `<span class="pf-plante">${escapeHtml(nomHerbe(x.a.c))} ×${x.n}</span>`).join(" ") + `<div class="pf-sans">× = nombre de formules du groupe qui la contiennent (sur ${cols.length})</div>` : '<span class="muted">aucune</span>')}</div>` +
-      `<div class="pf-bloc"><span class="pf-tit">Signes communs</span>${signesCommuns.length ? signesCommuns.map(t => `<span class="pf-plante">${escapeHtml(t)}</span>`).join(" ") : '<span class="muted">aucun signe en commun dans les tableaux</span>'}</div></div>` +
+      `<div class="pf-arbre">${communs.length ? `<div class="pf-commun-box"><span class="pf-tit">Signes communs à toutes ces formules</span>${communs.map(x => `<span class="pf-plante">${escapeHtml(x.t)}</span>`).join(" · ")}</div>` : ""}${gauche}</div>` +
       `<div class="pf-branches">${noeuds}</div></div>`;
   },
 
