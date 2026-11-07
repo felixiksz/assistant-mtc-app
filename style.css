@@ -714,10 +714,9 @@ mark.surlignage { background: #f4ff00; color: #000; font-weight: inherit; paddin
 .cmp-nom { font-weight: 700; margin-bottom: 0.15rem; }
 .cmp-actions { margin-top: 0.4rem; display: flex; gap: 0.3rem; }
 .cmp-chip { display: inline-block; margin: 0.1rem 0.15rem 0.1rem 0; padding: 0.05rem 0.5rem; border-radius: 999px; font-size: 0.8rem; border: 1px solid var(--line); }
-.cmp-commun { color: var(--muted); border-style: dashed; background: transparent; }
-.cmp-propre { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
+.cmp-commun, .cmp-propre { color: var(--ink); border-style: solid; background: transparent; font-weight: 400; }
 .cmp-commun-c { background: transparent; }
-.cmp-propre-c { background: var(--accent-soft); }
+.cmp-propre-c { background: transparent; }
 .cmp-phrases { margin: 0.3rem 0 0; padding-left: 1.1rem; font-size: 0.82rem; }
 .cmp-legende { margin: 0.4rem 0; }
 .cmp-add { background: transparent; color: var(--ink); border: 1px solid var(--line); padding: 0.15rem 0.55rem; font: inherit; font-size: 0.82rem; cursor: pointer; margin: 0 0 0.5rem; }
@@ -764,7 +763,7 @@ body:has(#tab-comparer.active) #cmp-pastille { display: none; }
 .cmp-table tbody th { position: sticky; left: 0; z-index: 2; box-shadow: 2px 0 0 var(--line); }
 .cmp-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--accent-soft) 35%, transparent); }
 .cmp-nom { font-size: 1rem; }
-.cmp-bilan { margin-top: 0.25rem; font-size: 0.78rem; font-weight: 700; color: var(--accent); }
+.cmp-bilan { margin-top: 0.25rem; font-size: 0.78rem; font-weight: 700; color: var(--ink); }
 .cmp-chip { font-size: 0.84rem; padding: 0.1rem 0.6rem; margin: 0.15rem 0.2rem 0.15rem 0; }
 .cmp-resume { padding: 0.6rem 0.8rem; margin: 0.4rem 0; border: 1px dashed var(--line); background: var(--panel); }
 .cmp-sans-commun .cmp-commun, .cmp-sans-commun .cmp-ligne-commune { display: none; }
@@ -784,7 +783,7 @@ body:has(#tab-comparer.active) #cmp-pastille { display: none; }
 .cts-sugg li:hover { background: var(--accent-soft); }
 #cts-signe { min-width: 14rem; padding: 0.35rem 0.6rem; font-family: inherit; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); }
 .cts-sous { font-weight: 400; font-size: 0.7rem; text-transform: none; opacity: 0.85; }
-table.tab-comp tr.cts-commun > td, table.tab-comp tr.cts-commun > th:first-child { background: var(--accent-soft); font-weight: 700; }
+table.tab-comp tr.cts-commun > td, table.tab-comp tr.cts-commun > th:first-child { background: transparent; }
 #cts-print-titre { margin: 0.4rem 0 0; font-size: 0.95rem; }
 
 /* Proposer une formule */
@@ -942,3 +941,15 @@ section.sinolux { margin: 0.6rem 0; }
 .pf-mm.pf-focus .pf-noeud { opacity: 0.45; }
 .pf-mm.pf-focus .pf-noeud.pf-lie { opacity: 1; box-shadow: 0 0 0 2px var(--ink); }
 @media (max-width: 700px) { .pf-mm { grid-template-columns: 1fr; } }
+
+/* Variations (sous-formules) et substances animales */
+.gl-item.fl-sous { margin-left: 1.1rem; border-left: 2px solid var(--line); padding-left: 0.5rem; }
+.fl-sous .fl-pinyin { font-weight: 600; }
+.fl-animal, .an-marque { display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; border: 1px solid var(--ink); padding: 0 0.3rem; margin-left: 0.3rem; vertical-align: 0.1em; cursor: help; }
+section.animaux { margin: 0.6rem 0; border: 1px solid var(--ink); padding: 0.5rem 0.8rem; background: var(--panel); }
+section.animaux h3 { margin: 0 0 0.3rem; font-size: 0.95rem; }
+section.animaux ul { margin: 0; padding-left: 1.1rem; }
+.an-sub { font-size: 0.85rem; margin: 0.1rem 0 0.4rem; }
+.an-aucune { opacity: 0.75; font-style: italic; }
+.prop-variation { border-left: 4px solid var(--ink); }
+.prop-chips { margin: 0.4rem 0; }

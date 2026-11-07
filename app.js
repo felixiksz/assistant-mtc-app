@@ -334,6 +334,8 @@ const Formules = {
   activeCategory: null,
   _ouverts: new Set(),
   _tout: false,
+  variations: [],
+  varParId: new Map(),
 
   async load() {
     try {
@@ -344,8 +346,13 @@ const Formules = {
         `<li class="muted">Base pas encore prête (${e.message}). L'extraction tourne peut-être encore en tâche de fond — recharge la page dans un instant.</li>`;
       return;
     }
+    try {
+      this.variations = (await Store.readJSON("formules/variations/variations.json")).variations;
+      this.varParId = new Map(this.variations.map(v => [v.id, v]));
+    } catch (e) { /* pas de variations : la liste reste celle des formules */ }
     this.renderCategories();
     this.renderList(this.index);
+    Animaux.ensureLoaded().then(() => { if (Animaux.data) this.applyFilters(); });
   },
 
   categories() {
@@ -394,20 +401,35 @@ const Formules = {
     if (this.activeCategory) pool = pool.filter(f => f.categorie_id === this.activeCategory);
     const q = dsNorm((query || "").trim());
     if (!q) return pool;
-    return pool.filter(f => dsNorm([f.pinyin, f.nom_fr, f.indications_syndrome, f.categorie_nom].join(" ")).includes(q));
+    // une variation qui correspond fait apparaître sa formule parente
+    const parents = new Set(this.variations.filter(v => dsNorm([v.nom, ...v.alias, v.texte].join(" ")).includes(q)).map(v => v.parent));
+    return pool.filter(f => parents.has(f.id) || dsNorm([f.pinyin, f.nom_fr, f.indications_syndrome, f.categorie_nom].join(" ")).includes(q));
   },
 
   renderList(list) {
     const ul = document.getElementById("formule-list");
     const q = document.getElementById("formule-search").value.trim();
     const m = new Map();
-    list.forEach(f => { if (!m.has(f.categorie_id)) m.set(f.categorie_id, { nom: f.categorie_nom, items: [] }); m.get(f.categorie_id).items.push(f); });
-    const groupes = [...m.entries()].map(([id, g]) => ({ id, nom: g.nom, total: g.items.length, items: g.items }));
+    list.forEach(f => {
+      if (!m.has(f.categorie_id)) m.set(f.categorie_id, { nom: f.categorie_nom, items: [] });
+      const g = m.get(f.categorie_id);
+      g.items.push(f);
+      // variations de la formule, listées juste dessous comme sous-formules
+      this.variations.filter(v => v.parent === f.id).forEach(v => g.items.push({ ...v, estVariation: true, categorie_id: f.categorie_id, parentPinyin: f.pinyin }));
+    });
+    const groupes = [...m.entries()].map(([id, g]) => ({ id, nom: g.nom, total: g.items.filter(x => !x.estVariation).length, items: g.items }));
     barreGroupes(ul, ouvrir => { this._tout = ouvrir; if (!ouvrir) this._ouverts.clear(); this.applyFilters(); });
     listeGroupee(ul, groupes, {
       tout: !!q || !!this.activeCategory || groupes.length < 2 || this._tout, ouverts: this._ouverts,
       item: (li, f) => {
-        li.innerHTML = `<span class="fl-pinyin">${dsMarque(f.pinyin || f.id, q)}</span>` +
+        if (f.estVariation) {
+          li.classList.add("fl-sous");
+          li.innerHTML = `<span class="fl-pinyin">↳ ${dsMarque(f.nom, q)}</span><span class="fl-nomfr">${f.type === "variation" ? "variation" : escapeHtml(f.type)} de ${escapeHtml(f.parentPinyin)}</span>`;
+          li.addEventListener("click", () => this.showVariation(f, li));
+          return;
+        }
+        const an = Animaux.data && (Animaux.data.par_formule || {})[f.id];
+        li.innerHTML = `<span class="fl-pinyin">${dsMarque(f.pinyin || f.id, q)}${an && an.length ? ` <span class="fl-animal" title="${escapeHtml("Contient : " + an.join(", "))}">animal</span>` : ""}</span>` +
           (f.nom_fr ? `<span class="fl-nomfr">${dsMarque(f.nom_fr, q)}</span>` : "") +
           `<span class="fl-syndrome">${dsMarque(f.indications_syndrome || "", q)}</span>`;
         li.addEventListener("click", () => this.showDetail(f, li));
@@ -425,6 +447,7 @@ const Formules = {
       const f = await Store.readJSON("formules/" + entry.chemin);
       await SubstanceNature.ensureLoaded();
       await Sinolux.ensureLoaded();
+      await Animaux.ensureLoaded();
       detail.innerHTML = this.renderFormule(f);
       Store.hydrateImages(detail);
       ProchesFormules.remplir(detail, f);
@@ -465,6 +488,54 @@ const Formules = {
     </section>`;
   },
 
+  // ---- variations (sous-formules)
+  // composition d'une variation = composition de la formule d'origine, moins les retraits, plus les ajouts du cours
+  compositionVariation(v, fichesParent) {
+    const base = v.base !== v.parent && this.varParId.get(v.base) ? this.compositionVariation(this.varParId.get(v.base), fichesParent).filter(l => l.statut !== "retire").map(l => ({ c: l.c, statut: "garde" })) : (fichesParent.composition || []).map(c => ({ c, statut: "garde" }));
+    const k = t => SubstanceNature.cle(String(t || "").replace(/\(.*?\)/g, ""));
+    (v.retraits || []).forEach(r => {
+      const cr = k(r), l = base.find(x => ProchesFormules.clesSubstance(x.c).includes(cr) || k(x.c.substance_pinyin) === cr);
+      if (l) l.statut = "retire";
+    });
+    (v.ajouts || []).forEach(a => {
+      const m = String(a).match(/^(.*?)\s+(\d.*)$/);
+      base.push({ c: { substance_pinyin: (m ? m[1] : a).replace(/^\w/, ch => ch.toUpperCase()), dose: m ? m[2] : "" }, statut: "ajoute" });
+    });
+    return base;
+  },
+
+  async showVariation(v, liEl) {
+    document.querySelectorAll("#formule-list li").forEach(li => li.classList.remove("selected"));
+    if (liEl) liEl.classList.add("selected");
+    const detail = document.getElementById("formule-detail");
+    detail.innerHTML = "<p class='muted'>Chargement...</p>";
+    try {
+      const parent = this.byId.get(v.parent);
+      const fp = await Store.readJSON("formules/" + parent.chemin);
+      await SubstanceNature.ensureLoaded(); await Sinolux.ensureLoaded(); await Animaux.ensureLoaded();
+      detail.innerHTML = this.renderVariation(v, parent, fp);
+      detail.querySelectorAll("[data-parent]").forEach(b => b.addEventListener("click", () => this.showDetail(parent)));
+    } catch (e) { detail.innerHTML = `<p class="muted">Impossible d'afficher cette variation (${escapeHtml(e.message)}).</p>`; }
+  },
+
+  renderVariation(v, parent, fp) {
+    const lignes = ((v.non_detaillee && !v.ajouts.length && !v.retraits.length) || v.composition_deduite === false) ? [] : this.compositionVariation(v, fp);
+    const base = v.base !== v.parent && this.varParId.get(v.base) ? this.varParId.get(v.base) : null;
+    const chips = [...v.ajouts.map(a => `<span class="pf-chip pf-moi">+ ${escapeHtml(a)}</span>`), ...v.retraits.map(a => `<span class="pf-chip pf-autre">− ${escapeHtml(a)}</span>`)].join(" ");
+    const tableau = lignes.length ? `<table><thead><tr><th>Substance</th><th>Dose</th><th>Nature</th><th>Écart</th></tr></thead><tbody>${lignes.map(l => `<tr class="${l.statut === "retire" ? "prop-sorti" : ""}"><td>${escapeHtml(String(l.c.substance_pinyin || "").replace(/\(.*?\)/g, "").trim())} ${Animaux.marque(l.c.substance_pinyin)}</td><td>${escapeHtml(l.c.dose || "")}</td><td>${SubstanceNature.pastille(l.c)}</td><td>${l.statut === "ajoute" ? "ajoutée" : l.statut === "retire" ? "retirée" : ""}</td></tr>`).join("")}</tbody></table>` : "";
+    const an = Animaux.depuisLignes(lignes.length ? lignes.filter(l => l.statut !== "retire").map(l => l.c) : fp.composition, v.ajouts, fp.mode_de_preparation_posologie);
+    return `<h2>${escapeHtml(v.nom)} ${v.hanzi ? `<span class="hanzi">${escapeHtml(v.hanzi)}</span>` : ""}</h2>
+      <p class="muted">${v.type === "variation" ? "Variation" : escapeHtml(v.type)} de <button type="button" class="edit-toggle-btn" data-parent="1">${escapeHtml(parent.pinyin)}</button>${base ? ` (à partir de ${escapeHtml(base.nom)})` : ""}${v.alias.length ? ` · aussi appelée ${v.alias.map(escapeHtml).join(", ")}` : ""}</p>
+      ${v.non_detaillee ? `<p class="sx-alerte">Variation seulement citée par le cours : sa composition n'y est pas détaillée.</p>` : ""}
+      ${v.note ? `<p class="muted">${escapeHtml(v.note)}</p>` : ""}
+      ${Sinolux.blocCodes(v.sinolux, v.nom)}
+      ${Animaux.bloc(an)}
+      ${chips ? `<section><h3>Ce qui change par rapport à ${escapeHtml(base ? base.nom : parent.pinyin)}</h3><div>${chips}</div>${v.doses_citees ? `<p class="muted">Doses citées : ${escapeHtml(v.doses_citees)}</p>` : ""}</section>` : (v.doses_citees ? `<section><h3>Doses citées</h3><p>${escapeHtml(v.doses_citees)}</p></section>` : "")}
+      ${tableau ? `<section><h3>Composition déduite</h3>${tableau}<p class="muted">Déduite : formule d'origine − retraits + ajouts énoncés par le cours. Les doses des ajouts ne sont celles du cours que si elles y sont écrites.</p></section>` : ""}
+      <section><h3>Selon le cours</h3><div class="tcm-text">${formatFormuleField(v.texte)}</div></section>
+      <p class="muted">Source : fiche de ${escapeHtml(parent.pinyin)} (${v.champ === "modifications_courantes" ? "modifications courantes" : "comparaison avec formules proches"}). La fiche du cours fait foi.</p>`;
+  },
+
   renderFormule(f) {
     const comp = (f.composition || []).map(c =>
       `<tr><td>${escapeHtml(c.substance_pinyin || "")}</td><td>${escapeHtml(c.hanzi || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td><td>${SubstanceNature.pastille(c)}</td><td>${SubstanceNature.celluleDose(c)}</td><td>${Sinolux.cellule(c)}</td></tr>`
@@ -478,6 +549,7 @@ const Formules = {
       <p class="muted">${escapeHtml(f.categorie_nom || "")}${f.sous_type ? " · " + escapeHtml(f.sous_type) : ""}</p>
       ${f.nom_fr ? `<p><em>${escapeHtml(f.nom_fr)}</em></p>` : ""}
       ${Sinolux.blocFormule(f.id)}
+      ${Animaux.bloc(Animaux.depuisFiche(f))}
       ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th><th>Dose de référence</th><th>Code SINOLUX</th></tr></thead><tbody>${comp}</tbody></table><p class="muted poso-legende">⚠ à côté d'un code = l'équivalence avec le catalogue SINOLUX n'est pas stricte (survole le signe). Dose de référence : jeu Connections MTC. ▲ ▼ ≈ = la dose de la fiche sort (ou déborde) de cette fourchette : pas forcément une erreur (dose classique, pilules, valeur propre à la formule). * = précisions dans l'info-bulle.</p></section>` : ""}
       ${this.renderSchemaImage(f.schema_image, f.categorie_id)}
       ${section("Préparation / posologie", f.mode_de_preparation_posologie)}
@@ -499,6 +571,50 @@ Formules.load().then(() => Ajout.populateCategories());
 /* ============ SINOLUX : codes de commande, formats et budget ============
    Données : reference/sinolux/{correspondances,formules,tarifs,posologie_age_poids}.json (extraites des documents du fournisseur,
    voir reference/sinolux/generer.py et rapport_ecarts.txt). Tout cas d'équivalence qui n'est pas strict est signalé. */
+/* ============ Substances d'origine animale + substitutions indiquées par les cours ============
+   Données : reference/substances_animales/animales.json (voir generer.py). Les substitutions sont des passages de cours copiés tels quels ;
+   sans passage, l'interface écrit qu'aucune substitution n'est indiquée. */
+const Animaux = {
+  data: null, parCle: new Map(), _p: null,
+  async ensureLoaded() {
+    if (!this._p) this._p = Store.readJSON("reference/substances_animales/animales.json").then(d => { this.data = d; d.substances.forEach(a => a.cles.forEach(c => this.parCle.set(c, a))); }).catch(() => { /* pas de liste */ });
+    await this._p;
+  },
+  cleNom(t) { return SubstanceNature.cle(String(t || "").replace(/\(.*?\)/g, "").replace(/\s+\d.*$/, "")); },
+  trouver(nom) { return this.data ? this.parCle.get(this.cleNom(nom)) || null : null; },
+  composee(nom) { if (!this.data) return null; const k = this.cleNom(nom); return (this.data.formules_composees || []).find(x => x.cles.includes(k)) || null; },
+  marque(nom) {
+    const a = this.trouver(nom), c = a ? null : this.composee(nom);
+    if (!a && !c) return "";
+    return `<span class="an-marque" title="${escapeHtml(a ? a.origine + (a.substitutions_cours.length ? " — substitution selon le cours : voir la fiche" : " — aucune substitution indiquée dans les cours") : c.remarque)}">animal</span>`;
+  },
+  // éléments animaux d'une liste de lignes de composition (+ ajouts écrits en texte) ; le miel cité dans la préparation est ajouté à part
+  depuisLignes(composition, ajouts, prepa) {
+    const vus = new Set(), out = [];
+    const ajouter = (nom, a, c, dose) => { const k = a ? a.id : c.cles[0]; if (vus.has(k)) return; vus.add(k); out.push({ nom: String(nom).replace(/\(.*?\)/g, "").trim(), a, c, dose }); };
+    (composition || []).forEach(l => { const a = this.trouver(l.substance_pinyin); if (a) ajouter(l.substance_pinyin, a, null, l.dose); });
+    (ajouts || []).forEach(x => { const nom = String(x).split(/\s+ou\s+/)[0], a = this.trouver(nom), c = a ? null : this.composee(nom); if (a || c) ajouter(nom, a, c, ""); });
+    let miel = null;
+    if (prepa && !vus.has("TE4")) { const m = String(prepa).match(/[^.;]*\b(?:miel|fēng mì)\b[^.;]*/i); if (m) miel = m[0].trim().slice(0, 240); }
+    return { lignes: out, miel };
+  },
+  depuisFiche(f) { return this.depuisLignes(f.composition, [], f.mode_de_preparation_posologie); },
+  substitution(a) {
+    if (!a || !a.substitutions_cours.length) return null;
+    return a.substitutions_cours.map(u => u.texte.replace(/^\w+ \([^)]*\) — /, "").replace(/^Substitution : /, ""));
+  },
+  bloc(an) {
+    if (!an || (!an.lignes.length && !an.miel)) return "";
+    const li = an.lignes.map(x => {
+      const sub = x.a ? this.substitution(x.a) : null;
+      return `<li><strong>${escapeHtml(x.nom)}</strong> <span class="muted">${escapeHtml(x.a ? x.a.origine : x.c.remarque)}</span>` +
+        (x.c ? "" : sub ? `<div class="an-sub">Substitution selon le cours : ${sub.map(t => escapeHtml(t)).join(" ; ")}</div>` : `<div class="an-sub an-aucune">Aucune substitution indiquée dans les cours.</div>`) + `</li>`;
+    }).join("");
+    const miel = an.miel ? `<li><strong>Miel</strong> <span class="muted">(produit de la ruche) cité dans la préparation du cours : « ${escapeHtml(an.miel)} »</span><div class="an-sub an-aucune">Aucune substitution indiquée dans les cours.</div></li>` : "";
+    return `<section class="animaux"><h3>Substances animales</h3><ul>${li}${miel}</ul></section>`;
+  }
+};
+
 const Sinolux = {
   corr: null, formules: null, tarifs: null, poso: null, _p: null,
   LIBELLE_CAT: { incontournable: "formule « toute prête » (incontournable)", femmes: "soins des femmes (sur mesure)", peau: "soins de la peau (sur mesure, usage externe)" },
@@ -541,6 +657,14 @@ const Sinolux = {
     return h + `</section>`;
   },
 
+  // codes déjà connus (par exemple ceux d'une variation) -> même bloc que pour une formule
+  blocCodes(codes, nom) {
+    let h = `<section class="sinolux"><h3>Commande SINOLUX</h3>`;
+    if (codes && codes.length) h += codes.map(x => `<div class="sx-ligne"><span class="sx-code">${escapeHtml(x.code)}</span> <span class="muted">${escapeHtml(this.LIBELLE_CAT[x.categorie] || x.categorie)} · ${this.formatsTexte(x).map(escapeHtml).join(", ") || "format non précisé"}</span></div>`).join("");
+    else h += `<p class="muted">Aucun code SINOLUX de même nom que « ${escapeHtml(nom)} » : composition sur mesure à commander (formule de départ + ajouts).</p>`;
+    return h + `</section>`;
+  },
+
   // ---- substance : code(s) et statut de l'équivalence
   infoSubstance(c) {
     const r = SubstanceNature.trouver(c);
@@ -578,8 +702,8 @@ const Sinolux = {
     return { txt, p: meilleur.p, pat };
   },
   // formats possibles pour une formule (surMesure : composition modifiée ou formule sans code « toute prête »)
-  calcul(id, poids, jours, surMesure) {
-    const t = this.tarifs, f = id => t.formats.find(x => x.id === id), d = this.ligneDose(poids).v, info = this.infoFormule(id);
+  calcul(id, poids, jours, surMesure, codesImposes) {
+    const t = this.tarifs, f = id => t.formats.find(x => x.id === id), d = this.ligneDose(poids).v, info = codesImposes ? { codes: codesImposes } : this.infoFormule(id);
     const code = info && info.codes.find(x => x.categorie === "incontournable") || (info && info.codes[0]) || null;
     const pret = !!code && !surMesure;
     const prix = (fm, n) => ({ p: n * fm.prix_therapeute, pat: this.patient(n * fm.prix_therapeute) });
@@ -4061,7 +4185,6 @@ const Comparateur = {
     const phrases = `<tr><th scope="row">Autres lignes <span class="muted">(phrases entières)</span></th>${sans.map(l => `<td>${l.length ? `<details><summary>${l.length} ligne(s)</summary><ul class="cmp-phrases">${l.map(r => `<li>${escapeHtml(r.text)}</li>`).join("")}</ul></details>` : '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
     const nb = `<tr><th scope="row">Lignes du tableau</th>${sds.map((sd, i) => `<td class="muted">${(sd.rows || []).length} ligne(s), ${courts[i].size} signe(s) court(s)</td>`).join("")}</tr>`;
     return `<div class="cmp-resume"><strong>En commun à tous (${communs.length})</strong> ${communs.length ? communs.map(s => this.puce(s.label, true)).join(" ") : '<span class="muted">aucun signe court commun</span>'}</div>` +
-      `<p class="muted cmp-legende"><span class="cmp-chip cmp-commun">pâle</span> commun à tous · <span class="cmp-chip cmp-propre">couleur</span> propre à certains</p>` +
       `<div class="cmp-defile"><table class="cmp-table"><thead><tr><th></th>${entete}</tr></thead><tbody>${nb}${lignes || `<tr><td colspan="${sds.length + 1}" class="muted">Aucun signe court reconnu dans ces syndromes.</td></tr>`}${phrases}</tbody></table></div>`;
   },
 
@@ -4069,6 +4192,7 @@ const Comparateur = {
   async tableauFormules(ids) {
     if (!this._norm) { try { this._norm = await Store.readJSON("formules/tableaux/normalisation.json"); } catch (e) { this._norm = {}; } }
     await SubstanceNature.ensureLoaded();
+    await Animaux.ensureLoaded();
     const fiches = [];
     for (const id of ids) {
       const e = (Formules.index || []).find(f => f.id === id);
@@ -4101,11 +4225,11 @@ const Comparateur = {
       return `<tr class="cmp-sub-compo${commun ? " cmp-ligne-commune" : ""}"><th scope="row">${escapeHtml(s.nom)}</th>${s.cells.map(c => `<td class="${c ? (commun ? "cmp-commun-c" : "cmp-propre-c") : ""}">${c ? `${escapeHtml(c.dose || "")} <span class="muted">${escapeHtml((c.role_hierarchique || "").split(" ")[0])}</span> ${SubstanceNature.pastille(c)} ${SubstanceNature.marqueDose(c)}` :'<span class="muted">—</span>'}</td>`).join("")}</tr>`;
     }).join("");
     const textes = (titre, fn) => `<tr><th scope="row">${titre}</th>${fiches.map(x => `<td>${escapeHtml(fn(x) || "") || '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
-    return `<p class="muted cmp-legende"><span class="cmp-chip cmp-commun">pâle</span> commun à toutes · <span class="cmp-chip cmp-propre">couleur</span> propre à certaines</p>` +
-      `<div class="cmp-defile"><table class="cmp-table"><thead><tr><th></th>${entete}</tr></thead><tbody>` +
+    return `<div class="cmp-defile"><table class="cmp-table"><thead><tr><th></th>${entete}</tr></thead><tbody>` +
       textes("Syndrome", x => x.n.syndrome_court || x.f.indications_syndrome) +
       listeAtomique("actions", "Actions") +
       `<tr><th scope="row" colspan="${fiches.length + 1}" class="cmp-section">Composition</th></tr>${lignesSubs}` +
+      textes("Substances animales", x => { const an = Animaux.depuisFiche(x.f); return an.lignes.map(l => l.nom).concat(an.miel ? ["miel (préparation)"] : []).join(", "); }) +
       listeAtomique("signes", "Signes") + listeAtomique("contre_indications", "Contre-indications") +
       `</tbody></table></div>`;
   }
@@ -4148,6 +4272,7 @@ const Proposer = {
     if (!Comparateur._norm) { try { Comparateur._norm = await Store.readJSON("formules/tableaux/normalisation.json"); } catch (e) { Comparateur._norm = {}; } }
     await SubstanceNature.ensureLoaded();
     await Sinolux.ensureLoaded();
+    await Animaux.ensureLoaded();
   },
 
   jetons(t) { return new Set(dsNorm(String(t || "")).split(/[^a-z]+/).filter(w => w.length > 1 && !this.STOP.has(w))); },
@@ -4256,10 +4381,26 @@ const Proposer = {
       const lien = cf.length >= 6 && txtTrait.includes(cf);
       const score = (lien ? 60 : 0) + (cov >= 0.5 ? 40 * cov : 0) + 40 * dice;
       if (score < 12) return;
-      res.push({ f, score, lien, cov, commun, inter, B });
+      res.push({ f, cle: f.id, score, lien, cov, commun, inter, B });
+    });
+    // variations nommées (sous-formules) : même méthode, d'après le texte du cours qui les décrit
+    const parentsRetenus = new Set(res.map(r => r.f.id));
+    (Formules.variations || []).forEach(v => {
+      const parent = Formules.byId.get(v.parent);
+      if (!parent) return;
+      const tv = this.jetons([v.nom, ...v.alias, v.texte].join(" "));
+      const commun = [...nomsJetons].filter(t => tv.has(t));
+      const cov = nomsJetons.size ? commun.length / nomsJetons.size : 0;
+      const B = new Set(v.signes);
+      const inter = [...signesSynd].filter(i => B.has(i));
+      const dice = signesSynd.size + B.size ? (2 * inter.length) / (signesSynd.size + B.size) : 0;
+      const lien = [v.nom, ...v.alias].some(n => { const c = SubstanceNature.cle(n); return c.length >= 6 && txtTrait.includes(c); });
+      const score = (lien ? 60 : 0) + (cov >= 0.5 ? 40 * cov : 0) + 40 * dice;
+      if (score < 12 || !(lien || parentsRetenus.has(v.parent) || score >= 40)) return;     // une variation n'apparaît que si son origine est retenue, si le syndrome la cite ou si elle correspond nettement
+      res.push({ f: parent, v, cle: v.id, score, lien, cov, commun, inter, B });
     });
     res.sort((a, b) => b.score - a.score);
-    return res.slice(0, 8).map(r => ({ ...r, signesSynd }));
+    return res.slice(0, 10).map(r => ({ ...r, signesSynd }));
   },
 
   async rendre() {
@@ -4268,7 +4409,7 @@ const Proposer = {
     if (!this.mods) { zone.innerHTML = `<p class="muted">Chargement…</p>`; return; }
     const classement = this.classer();
     if (!classement.length) { zone.innerHTML = `<p class="muted">Aucune formule de ta base ne correspond clairement à ce diagnostic. Elle ne couvre pas encore ce syndrome : rien n'est inventé.</p>`; return; }
-    this._ids = classement.map(r => r.f.id);
+    this._ids = classement.map(r => r.cle);
     const meilleur = classement[0].score;
     const fiches = await Promise.all(classement.map(r => Store.readJSON("formules/" + r.f.chemin).catch(() => null)));
     zone.innerHTML = `<p class="muted prop-avert">Aide à la réflexion et à la révision, pas une prescription : les formules viennent de ta base de cours, classées d'après le lien avec la fiche du syndrome, l'indication et les signes en commun. Vérifie toujours dans la fiche.</p>` +
@@ -4281,12 +4422,38 @@ const Proposer = {
       if (c.checked) s.add(+k); else s.delete(+k);
       this.rendreCompo(fid);
     }));
-    classement.forEach((r, i) => this.rendreCompo(r.f.id, fiches[i]));
+    zone.querySelectorAll("[data-var]").forEach(b => b.addEventListener("click", () => { const v = Formules.varParId.get(b.dataset.var); if (v) { document.querySelector('.tab-btn[data-tab="formules"]').click(); Formules.showVariation(v); } }));
+    classement.forEach((r, i) => { if (!r.v) this.rendreCompo(r.f.id, fiches[i]); });
     this.rendreTousBudgets();
-    this._fiches = Object.fromEntries(classement.map((r, i) => [r.f.id, fiches[i]]));
+    this._fiches = Object.fromEntries(classement.map((r, i) => [r.cle, fiches[i]]));
+  },
+
+  carteVariation(r, fiche, meilleur) {
+    const v = r.v, f = r.f;
+    const label = i => (DiagSignes.courtsInfo.get(i) || {}).label || i;
+    const raisons = [];
+    if (r.lien) raisons.push(`<span class="prop-raison prop-lien">Citée dans la fiche du syndrome</span>`);
+    if (r.cov >= 0.5) raisons.push(`<span class="prop-raison">Indication proche : ${escapeHtml(r.commun.join(", "))}</span>`);
+    if (r.inter.length) raisons.push(`<span class="prop-raison">${r.inter.length} signe(s) en commun : ${escapeHtml(r.inter.slice(0, 6).map(label).join(", "))}${r.inter.length > 6 ? "…" : ""}</span>`);
+    const chips = [...v.ajouts.map(a => `<span class="prop-aj">+ ${escapeHtml(a)} ${SubstanceNature.pastille(this.substAjout(a))} ${SubstanceNature.pastilleDose(this.substAjout(a))} ${Animaux.marque(a)}</span>`), ...v.retraits.map(a => `<span class="prop-ret">− ${escapeHtml(a)}</span>`)].join(" ");
+    const lignes = (v.composition_deduite === false || (v.non_detaillee && !v.ajouts.length && !v.retraits.length)) ? null : Formules.compositionVariation(v, fiche);
+    const an = Animaux.depuisLignes(lignes ? lignes.filter(l => l.statut !== "retire").map(l => l.c) : (fiche && fiche.composition) || [], v.ajouts, fiche && fiche.mode_de_preparation_posologie);
+    return `<article class="prop-formule prop-variation">
+      <div class="prop-tete"><div><strong class="prop-nom">${escapeHtml(v.nom)}</strong> ${v.hanzi ? `<span class="hanzi">${escapeHtml(v.hanzi)}</span>` : ""}<div class="muted">${v.type === "variation" ? "Variation" : escapeHtml(v.type)} de ${escapeHtml(f.pinyin)} · ${escapeHtml(Formules.court(f.categorie_nom))}</div></div>
+        <div class="prop-barre" title="Pertinence relative"><i style="width:${Math.round((r.score / meilleur) * 100)}%"></i></div></div>
+      <div class="prop-raisons">${raisons.join(" ")}</div>
+      ${v.non_detaillee ? `<p class="sx-alerte">Seulement citée par le cours : sa composition n'y est pas détaillée.</p>` : ""}
+      <div class="prop-actions"><button type="button" class="edit-toggle-btn" data-var="${escapeHtml(v.id)}">Fiche de la variation</button> <button type="button" class="edit-toggle-btn" data-fiche="${escapeHtml(f.id)}">Fiche de ${escapeHtml(f.pinyin)}</button></div>
+      ${chips ? `<div class="prop-chips">${chips}</div>` : ""}
+      ${v.doses_citees ? `<p class="muted">Doses citées : ${escapeHtml(v.doses_citees)}</p>` : ""}
+      ${Animaux.bloc(an)}
+      <div class="prop-budget-zone" id="budget-${escapeHtml(v.id)}"></div>
+      <details class="prop-orig"><summary>Selon le cours</summary>${escapeHtml(v.texte)}</details>
+    </article>`;
   },
 
   carte(r, fiche, meilleur) {
+    if (r.v) return this.carteVariation(r, fiche, meilleur);
     const f = r.f, m = this.mods[f.id] || { modifications: [] };
     const label = i => (DiagSignes.courtsInfo.get(i) || {}).label || i;
     const raisons = [];
@@ -4304,7 +4471,7 @@ const Proposer = {
     const ligne = l => {
       const mod = l.mod, cle = `${f.id}|${l.k}`;
       const pourquoi = l.concom.length ? `Signe concomitant : ${l.concom.map(label).join(", ")}` : l.synd.length ? `Signe du syndrome non couvert par la formule : ${l.synd.map(label).join(", ")}` : "";
-      const ajouts = mod.ajouts.map(a => `<span class="prop-aj">+ ${escapeHtml(a)} ${SubstanceNature.pastille(this.substAjout(a))} ${SubstanceNature.pastilleDose(this.substAjout(a))}</span>`).join(" ");
+      const ajouts = mod.ajouts.map(a => `<span class="prop-aj">+ ${escapeHtml(a)} ${SubstanceNature.pastille(this.substAjout(a))} ${SubstanceNature.pastilleDose(this.substAjout(a))} ${Animaux.marque(a)}</span>`).join(" ");
       const retraits = mod.retraits.map(a => `<span class="prop-ret">− ${escapeHtml(a)}</span>`).join(" ");
       return `<label class="prop-mod${l.rang ? " pert" : ""}"><input type="checkbox" data-mod="${escapeHtml(cle)}"${(this.choix[f.id] || new Set()).has(l.k) ? " checked" : ""}>` +
         `<span><strong>${escapeHtml(mod.condition || mod.texte.slice(0, 90))}</strong>${mod.principe && mod.condition ? ` <span class="muted">— ${escapeHtml(mod.principe)}</span>` : ""}` +
@@ -4317,6 +4484,7 @@ const Proposer = {
         <div class="prop-barre" title="Pertinence relative"><i style="width:${Math.round((r.score / meilleur) * 100)}%"></i></div></div>
       <div class="prop-raisons">${raisons.join(" ")}</div>
       <div class="prop-actions"><button type="button" class="edit-toggle-btn" data-fiche="${escapeHtml(f.id)}">Fiche</button> <button type="button" class="cmp-add" data-cmp="${escapeHtml(f.id)}">⇄ Comparer</button></div>
+      ${Animaux.bloc(Animaux.depuisFiche(fiche || { composition: [] }))}
       <div class="prop-budget-zone" id="budget-${escapeHtml(f.id)}"></div>
       ${ci}
       <h4 class="sec-sub">Modifications possibles ${pertinentes.length ? `(${pertinentes.length} correspondent à tes signes)` : ""}</h4>
@@ -4334,8 +4502,9 @@ const Proposer = {
     const poids = Math.max(5, Math.min(250, parseFloat(document.getElementById("prop-poids").value) || 70));
     const jours = Math.max(1, Math.min(365, parseInt(document.getElementById("prop-jours").value, 10) || 30));
     const budget = parseFloat(document.getElementById("prop-budget").value) || 0;
-    const modif = (this.choix[fid] || new Set()).size > 0;
-    const r = Sinolux.calcul(fid, poids, jours, modif);
+    const v = Formules.varParId.get(fid);
+    const modif = v ? !(v.sinolux || []).length : (this.choix[fid] || new Set()).size > 0;
+    const r = Sinolux.calcul(v ? v.parent : fid, poids, jours, modif, v && (v.sinolux || []).length ? v.sinolux : null);
     const e2 = x => x.toFixed(2).replace(".", ",");
     const code = r.code ? `Code SINOLUX <span class="sx-code">${escapeHtml(r.code.code)}</span> · ${Sinolux.formatsTexte(r.code).map(escapeHtml).join(", ")}` : "Pas de code « toute prête » : composition sur mesure";
     const lignes = r.lignes.map(l => {
@@ -4343,10 +4512,10 @@ const Proposer = {
       const b = budget > 0 ? (l.pat <= budget ? "dans le budget" : `+ ${e2(l.pat - budget)} €`) : "";
       return `<tr><td><strong>${escapeHtml(l.format)}</strong> <span class="muted">${escapeHtml(l.lib)}</span></td><td>${escapeHtml(l.dose)}</td><td>${escapeHtml(l.qte)}</td><td>${e2(l.p)} €</td><td><strong>${e2(l.pat)} €</strong>${mois}</td>${budget > 0 ? `<td>${b}</td>` : ""}</tr>`;
     }).join("");
-    el.innerHTML = `<details class="sx-budget" open><summary>Format et budget — ${jours} jours, ${poids} kg${modif ? " (composition modifiée : sur mesure)" : ""}</summary>` +
+    el.innerHTML = `<details class="sx-budget" open><summary>Format et budget — ${jours} jours, ${poids} kg${modif ? (v ? " (variation sans code « toute prête » : sur mesure)" : " (composition modifiée : sur mesure)") : ""}</summary>` +
       `<p class="muted">${code}</p>` +
       `<div class="sx-defile"><table class="sx-tab"><thead><tr><th>Format</th><th>Dose / jour</th><th>À commander</th><th>Prix thérapeute</th><th>Prix patient</th>${budget > 0 ? "<th>Budget</th>" : ""}</tr></thead><tbody>${lignes}</tbody></table></div>` +
-      `<p class="muted sx-note">Tarifs SINOLUX 2026_2 TTC ; prix patient = prix thérapeute + 15 %, hors frais de port (offerts dès 150 €, ou pour 200 g de CP d'une même formule). Dose : posologie du laboratoire pour ce poids, à adapter selon la constitution, la Rate et la phase de la maladie. Les comprimés offerts (+20, +40) ne sont pas comptés. WAN et PIAN n'existent que pour certaines formules « toutes prêtes ».</p></details>`;
+      `<p class="muted sx-note">Tarifs SINOLUX 2026_2 TTC ; prix patient = prix thérapeute + 15 %, hors frais de port (offerts dès 150 €, ou pour 200 g de CP d'une même formule). Dose : posologie du laboratoire pour ce poids, à adapter selon la constitution, la Rate et la phase de la maladie. Les comprimés offerts (+20, +40) ne sont pas comptés. WAN et PIAN n'existent que pour certaines formules « toutes prêtes ». Gélules : d'origine animale par défaut chez SINOLUX, gélules végétales (Véga CAPS) sur demande.</p></details>`;
   },
 
   // composition résultante : base - retraits + ajouts cochés
@@ -4366,7 +4535,7 @@ const Proposer = {
     }).join("");
     const plus = ajoutees.map(a => {
       const sub = this.substAjout(a), dose = SubstanceNature.pastilleDose(sub), dejaDose = /\d\s*g\b/i.test(a);
-      return `<li class="prop-ajoute">+ ${escapeHtml(a)} ${dose || (dejaDose ? "" : `<span class="muted">dose à définir</span>`)} ${SubstanceNature.pastille(sub)}</li>`;
+      return `<li class="prop-ajoute">+ ${escapeHtml(a)} ${dose || (dejaDose ? "" : `<span class="muted">dose à définir</span>`)} ${SubstanceNature.pastille(sub)} ${Animaux.marque(a)}</li>`;
     }).join("");
     el.innerHTML = `<h4 class="sec-sub">Formule modifiée (modifications cochées)</h4><ul class="prop-liste">${base}${plus}</ul><p class="muted">Dose des ajouts : fourchette de référence du jeu Connections MTC (la base des modifications ne donne pas de dose) ; * = texte complet dans l’info-bulle. À ajuster selon ta source et le patient.</p>`;
   }
