@@ -328,6 +328,135 @@ const SubstanceNature = {
   }
 };
 
+/* ============ Cartes mentales de l'utilisatrice : compléments des fiches ============
+   Données : formules/cartes_mentales/cartes.json (extrait de ses PDF par generer.py ; textes tels quels). */
+const CarteMentale = {
+  NAT: { T: "tiède", N: "neutre", F: "froid", C: "chaud", lgF: "légèrement froid", lgT: "légèrement tiède", Tox: "toxique" },
+  SAV: { D: "doux", P: "piquant", Am: "amer", am: "amer", Ac: "acide", S: "salé" },
+  TITRES: { syndromes: "Syndromes et applications", description: "Description", action: "Action", indications: "Indications", preparation: "Préparation", contre_indications: "Contre-indications" },
+  cle(t) { return SubstanceNature.cle(String(t || "").replace(/[\u4e00-\u9fff]/g, "").replace(/\(.*?\)/g, "")); },
+  carte(id, variation) { const d = Formules.cartes; return d ? ((variation ? d.variations : d.formules) || {})[id] || null : null; },
+  // fonction de chaque plante telle qu'écrite dans la carte (« Tonifie le Qi », « Piquante fraiche »…)
+  fonction(id, c, variation) {
+    const k = this.cle(c.substance_pinyin), carte = this.carte(id, variation);
+    if (!carte) return "";
+    const l = carte.ingredients.find(x => this.cle(x.nom) === k);
+    return l ? l.fonction : "";
+  },
+  decoder(codes, table) {
+    if (!codes) return "";
+    return codes.split(",").filter(Boolean).map(t => table[t] ? `${escapeHtml(t)} (${table[t]})` : escapeHtml(t)).join(", ");
+  },
+  // sections de la carte absentes de la fiche (part des mots déjà dans la fiche < 75 %) ; pour une variation : toutes
+  bloc(id, variation) {
+    const c = this.carte(id, variation);
+    if (!c) return "";
+    const secs = Object.entries(c.sections).filter(([k, v]) => variation || c.couverture[k] == null || c.couverture[k] < 0.75);
+    const nat = c.nat || c.sav ? `<p><span class="cm-etiq">Nature</span> ${this.decoder(c.nat, this.NAT) || "—"} · <span class="cm-etiq">Saveur</span> ${this.decoder(c.sav, this.SAV) || "—"} <span class="muted">(codes de ta carte)</span></p>` : "";
+    const sections = secs.map(([k, v]) => `<div class="cm-sec"><span class="cm-etiq">${escapeHtml(this.TITRES[k] || k)}</span><div class="cm-texte">${escapeHtml(v)}</div></div>`).join("");
+    const mods = !variation && c.modifications.length ? `<div class="cm-sec"><span class="cm-etiq">Modifications (ta carte)</span><table class="cm-tab"><thead><tr><th>Si…</th><th>Action</th><th>Plantes</th></tr></thead><tbody>${c.modifications.map(m => `<tr><td>${escapeHtml(m.condition)}</td><td>${escapeHtml(m.action)}</td><td>${escapeHtml(m.plantes)}</td></tr>`).join("")}</tbody></table></div>` : "";
+    if (!nat && !sections && !mods) return "";
+    return `<section class="carte-mentale"><h3>Ta carte mentale${variation ? "" : " — en plus de la fiche"}</h3>${nat}${sections}${mods}<p class="muted cm-note">Textes de ta carte « ${escapeHtml(c.fichier.split("\\").pop().replace(/\.pdf$/, ""))} », copiés tels quels.</p></section>`;
+  },
+  // composition de la carte d'une variation (avec doses)
+  tableauIngredients(c) {
+    return `<table><thead><tr><th>Plante</th><th>Fonction</th><th>Dose</th></tr></thead><tbody>${c.ingredients.map(l => `<tr><td>${escapeHtml(l.nom.replace(/[\u4e00-\u9fff]/g, "").replace(/\(\s*\)/g, "").replace(/\s+/g, " ").trim())}</td><td>${escapeHtml(l.fonction)}</td><td>${escapeHtml(l.dose)}</td></tr>`).join("")}</tbody></table>`;
+  },
+  // modifications de la carte, au format du module des modifications (pour le Proposer et l'arbre)
+  modifications(id) {
+    const c = this.carte(id, false);
+    if (!c) return [];
+    return c.modifications.map(m => ({
+      texte: `${m.condition} — ${m.action}${m.plantes ? " : " + m.plantes : ""}`, condition: m.condition, principe: m.action,
+      ajouts: m.ajouts, retraits: m.retraits, signes: m.signes, source: "carte", donne: m.donne, renforcer: m.plantes_sans_signe
+    }));
+  },
+  cleAjout(a) { return SubstanceNature.cle(String(a).replace(/\(.*?\)/g, "").replace(/\s+\d.*$/, "")); },
+  // modifications de la fiche + celles de la carte qui n'y sont pas déjà (même ensemble de plantes ajoutées/retirées) ; chaque entrée garde sa source
+  fusion(id, deFiche) {
+    const exist = new Set((deFiche || []).map(m => [...m.ajouts.map(this.cleAjout), ...m.retraits.map(x => "-" + this.cleAjout(x))].sort().join("|")).filter(Boolean));
+    const out = (deFiche || []).map(m => ({ ...m, source: "fiche" }));
+    this.modifications(id).forEach(m => {
+      const k = [...m.ajouts.map(this.cleAjout), ...m.retraits.map(x => "-" + this.cleAjout(x))].sort().join("|");
+      if (k && exist.has(k)) return;
+      out.push(m);
+    });
+    return out;
+  }
+};
+
+/* ============ Modifications courantes en arbre : conditions (signes, syndromes) -> plantes ajoutées / retirées ============ */
+const ModifArbre = {
+  mods: null,
+  signes: null,
+  async chargeSignes() { if (!this.signes) { try { this.signes = new Map((await Store.readJSON("syndromes/signes_courts/signes_courts.json")).signes.map(x => [x.id, x.label])); } catch (e) { this.signes = new Map(); } } },
+  async charge() { if (!this.mods) { try { this.mods = (await Store.readJSON("formules/modifications/modifications.json")).formules; } catch (e) { this.mods = {}; } } },
+  async remplir(racine, f) {
+    const sec = racine.querySelector("section.modifs");
+    if (!sec) return;
+    await this.charge(); await this.chargeSignes();
+    await SubstanceNature.ensureLoaded(); await Animaux.ensureLoaded();
+    const liste = CarteMentale.fusion(f.id, (this.mods[f.id] || {}).modifications).filter(m => m.ajouts.length || m.retraits.length || m.condition);
+    if (!liste.length) return;
+    const k = a => CarteMentale.cleAjout(a);
+    const subs = new Map();
+    liste.forEach((m, i) => { m.ajouts.forEach(a => { const c = k(a); if (!subs.has(c)) subs.set(c, { nom: String(a).replace(/\(.*?\)/g, "").replace(/\s+\d.*$/, "").trim(), liens: [] }); subs.get(c).liens.push(i + ":+"); });
+      m.retraits.forEach(a => { const c = k(a); if (!subs.has(c)) subs.set(c, { nom: String(a).replace(/\(.*?\)/g, "").replace(/\s+\d.*$/, "").trim(), liens: [] }); subs.get(c).liens.push(i + ":-"); }); });
+    const gauche = liste.map((m, i) => `<div class="pm-cond" data-id="m${i}" data-liens="${[...m.ajouts.map(a => k(a) + ":+"), ...m.retraits.map(a => k(a) + ":-")].join(",")}">` +
+      `<div class="pm-si"><span class="pm-si-t">Si</span><span class="pm-cond-t">${escapeHtml(m.condition || m.texte.slice(0, 120))}</span>${m.source === "carte" ? ' <span class="pm-src">carte mentale</span>' : ""}</div>` +
+      ((m.signes || []).length ? `<div class="pm-sigs">${m.signes.map(i => `<span>${escapeHtml(this.signes.get(i) || i)}</span>`).join("")}</div>` : "") +
+      (m.principe ? `<div class="pm-principe">→ ${escapeHtml(m.principe)}</div>` : "") +
+      (m.donne ? `<div class="pm-principe">= ${escapeHtml(m.donne)}</div>` : "") +
+      (m.renforcer ? `<div class="pm-principe">à renforcer : ${escapeHtml(m.renforcer)}</div>` : "") + `</div>`).join("");
+    const droite = [...subs.entries()].map(([c, x]) => {
+      const fake = { substance_pinyin: x.nom };
+      return `<div class="pm-sub" data-id="s${c}" data-cle="${c}"><strong>${escapeHtml(x.nom)}</strong> ${SubstanceNature.pastille(fake)} ${SubstanceNature.pastilleDose(fake)} ${Animaux.marque(x.nom)}</div>`;
+    }).join("");
+    const texte = sec.querySelector(".modifs-texte") ? sec.querySelector(".modifs-texte").outerHTML : "";
+    sec.querySelector(".modifs-corps").innerHTML =
+      `<div class="pf-onglets"><button type="button" class="cat-chip active" data-v="arbre">Arbre</button><button type="button" class="cat-chip" data-v="texte">Texte du cours</button></div>` +
+      `<div class="pm-vue" data-v="arbre"><p class="muted pf-legende">Trait plein = on ajoute la plante · trait pointillé = on la retire. Survole une condition ou une plante pour voir ses liens.</p>` +
+      `<div class="pm-mm"><svg class="pf-traits" aria-hidden="true"></svg><div class="pm-gauche">${gauche}</div><div class="pm-droite">${droite}</div></div></div>` +
+      `<div class="pm-vue" data-v="texte" style="display:none">${texte}</div>`;
+    const montrer = v => { sec.querySelectorAll(".pm-vue").forEach(d => d.style.display = d.dataset.v === v ? "" : "none"); sec.querySelectorAll(".pf-onglets button").forEach(b => b.classList.toggle("active", b.dataset.v === v)); if (v === "arbre") this.tracer(sec); };
+    sec.querySelectorAll(".pf-onglets button").forEach(b => b.addEventListener("click", () => montrer(b.dataset.v)));
+    this.survol(sec);
+    window.addEventListener("resize", () => { if (sec.isConnected) this.tracer(sec); });
+    this.tracer(sec);
+  },
+  tracer(sec) {
+    const mm = sec.querySelector(".pm-mm"), svg = mm && mm.querySelector("svg.pf-traits");
+    if (!svg || mm.offsetParent === null) return;
+    const r = mm.getBoundingClientRect();
+    svg.setAttribute("width", r.width); svg.setAttribute("height", r.height);
+    const noeuds = {};
+    mm.querySelectorAll(".pm-sub").forEach(n => { noeuds[n.dataset.cle] = n.getBoundingClientRect(); });
+    let h = "";
+    mm.querySelectorAll(".pm-cond").forEach(c => {
+      const b = c.getBoundingClientRect(), x1 = b.right - r.left, y1 = b.top + Math.min(20, b.height / 2) - r.top;
+      (c.dataset.liens || "").split(",").filter(Boolean).forEach(l => {
+        const [cle, sens] = l.split(":"), n = noeuds[cle];
+        if (!n) return;
+        const x2 = n.left - r.left, y2 = n.top + n.height / 2 - r.top, mx = (x1 + x2) / 2;
+        h += `<path class="pf-trait" data-cond="${c.dataset.id}" data-sub="${cle}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="currentColor" stroke-width="1.4" ${sens === "-" ? 'stroke-dasharray="5 4"' : ""} opacity="0.55"/>`;
+      });
+    });
+    svg.innerHTML = h;
+  },
+  survol(sec) {
+    const mm = sec.querySelector(".pm-mm"); if (!mm) return;
+    const allumer = (cond, sub) => {
+      mm.classList.add("pf-focus");
+      const lies = new Set();
+      mm.querySelectorAll(".pf-trait").forEach(t => { const on = (cond && t.dataset.cond === cond) || (sub && t.dataset.sub === sub); t.style.opacity = on ? 0.95 : 0.06; if (on) { lies.add("c" + t.dataset.cond); lies.add("s" + t.dataset.sub); } });
+      mm.querySelectorAll(".pm-cond, .pm-sub").forEach(n => n.classList.toggle("pf-lie", lies.has(n.dataset.id) || (n.dataset.id === cond) || (n.dataset.id === "s" + sub)));
+    };
+    const eteindre = () => { mm.classList.remove("pf-focus"); mm.querySelectorAll(".pf-lie").forEach(n => n.classList.remove("pf-lie")); this.tracer(sec); };
+    mm.querySelectorAll(".pm-cond").forEach(n => { n.addEventListener("mouseenter", () => allumer(n.dataset.id, null)); n.addEventListener("mouseleave", eteindre); });
+    mm.querySelectorAll(".pm-sub").forEach(n => { n.addEventListener("mouseenter", () => allumer(null, n.dataset.cle)); n.addEventListener("mouseleave", eteindre); });
+  }
+};
+
 const Formules = {
   index: [],
   byId: new Map(),
@@ -336,6 +465,7 @@ const Formules = {
   _tout: false,
   variations: [],
   varParId: new Map(),
+  cartes: null,
 
   async load() {
     try {
@@ -350,6 +480,7 @@ const Formules = {
       this.variations = (await Store.readJSON("formules/variations/variations.json")).variations;
       this.varParId = new Map(this.variations.map(v => [v.id, v]));
     } catch (e) { /* pas de variations : la liste reste celle des formules */ }
+    try { this.cartes = await Store.readJSON("formules/cartes_mentales/cartes.json"); } catch (e) { /* pas de cartes : les fiches restent celles du cours */ }
     this.renderCategories();
     this.renderList(this.index);
     Animaux.ensureLoaded().then(() => { if (Animaux.data) this.applyFilters(); });
@@ -451,6 +582,7 @@ const Formules = {
       detail.innerHTML = this.renderFormule(f);
       Store.hydrateImages(detail);
       ProchesFormules.remplir(detail, f);
+      ModifArbre.remplir(detail, f);
       detail.prepend(Comparateur.bouton("", () => Comparateur.ajouterFormule(entry.id)));
       addEditControls(detail, "formules/" + entry.chemin, f, {
         onSaved: async (parsed) => {
@@ -523,22 +655,25 @@ const Formules = {
     const base = v.base !== v.parent && this.varParId.get(v.base) ? this.varParId.get(v.base) : null;
     const chips = [...v.ajouts.map(a => `<span class="pf-chip pf-moi">+ ${escapeHtml(a)}</span>`), ...v.retraits.map(a => `<span class="pf-chip pf-autre">− ${escapeHtml(a)}</span>`)].join(" ");
     const tableau = lignes.length ? `<table><thead><tr><th>Substance</th><th>Dose</th><th>Nature</th><th>Écart</th></tr></thead><tbody>${lignes.map(l => `<tr class="${l.statut === "retire" ? "prop-sorti" : ""}"><td>${escapeHtml(String(l.c.substance_pinyin || "").replace(/\(.*?\)/g, "").trim())} ${Animaux.marque(l.c.substance_pinyin)}</td><td>${escapeHtml(l.c.dose || "")}</td><td>${SubstanceNature.pastille(l.c)}</td><td>${l.statut === "ajoute" ? "ajoutée" : l.statut === "retire" ? "retirée" : ""}</td></tr>`).join("")}</tbody></table>` : "";
-    const an = Animaux.depuisLignes(lignes.length ? lignes.filter(l => l.statut !== "retire").map(l => l.c) : fp.composition, v.ajouts, fp.mode_de_preparation_posologie);
+    const carteVar = CarteMentale.carte(v.id, true);
+    const an = Animaux.depuisLignes(lignes.length ? lignes.filter(l => l.statut !== "retire").map(l => l.c) : (v.non_detaillee && !v.ajouts.length ? [] : fp.composition), v.ajouts, fp.mode_de_preparation_posologie, v.nom);
     return `<h2>${escapeHtml(v.nom)} ${v.hanzi ? `<span class="hanzi">${escapeHtml(v.hanzi)}</span>` : ""}</h2>
       <p class="muted">${v.type === "variation" ? "Variation" : escapeHtml(v.type)} de <button type="button" class="edit-toggle-btn" data-parent="1">${escapeHtml(parent.pinyin)}</button>${base ? ` (à partir de ${escapeHtml(base.nom)})` : ""}${v.alias.length ? ` · aussi appelée ${v.alias.map(escapeHtml).join(", ")}` : ""}</p>
       ${v.non_detaillee ? `<p class="sx-alerte">Variation seulement citée par le cours : sa composition n'y est pas détaillée.</p>` : ""}
       ${v.note ? `<p class="muted">${escapeHtml(v.note)}</p>` : ""}
-      ${Sinolux.blocCodes(v.sinolux, v.nom)}
+      ${Sinolux.blocCodes(v.sinolux, v.nom, v.sinolux_proches)}
       ${Animaux.bloc(an)}
       ${chips ? `<section><h3>Ce qui change par rapport à ${escapeHtml(base ? base.nom : parent.pinyin)}</h3><div>${chips}</div>${v.doses_citees ? `<p class="muted">Doses citées : ${escapeHtml(v.doses_citees)}</p>` : ""}</section>` : (v.doses_citees ? `<section><h3>Doses citées</h3><p>${escapeHtml(v.doses_citees)}</p></section>` : "")}
-      ${tableau ? `<section><h3>Composition déduite</h3>${tableau}<p class="muted">Déduite : formule d'origine − retraits + ajouts énoncés par le cours. Les doses des ajouts ne sont celles du cours que si elles y sont écrites.</p></section>` : ""}
+      ${carteVar ? `<section><h3>Composition (ta carte mentale)</h3>${CarteMentale.tableauIngredients(carteVar)}</section>` : ""}
+      ${CarteMentale.bloc(v.id, true)}
+      ${tableau && !carteVar ? `<section><h3>Composition déduite</h3>${tableau}<p class="muted">Déduite : formule d'origine − retraits + ajouts énoncés par le cours. Les doses des plantes conservées sont celles de la formule d'origine ; les ajouts n'ont une dose que si le cours l'écrit.</p>${v.doses_citees ? `<p class="sx-alerte">Le cours donne d'autres doses pour cette variation : voir « Doses citées » ci-dessus.</p>` : ""}</section>` : ""}
       <section><h3>Selon le cours</h3><div class="tcm-text">${formatFormuleField(v.texte)}</div></section>
       <p class="muted">Source : fiche de ${escapeHtml(parent.pinyin)} (${v.champ === "modifications_courantes" ? "modifications courantes" : "comparaison avec formules proches"}). La fiche du cours fait foi.</p>`;
   },
 
   renderFormule(f) {
     const comp = (f.composition || []).map(c =>
-      `<tr><td>${escapeHtml(c.substance_pinyin || "")}</td><td>${escapeHtml(c.hanzi || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td><td>${SubstanceNature.pastille(c)}</td><td>${SubstanceNature.celluleDose(c)}</td><td>${Sinolux.cellule(c)}</td></tr>`
+      `<tr><td>${escapeHtml(c.substance_pinyin || "")}</td><td>${escapeHtml(c.hanzi || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td><td>${SubstanceNature.pastille(c)}</td><td>${SubstanceNature.celluleDose(c)}</td><td>${Sinolux.cellule(c)}</td>${Formules.cartes && Formules.cartes.formules[f.id] ? `<td>${escapeHtml(CarteMentale.fonction(f.id, c))}</td>` : ""}</tr>`
     ).join("");
     const verif = (f.a_verifier && f.a_verifier.length)
       ? `<section><h3>À vérifier contre la source</h3>${f.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("")}</section>`
@@ -550,15 +685,16 @@ const Formules = {
       ${f.nom_fr ? `<p><em>${escapeHtml(f.nom_fr)}</em></p>` : ""}
       ${Sinolux.blocFormule(f.id)}
       ${Animaux.bloc(Animaux.depuisFiche(f))}
-      ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th><th>Dose de référence</th><th>Code SINOLUX</th></tr></thead><tbody>${comp}</tbody></table><p class="muted poso-legende">⚠ à côté d'un code = l'équivalence avec le catalogue SINOLUX n'est pas stricte (survole le signe). Dose de référence : jeu Connections MTC. ▲ ▼ ≈ = la dose de la fiche sort (ou déborde) de cette fourchette : pas forcément une erreur (dose classique, pilules, valeur propre à la formule). * = précisions dans l'info-bulle.</p></section>` : ""}
+      ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th><th>Dose de référence</th><th>Code SINOLUX</th>${Formules.cartes && Formules.cartes.formules[f.id] ? "<th>Fonction (ta carte)</th>" : ""}</tr></thead><tbody>${comp}</tbody></table><p class="muted poso-legende">⚠ à côté d'un code = l'équivalence avec le catalogue SINOLUX n'est pas stricte (survole le signe). Dose de référence : jeu Connections MTC. ▲ ▼ ≈ = la dose de la fiche sort (ou déborde) de cette fourchette : pas forcément une erreur (dose classique, pilules, valeur propre à la formule). * = précisions dans l'info-bulle.</p></section>` : ""}
       ${this.renderSchemaImage(f.schema_image, f.categorie_id)}
       ${section("Préparation / posologie", f.mode_de_preparation_posologie)}
       ${section("Actions thérapeutiques", f.actions_therapeutiques)}
       ${section("Indications / syndrome", f.indications_syndrome)}
       ${section("Tableau clinique", f.tableau_clinique)}
       ${f.contre_indications_precautions ? `<section><h3>Contre-indications / précautions</h3><div class="tdah-contre-ind">${formatFormuleField(f.contre_indications_precautions)}</div></section>` : ""}
-      ${section("Modifications courantes", f.modifications_courantes)}
+      ${f.modifications_courantes || (Formules.cartes && CarteMentale.modifications(f.id).length) ? `<section class="modifs"><h3>Modifications courantes</h3><div class="modifs-corps"><div class="tcm-text modifs-texte">${f.modifications_courantes ? formatFormuleField(f.modifications_courantes) : '<p class="muted">Le cours ne donne pas de modifications pour cette formule : celles de ta carte mentale sont dans l\'arbre.</p>'}</div></div></section>` : ""}
       ${f.comparaison_formules_proches ? `<section class="proches"><h3>Comparaison avec formules proches</h3><div class="proches-corps"><div class="tcm-text">${formatFormuleField(f.comparaison_formules_proches)}</div></div></section>` : ""}
+      ${CarteMentale.bloc(f.id, false)}
       ${verif}
       <p class="muted">Source : ${escapeHtml(f.source && f.source.fichier || "?")}</p>
     `;
@@ -588,15 +724,19 @@ const Animaux = {
     if (!a && !c) return "";
     return `<span class="an-marque" title="${escapeHtml(a ? a.origine + (a.substitutions_cours.length ? " — substitution selon le cours : voir la fiche" : " — aucune substitution indiquée dans les cours") : c.remarque)}">animal</span>`;
   },
-  // éléments animaux d'une liste de lignes de composition (+ ajouts écrits en texte) ; le miel cité dans la préparation est ajouté à part
-  depuisLignes(composition, ajouts, prepa) {
+  // éléments animaux d'une liste de lignes de composition (+ ajouts écrits en texte, + nom de la formule si c'est une formule composée) ;
+  // le miel cité dans la préparation et les plantes préparées au miel sont ajoutés à part
+  depuisLignes(composition, ajouts, prepa, nomFormule) {
     const vus = new Set(), out = [];
     const ajouter = (nom, a, c, dose) => { const k = a ? a.id : c.cles[0]; if (vus.has(k)) return; vus.add(k); out.push({ nom: String(nom).replace(/\(.*?\)/g, "").trim(), a, c, dose }); };
     (composition || []).forEach(l => { const a = this.trouver(l.substance_pinyin); if (a) ajouter(l.substance_pinyin, a, null, l.dose); });
     (ajouts || []).forEach(x => { const nom = String(x).split(/\s+ou\s+/)[0], a = this.trouver(nom), c = a ? null : this.composee(nom); if (a || c) ajouter(nom, a, c, ""); });
+    if (nomFormule) { const c = this.composee(nomFormule); if (c) ajouter(nomFormule, null, c, ""); }
     let miel = null;
-    if (prepa && !vus.has("TE4")) { const m = String(prepa).match(/[^.;]*\b(?:miel|fēng mì)\b[^.;]*/i); if (m) miel = m[0].trim().slice(0, 240); }
-    return { lignes: out, miel };
+    if (prepa && !vus.has("TE4")) { const m = String(prepa).match(/[^.;]*(?:(?<![a-zà-ÿ])miel(?![a-zà-ÿ])|fēng mì)[^.;]*/i); if (m) miel = m[0].trim().slice(0, 240); }
+    // zhì gān cǎo, huáng qí (mì zhì) : préparations au miel (convention d'usage)
+    const prepMiel = (composition || []).filter(l => /m[ìi] zh[ìi]/i.test(l.substance_pinyin) || /^zh[ìi] g[āa]n c[ǎa]o/i.test(l.substance_pinyin)).map(l => String(l.substance_pinyin).trim());
+    return { lignes: out, miel, prepMiel };
   },
   depuisFiche(f) { return this.depuisLignes(f.composition, [], f.mode_de_preparation_posologie); },
   substitution(a) {
@@ -604,14 +744,16 @@ const Animaux = {
     return a.substitutions_cours.map(u => u.texte.replace(/^\w+ \([^)]*\) — /, "").replace(/^Substitution : /, ""));
   },
   bloc(an) {
-    if (!an || (!an.lignes.length && !an.miel)) return "";
+    if (!an || (!an.lignes.length && !an.miel && !(an.prepMiel && an.prepMiel.length))) return "";
     const li = an.lignes.map(x => {
       const sub = x.a ? this.substitution(x.a) : null;
       return `<li><strong>${escapeHtml(x.nom)}</strong> <span class="muted">${escapeHtml(x.a ? x.a.origine : x.c.remarque)}</span>` +
-        (x.c ? "" : sub ? `<div class="an-sub">Substitution selon le cours : ${sub.map(t => escapeHtml(t)).join(" ; ")}</div>` : `<div class="an-sub an-aucune">Aucune substitution indiquée dans les cours.</div>`) + `</li>`;
+        (x.c ? "" : sub ? `<div class="an-sub">Substitution selon le cours : ${sub.map(t => escapeHtml(t)).join(" ; ")}</div>` : `<div class="an-sub an-aucune">Aucune substitution indiquée dans les cours.</div>`) +
+        (x.a && x.a.remarque ? `<div class="an-sub an-note">À noter : ${escapeHtml(x.a.remarque)}</div>` : "") + `</li>`;
     }).join("");
     const miel = an.miel ? `<li><strong>Miel</strong> <span class="muted">(produit de la ruche) cité dans la préparation du cours : « ${escapeHtml(an.miel)} »</span><div class="an-sub an-aucune">Aucune substitution indiquée dans les cours.</div></li>` : "";
-    return `<section class="animaux"><h3>Substances animales</h3><ul>${li}${miel}</ul></section>`;
+    const prep = an.prepMiel && an.prepMiel.length ? `<li><strong>Préparé au miel</strong> <span class="muted">(« zhì » / « mì zhì » : grillé au miel, convention d'usage) : ${an.prepMiel.map(escapeHtml).join(", ")}</span><div class="an-sub an-aucune">Aucune substitution indiquée dans les cours.</div></li>` : "";
+    return `<section class="animaux"><h3>${an.lignes.length ? "Substances animales" : "Produits de la ruche (miel)"}</h3><ul>${li}${miel}${prep}</ul></section>`;
   }
 };
 
@@ -658,10 +800,15 @@ const Sinolux = {
   },
 
   // codes déjà connus (par exemple ceux d'une variation) -> même bloc que pour une formule
-  blocCodes(codes, nom) {
+  blocCodes(codes, nom, proches) {
     let h = `<section class="sinolux"><h3>Commande SINOLUX</h3>`;
-    if (codes && codes.length) h += codes.map(x => `<div class="sx-ligne"><span class="sx-code">${escapeHtml(x.code)}</span> <span class="muted">${escapeHtml(this.LIBELLE_CAT[x.categorie] || x.categorie)} · ${this.formatsTexte(x).map(escapeHtml).join(", ") || "format non précisé"}</span></div>`).join("");
-    else h += `<p class="muted">Aucun code SINOLUX de même nom que « ${escapeHtml(nom)} » : composition sur mesure à commander (formule de départ + ajouts).</p>`;
+    if (codes && codes.length) {
+      h += codes.map(x => `<div class="sx-ligne"><span class="sx-code">${escapeHtml(x.code)}</span> <span class="muted">${escapeHtml(this.LIBELLE_CAT[x.categorie] || x.categorie)} · ${this.formatsTexte(x).map(escapeHtml).join(", ") || "format non précisé"}${x.via && x.via !== "nom exact" ? " · code trouvé par l'" + escapeHtml(x.via) : ""}</span></div>`).join("");
+      if (codes.some(x => x.via && x.via !== "nom exact")) h += `<p class="sx-alerte">Code trouvé sous un autre nom de la même formule : à valider avec le fournisseur.</p>`;
+    } else {
+      h += `<p class="muted">Aucun code SINOLUX de même nom que « ${escapeHtml(nom)} » : composition sur mesure à commander (formule de départ + ajouts).</p>`;
+      if (proches && proches.length) h += `<p>Voisin(s) à confirmer : ${proches.map(x => `<span class="sx-code">${escapeHtml(x.code)}</span> ${escapeHtml(x.nom)}`).join(" · ")} <span class="muted">(même nom avec un autre suffixe : à vérifier, ce n'est pas toujours la même formule)</span></p>`;
+    }
     return h + `</section>`;
   },
 
@@ -889,7 +1036,6 @@ const ProchesFormules = {
       const ex = c.moi ? "" : this.extraits(texte, c.nom || c.g.pinyin);
       return `<article class="pf-noeud${c.moi ? " pf-moi" : ""}" data-forme="${ci}">` +
         `<header><strong>${escapeHtml(c.g.pinyin)}</strong> <span class="hanzi">${escapeHtml(c.g.hanzi || "")}</span>${c.moi ? ' <span class="pf-etiq-moi">cette formule</span>' : ` <button type="button" class="edit-toggle-btn" data-pf-fiche="${escapeHtml(c.id)}">Fiche</button> <button type="button" class="cmp-add cmp-mini" data-pf-cmp="${escapeHtml(c.id)}" title="Ajouter au comparateur">⇄</button>`}</header>` +
-        `<div class="pf-bloc pf-b-pl"><span class="pf-tit">Plantes${c.moi ? "" : " <small>(en gras : absentes de la formule de départ)</small>"}</span><div class="pf-plantes">${herbes}</div>${sans.length ? `<div class="pf-sans">Sans : ${sans.map(l => escapeHtml(nomHerbe(l.c))).join(", ")}</div>` : ""}</div>` +
         ((c.n.actions || []).length ? `<div class="pf-bloc pf-b-act"><span class="pf-tit">Actions</span>${escapeHtml(c.n.actions.slice(0, 4).join(" · "))}</div>` : "") +
         ((c.n.contre_indications || []).length ? `<div class="pf-bloc pf-b-ci"><span class="pf-tit">Attention</span>${escapeHtml(c.n.contre_indications.slice(0, 2).join(" ; "))}</div>` : "") +
         (ex ? `<details class="pf-cours"><summary>Ce que dit le cours</summary><div>${escapeHtml(ex)}</div></details>` : "") +
@@ -4268,7 +4414,14 @@ const Proposer = {
 
   async charger() {
     await DiagSignes.ensureLoaded();
-    if (!this.mods) this.mods = (await Store.readJSON("formules/modifications/modifications.json")).formules;
+    if (!this.mods) {
+      this.mods = (await Store.readJSON("formules/modifications/modifications.json")).formules;
+      // + modifications des cartes mentales qui n'y sont pas déjà
+      (Formules.index || []).forEach(f => {
+        const m = this.mods[f.id] || (this.mods[f.id] = { signes: [], modifications: [] });
+        m.modifications = CarteMentale.fusion(f.id, m.modifications);
+      });
+    }
     if (!Comparateur._norm) { try { Comparateur._norm = await Store.readJSON("formules/tableaux/normalisation.json"); } catch (e) { Comparateur._norm = {}; } }
     await SubstanceNature.ensureLoaded();
     await Sinolux.ensureLoaded();
@@ -4437,7 +4590,7 @@ const Proposer = {
     if (r.inter.length) raisons.push(`<span class="prop-raison">${r.inter.length} signe(s) en commun : ${escapeHtml(r.inter.slice(0, 6).map(label).join(", "))}${r.inter.length > 6 ? "…" : ""}</span>`);
     const chips = [...v.ajouts.map(a => `<span class="prop-aj">+ ${escapeHtml(a)} ${SubstanceNature.pastille(this.substAjout(a))} ${SubstanceNature.pastilleDose(this.substAjout(a))} ${Animaux.marque(a)}</span>`), ...v.retraits.map(a => `<span class="prop-ret">− ${escapeHtml(a)}</span>`)].join(" ");
     const lignes = (v.composition_deduite === false || (v.non_detaillee && !v.ajouts.length && !v.retraits.length)) ? null : Formules.compositionVariation(v, fiche);
-    const an = Animaux.depuisLignes(lignes ? lignes.filter(l => l.statut !== "retire").map(l => l.c) : (fiche && fiche.composition) || [], v.ajouts, fiche && fiche.mode_de_preparation_posologie);
+    const an = Animaux.depuisLignes(lignes ? lignes.filter(l => l.statut !== "retire").map(l => l.c) : (v.non_detaillee && !v.ajouts.length ? [] : (fiche && fiche.composition) || []), v.ajouts, fiche && fiche.mode_de_preparation_posologie, v.nom);
     return `<article class="prop-formule prop-variation">
       <div class="prop-tete"><div><strong class="prop-nom">${escapeHtml(v.nom)}</strong> ${v.hanzi ? `<span class="hanzi">${escapeHtml(v.hanzi)}</span>` : ""}<div class="muted">${v.type === "variation" ? "Variation" : escapeHtml(v.type)} de ${escapeHtml(f.pinyin)} · ${escapeHtml(Formules.court(f.categorie_nom))}</div></div>
         <div class="prop-barre" title="Pertinence relative"><i style="width:${Math.round((r.score / meilleur) * 100)}%"></i></div></div>
@@ -4474,7 +4627,7 @@ const Proposer = {
       const ajouts = mod.ajouts.map(a => `<span class="prop-aj">+ ${escapeHtml(a)} ${SubstanceNature.pastille(this.substAjout(a))} ${SubstanceNature.pastilleDose(this.substAjout(a))} ${Animaux.marque(a)}</span>`).join(" ");
       const retraits = mod.retraits.map(a => `<span class="prop-ret">− ${escapeHtml(a)}</span>`).join(" ");
       return `<label class="prop-mod${l.rang ? " pert" : ""}"><input type="checkbox" data-mod="${escapeHtml(cle)}"${(this.choix[f.id] || new Set()).has(l.k) ? " checked" : ""}>` +
-        `<span><strong>${escapeHtml(mod.condition || mod.texte.slice(0, 90))}</strong>${mod.principe && mod.condition ? ` <span class="muted">— ${escapeHtml(mod.principe)}</span>` : ""}` +
+        `<span><strong>${escapeHtml(mod.condition || mod.texte.slice(0, 90))}</strong>${mod.source === "carte" ? ' <span class="pm-src">carte mentale</span>' : ""}${mod.principe && mod.condition ? ` <span class="muted">— ${escapeHtml(mod.principe)}</span>` : ""}` +
         `<br>${ajouts} ${retraits}${pourquoi ? `<br><span class="prop-pourquoi">${escapeHtml(pourquoi)}</span>` : ""}` +
         `<details class="prop-orig"><summary>texte d'origine</summary>${escapeHtml(mod.texte)}</details></span></label>`;
     };
@@ -4507,14 +4660,18 @@ const Proposer = {
     const r = Sinolux.calcul(v ? v.parent : fid, poids, jours, modif, v && (v.sinolux || []).length ? v.sinolux : null);
     const e2 = x => x.toFixed(2).replace(".", ",");
     const code = r.code ? `Code SINOLUX <span class="sx-code">${escapeHtml(r.code.code)}</span> · ${Sinolux.formatsTexte(r.code).map(escapeHtml).join(", ")}` : "Pas de code « toute prête » : composition sur mesure";
-    const lignes = r.lignes.map(l => {
+    // avec un budget : seuls les formats qui y rentrent sont affichés
+    const retenues = budget > 0 ? r.lignes.filter(l => l.pat <= budget) : r.lignes;
+    const masques = r.lignes.length - retenues.length;
+    const lignes = retenues.map(l => {
       const mois = jours === 30 ? "" : `<div class="muted">≈ ${e2(l.pat * 30 / jours)} € / 30 j</div>`;
-      const b = budget > 0 ? (l.pat <= budget ? "dans le budget" : `+ ${e2(l.pat - budget)} €`) : "";
-      return `<tr><td><strong>${escapeHtml(l.format)}</strong> <span class="muted">${escapeHtml(l.lib)}</span></td><td>${escapeHtml(l.dose)}</td><td>${escapeHtml(l.qte)}</td><td>${e2(l.p)} €</td><td><strong>${e2(l.pat)} €</strong>${mois}</td>${budget > 0 ? `<td>${b}</td>` : ""}</tr>`;
+      return `<tr><td><strong>${escapeHtml(l.format)}</strong> <span class="muted">${escapeHtml(l.lib)}</span></td><td>${escapeHtml(l.dose)}</td><td>${escapeHtml(l.qte)}</td><td>${e2(l.p)} €</td><td><strong>${e2(l.pat)} €</strong>${mois}</td></tr>`;
     }).join("");
+    const moinsCher = r.lignes[0];
+    const message = budget > 0 && !retenues.length ? `<p class="sx-alerte">Aucun format ne rentre dans ${e2(budget)} € pour ${jours} jours : le moins cher est ${escapeHtml(moinsCher.format)} (${escapeHtml(moinsCher.lib)}) à ${e2(moinsCher.pat)} €, soit ${e2(moinsCher.pat - budget)} € de plus.</p>` : (masques ? `<p class="muted">${masques} format(s) au-dessus du budget de ${e2(budget)} € masqué(s).</p>` : "");
     el.innerHTML = `<details class="sx-budget" open><summary>Format et budget — ${jours} jours, ${poids} kg${modif ? (v ? " (variation sans code « toute prête » : sur mesure)" : " (composition modifiée : sur mesure)") : ""}</summary>` +
       `<p class="muted">${code}</p>` +
-      `<div class="sx-defile"><table class="sx-tab"><thead><tr><th>Format</th><th>Dose / jour</th><th>À commander</th><th>Prix thérapeute</th><th>Prix patient</th>${budget > 0 ? "<th>Budget</th>" : ""}</tr></thead><tbody>${lignes}</tbody></table></div>` +
+      message + (lignes ? `<div class="sx-defile"><table class="sx-tab"><thead><tr><th>Format</th><th>Dose / jour</th><th>À commander</th><th>Prix thérapeute</th><th>Prix patient</th></tr></thead><tbody>${lignes}</tbody></table></div>` : "") +
       `<p class="muted sx-note">Tarifs SINOLUX 2026_2 TTC ; prix patient = prix thérapeute + 15 %, hors frais de port (offerts dès 150 €, ou pour 200 g de CP d'une même formule). Dose : posologie du laboratoire pour ce poids, à adapter selon la constitution, la Rate et la phase de la maladie. Les comprimés offerts (+20, +40) ne sont pas comptés. WAN et PIAN n'existent que pour certaines formules « toutes prêtes ». Gélules : d'origine animale par défaut chez SINOLUX, gélules végétales (Véga CAPS) sur demande.</p></details>`;
   },
 

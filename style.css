@@ -953,3 +953,35 @@ section.animaux ul { margin: 0; padding-left: 1.1rem; }
 .an-aucune { opacity: 0.75; font-style: italic; }
 .prop-variation { border-left: 4px solid var(--ink); }
 .prop-chips { margin: 0.4rem 0; }
+
+/* Cartes mentales (compléments) et arbre des modifications */
+section.carte-mentale { margin: 0.8rem 0; border: 1px dashed var(--ink); padding: 0.6rem 0.9rem; }
+section.carte-mentale h3 { margin-top: 0; }
+.cm-etiq { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; opacity: 0.75; margin-right: 0.3rem; }
+.cm-sec { margin: 0.5rem 0; }
+.cm-texte { white-space: pre-line; line-height: 1.5; font-size: 0.9rem; }
+.cm-tab { border-collapse: collapse; width: 100%; font-size: 0.82rem; margin-top: 0.3rem; }
+.cm-tab th, .cm-tab td { border: 1px solid var(--line); padding: 0.25rem 0.45rem; text-align: left; vertical-align: top; }
+.cm-note { font-size: 0.75rem; }
+.pm-mm { position: relative; display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(11rem, 16rem); gap: 1rem 4rem; align-items: start; color: var(--ink); margin-top: 0.4rem; }
+.pm-gauche, .pm-droite { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+.pm-cond { border: 2px solid var(--ink); background: var(--bg); padding: 0.4rem 0.65rem; font-size: 0.84rem; cursor: default; }
+.pm-cond-t { font-weight: 700; }
+.pm-principe { font-size: 0.8rem; margin-top: 0.15rem; opacity: 0.85; }
+.pm-sub { border: 1px dashed var(--ink); background: var(--panel); padding: 0.3rem 0.55rem; font-size: 0.82rem; cursor: default; }
+.pm-src { display: inline-block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; border: 1px solid var(--ink); padding: 0 0.25rem; vertical-align: 0.1em; }
+.pm-mm.pf-focus .pm-cond, .pm-mm.pf-focus .pm-sub { opacity: 0.4; }
+.pm-mm.pf-focus .pf-lie { opacity: 1; box-shadow: 0 0 0 2px var(--ink); }
+@media (max-width: 700px) { .pm-mm { grid-template-columns: 1fr; } .pm-mm .pf-traits { display: none; } }
+
+/* Arbre des modifications : l'indication (ou les signes) qui déclenche la modification est mise en avant */
+.pm-cond { border: 2px solid var(--ink); background: var(--panel); padding: 0; }
+.pm-si { display: flex; align-items: stretch; gap: 0; }
+.pm-si-t { background: var(--ink); color: var(--bg); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.45rem 0.55rem; display: flex; align-items: flex-start; }
+.pm-si .pm-cond-t { font-size: 0.98rem; font-weight: 700; padding: 0.4rem 0.65rem; line-height: 1.35; }
+.pm-si .pm-src { align-self: flex-start; margin: 0.45rem 0.5rem 0 auto; }
+.pm-sigs { padding: 0 0.65rem 0.3rem 3.2rem; }
+.pm-sigs span { display: inline-block; border: 1px solid var(--ink); padding: 0 0.4rem; margin: 0.1rem 0.25rem 0.1rem 0; font-size: 0.78rem; font-weight: 600; background: var(--bg); }
+.pm-cond .pm-principe { padding: 0 0.65rem 0.4rem 3.2rem; font-size: 0.82rem; }
+.pm-sub { background: transparent; border-color: var(--line); opacity: 0.92; font-size: 0.78rem; }
+.an-note { font-style: italic; }
