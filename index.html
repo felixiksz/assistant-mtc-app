@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=61">
+<link rel="stylesheet" href="style.css?v=62">
 <script src="theme.js?v=2"></script>
 </head>
 <body>
@@ -90,6 +90,7 @@
     <div class="pts-view-toggle">
       <button type="button" id="cmp-mode-synd" class="cat-chip active">Syndromes</button>
       <button type="button" id="cmp-mode-form" class="cat-chip">Formules</button>
+      <button type="button" id="cmp-mode-tabsyn" class="cat-chip">Tableaux de syndromes</button>
       <button type="button" id="cmp-mode-fam" class="cat-chip">Tableaux par famille de formules</button>
     </div>
     <p class="muted" data-aide>Choisis 2 à 4 syndromes (ou formules) à comparer : tape un nom ci-dessous, ou utilise le bouton « ⇄ Comparer » présent sur les fiches, les résultats de la recherche par signes et les post-it. Le tableau montre, catégorie par catégorie, les signes de chacun : ce qui est commun à tous apparaît en pâle, ce qui distingue chaque élément est en couleur.</p>
@@ -100,6 +101,22 @@
     <div id="cmp-choisis" class="ds-chips"></div>
     <label class="cmp-option"><input type="checkbox" id="cmp-diff"> Montrer seulement ce qui diffère</label>
     <div id="cmp-resultat"></div>
+    <div id="cmp-tabsyn-panel" style="display:none;">
+      <p class="muted" data-aide>Un tableau comme ceux des familles de formules, mais pour les syndromes : les colonnes sont les syndromes retenus, les lignes sont les signes courts (par catégorie : langue, pouls, soif…). Les filtres se combinent : plusieurs choix dans une même rubrique s'additionnent (ou), des rubriques différentes se croisent (et). La « zone touchée » est déduite des zones citées dans les signes de chaque syndrome. Clique sur le nom d'un syndrome pour ouvrir sa fiche.</p>
+      <div id="cts-facettes"></div>
+      <div class="tab-comp-options">
+        <div class="tab-comp-options-row"><strong>Catégories de signes</strong><div id="cts-champs" class="cat-chip-row"></div></div>
+        <div class="tab-comp-options-row">
+          <label>Trier les colonnes par <select id="cts-tri"><option value="type">type, organe puis nom</option><option value="nom">nom</option><option value="signes">nombre de signes (décroissant)</option></select></label>
+          <button type="button" id="cts-reinit" class="edit-toggle-btn">Effacer les filtres</button>
+          <button type="button" id="cts-print" class="edit-toggle-btn">🖨 Imprimer ce tableau (A4 paysage)</button>
+        </div>
+      </div>
+      <div id="cts-print-area">
+        <h3 id="cts-print-titre"></h3>
+        <div id="cts-wrap" class="tab-comp-scroll"></div>
+      </div>
+    </div>
     <div id="formules-view-tableaux-panel" class="cmp-familles" style="display:none;">
       <div id="tab-comp-familles" class="cat-chip-row"></div>
       <div class="tab-comp-options">
@@ -373,6 +390,6 @@
 
 </main>
 
-<script src="app.js?v=82"></script>
+<script src="app.js?v=85"></script>
 </body>
 </html>

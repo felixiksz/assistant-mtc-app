@@ -571,7 +571,7 @@ const FormuleTableaux = {
 };
 
 // Impression : on n'imprime que le tableau (voir @media print dans style.css), y compris avec Ctrl+P.
-function tabCompPrintable() { return document.getElementById("formules-view-tableaux-panel").style.display !== "none" && document.getElementById("tab-comparer").classList.contains("active"); }
+function tabCompPrintable() { return ["formules-view-tableaux-panel", "cmp-tabsyn-panel"].some(id => document.getElementById(id).style.display !== "none") && document.getElementById("tab-comparer").classList.contains("active"); }
 window.addEventListener("beforeprint", () => { if (tabCompPrintable()) document.body.classList.add("print-tab-comp"); });
 window.addEventListener("afterprint", () => document.body.classList.remove("print-tab-comp"));
 document.getElementById("tab-comp-print").addEventListener("click", () => window.print());
@@ -3403,12 +3403,15 @@ const Comparateur = {
     document.getElementById("cmp-mode-form").classList.toggle("active", m === "form");
     document.getElementById("cmp-mode-fam").classList.toggle("active", m === "fam");
     // le mode « tableaux par famille » a ses propres commandes ; les autres partagent la zone de recherche et le tableau
-    const fam = m === "fam";
-    document.querySelector("#tab-comparer .cmp-ajout").style.display = fam ? "none" : "";
-    document.getElementById("cmp-choisis").style.display = fam ? "none" : "";
-    document.querySelector("#tab-comparer .cmp-option").style.display = fam ? "none" : "";
-    document.getElementById("cmp-resultat").style.display = fam ? "none" : "";
+    const fam = m === "fam", tabsyn = m === "tabsyn", special = fam || tabsyn;
+    document.getElementById("cmp-mode-tabsyn").classList.toggle("active", tabsyn);
+    document.getElementById("cmp-tabsyn-panel").style.display = tabsyn ? "" : "none";
+    document.querySelector("#tab-comparer .cmp-ajout").style.display = special ? "none" : "";
+    document.getElementById("cmp-choisis").style.display = special ? "none" : "";
+    document.querySelector("#tab-comparer .cmp-option").style.display = special ? "none" : "";
+    document.getElementById("cmp-resultat").style.display = special ? "none" : "";
     document.getElementById("formules-view-tableaux-panel").style.display = fam ? "" : "none";
+    if (tabsyn) { this.ouvrirTabSyn(); this.mode = "tabsyn"; return; }
     if (fam) { FormuleTableaux.ensureLoaded(); this.memoriser(); return; }
     document.getElementById("cmp-search").placeholder = m === "synd" ? "Ajouter un syndrome à comparer (nom, organe, vaisseau…)" : "Ajouter une formule à comparer (pinyin, indication…)";
     document.getElementById("cmp-search").value = "";
@@ -3434,7 +3437,7 @@ const Comparateur = {
     this.memoriser();
     this.pastille();
     this.toast(type, "ajouté");
-    if (document.getElementById("tab-comparer").classList.contains("active") && this.mode !== "fam") { this.rendre(); }
+    if (document.getElementById("tab-comparer").classList.contains("active") && this.mode !== "fam" && this.mode !== "tabsyn") { this.rendre(); }
   },
 
   retirer(cle) {
@@ -3606,6 +3609,153 @@ const Comparateur = {
   }
 };
 Comparateur.init();
+
+/* ===== Tableaux comparatifs de syndromes (comme les tableaux par famille de formules) =====
+   Filtres combinables : type, organe / vaisseau / niveau, catégorie (vide, plénitude, plan…), zone touchée, signe. */
+Object.assign(Comparateur, {
+  CAP: 16,
+  ts: { type: new Set(), sous: new Set(), cat: new Set(), zone: new Set(), signes: new Set(), tri: "type", champs: new Set(), champsInit: false },
+  _attrs: null,
+  FACETTES: [["type", "Type"], ["sous", "Organe / vaisseau / niveau"], ["cat", "Catégorie"], ["zone", "Zone touchée (citée dans les signes)"]],
+  ORDRE_TYPES: ["Organes", "Externes", "Qi, sang, liquides", "Canaux", "Merveilleux vaisseaux"],
+
+  initTabSyn() {
+    document.getElementById("cmp-mode-tabsyn").addEventListener("click", () => this.setMode("tabsyn"));
+    document.getElementById("cts-tri").addEventListener("change", e => { this.ts.tri = e.target.value; this.rendreTabSyn(); });
+    document.getElementById("cts-reinit").addEventListener("click", () => { ["type", "sous", "cat", "zone", "signes"].forEach(k => this.ts[k].clear()); this.rendreTabSyn(); });
+    document.getElementById("cts-print").addEventListener("click", () => window.print());
+  },
+
+  attributs(e) {
+    const raw = (Syndromes.rawIndexByDomaine[e.domaine] || []).find(r => (r.chemin || r.chemin_relatif) === e.chemin) || {};
+    const net = t => String(t || "—").replace(/\s*\(.*?\)\s*/g, " ").replace(/\s+/g, " ").trim() || "—";
+    switch (e.domaine) {
+      case "organes": return { type: "Organes", sous: raw.organe || "—", cat: raw.categorie || "—" };
+      case "externes": return { type: "Externes", sous: net(raw.niveau_ou_couche), cat: net(raw.systeme_diagnostique) };
+      case "qi_sang_liquides": return { type: "Qi, sang, liquides", sous: net(raw.categorie_generale), cat: net(raw.sous_categorie) };
+      case "canaux": return { type: "Canaux", sous: raw.organe || e.sousLabel || "—", cat: "Canal (régulier, luo, tendineux)" };
+      default: return { type: "Merveilleux vaisseaux", sous: raw.vaisseau || e.sousLabel || "—", cat: "Plan " + (raw.plan || "—") };
+    }
+  },
+
+  async chargerTabSyn() {
+    await DiagSignes.ensureLoaded();
+    await ZonesCorps.ensureLoaded();
+    if (this._attrs) return;
+    const zd = ZonesCorps.data;
+    // zones citées dans les signes ; les signes de langue, d'enduit, de pouls et de teint ne comptent pas (ce sont des signes d'examen, pas une zone atteinte),
+    // et « urines » seul n'indique pas une zone génitale pour un syndrome entier
+    const motifs = zd ? zd.zones.map(z => [z.id, [...z.motifs, ...(z.motifs_implicites || []).filter(p => !/urines/.test(p))].map(p => new RegExp(p))]) : [];
+    this._attrs = DiagSignes.syndromesData.map(sd => {
+      const a = this.attributs(sd.entry);
+      const zones = new Set();
+      sd.rows.forEach(r => {
+        const n = ZonesCorps.norm(r.text).replace(/\b(?:langue|enduit|pouls|teint)\b[^,;.]*/g, " ");
+        motifs.forEach(([id, res]) => { if (res.some(re => re.test(n))) zones.add(id); });
+      });
+      if (sd.entry.domaine === "canaux" && zd && zd.canaux[sd.entry.id]) Object.keys(zd.canaux[sd.entry.id].zones).forEach(z => zones.add(z));
+      const courts = new Set();
+      sd.courtsParCle.forEach(ids => ids.forEach(i => courts.add(i)));
+      return { sd, cle: DiagSignes.cleSynd(sd), ...a, zones: [...zones].map(z => ZonesCorps.labelOf(z)), courts };
+    });
+  },
+
+  valeursDe(f, x) { return f === "zone" ? x.zones : [x[f]]; },
+
+  // syndromes retenus par les filtres (sauf éventuellement une facette, pour calculer les effectifs des autres choix)
+  candidats(sauf) {
+    return this._attrs.filter(x => {
+      for (const [f] of this.FACETTES) {
+        if (f === sauf || !this.ts[f].size) continue;
+        if (!this.valeursDe(f, x).some(v => this.ts[f].has(v))) return false;
+      }
+      for (const s of this.ts.signes) if (!x.courts.has(s)) return false;
+      return true;
+    });
+  },
+
+  async ouvrirTabSyn() {
+    document.getElementById("cts-wrap").innerHTML = `<p class="muted">Chargement des syndromes…</p>`;
+    try { await this.chargerTabSyn(); } catch (e) { document.getElementById("cts-wrap").innerHTML = `<p class="muted">Impossible de charger (${escapeHtml(e.message)}).</p>`; return; }
+    this.rendreTabSyn();
+  },
+
+  rendreTabSyn() {
+    if (!this._attrs) return;
+    const T = this.ts, hote = document.getElementById("cts-facettes");
+    hote.innerHTML = this.FACETTES.map(([f, titre]) => {
+      const eff = new Map();
+      this.candidats(f).forEach(x => this.valeursDe(f, x).forEach(v => eff.set(v, (eff.get(v) || 0) + 1)));
+      T[f].forEach(v => { if (!eff.has(v)) eff.set(v, 0); });
+      let vals = [...eff.entries()];
+      vals.sort((a, b) => f === "type" ? this.ORDRE_TYPES.indexOf(a[0]) - this.ORDRE_TYPES.indexOf(b[0]) : b[1] - a[1] || a[0].localeCompare(b[0], "fr"));
+      return `<div class="cts-facette"><div class="cts-titre">${escapeHtml(titre)} ${T[f].size ? `<span class="muted">(${T[f].size} choisi${T[f].size > 1 ? "s" : ""})</span>` : ""}</div>` +
+        `<div class="cts-puces">${vals.map(([v, n]) => `<button type="button" class="cat-chip${T[f].has(v) ? " active" : ""}${n === 0 && !T[f].has(v) ? " cts-vide" : ""}" data-f="${f}" data-v="${escapeHtml(v)}">${escapeHtml(v)} (${n})</button>`).join("")}</div></div>`;
+    }).join("") +
+      `<div class="cts-facette"><div class="cts-titre">Avec le signe court <span class="muted">(tous les signes choisis)</span></div>` +
+      `<div class="cts-puces">${[...T.signes].map(s => `<span class="chosen-item chosen-court">${escapeHtml((DiagSignes.courtsInfo.get(s) || {}).label || s)}<button type="button" data-ds="${escapeHtml(s)}" aria-label="Retirer">✕</button></span>`).join("")}` +
+      `<input type="search" id="cts-signe" placeholder="Ajouter un signe (ex : langue rouge)…" autocomplete="off"></div><ul id="cts-signe-sugg" class="cts-sugg"></ul></div>`;
+    hote.querySelectorAll("button[data-f]").forEach(b => b.addEventListener("click", () => {
+      const s = T[b.dataset.f]; if (s.has(b.dataset.v)) s.delete(b.dataset.v); else s.add(b.dataset.v);
+      this.rendreTabSyn();
+    }));
+    hote.querySelectorAll("button[data-ds]").forEach(b => b.addEventListener("click", () => { T.signes.delete(b.dataset.ds); this.rendreTabSyn(); }));
+    const champ = document.getElementById("cts-signe"), sugg = document.getElementById("cts-signe-sugg");
+    champ.addEventListener("input", () => {
+      const nq = dsNorm(champ.value.trim());
+      const l = nq ? DiagSignes.courtsData.signes.filter(s => !T.signes.has(s.id) && dsNorm(s.label).includes(nq)).slice(0, 10) : [];
+      sugg.innerHTML = l.map(s => `<li data-s="${escapeHtml(s.id)}">${escapeHtml(s.label)} <span class="muted">${escapeHtml(s.categorie)}</span></li>`).join("");
+      sugg.querySelectorAll("li").forEach(li => li.addEventListener("click", () => { T.signes.add(li.dataset.s); this.rendreTabSyn(); }));
+    });
+
+    // résultats
+    let res = this.candidats(null);
+    const trie = {
+      type: (a, b) => this.ORDRE_TYPES.indexOf(a.type) - this.ORDRE_TYPES.indexOf(b.type) || a.sous.localeCompare(b.sous, "fr") || a.sd.entry.nom.localeCompare(b.sd.entry.nom, "fr"),
+      nom: (a, b) => a.sd.entry.nom.localeCompare(b.sd.entry.nom, "fr"),
+      signes: (a, b) => b.courts.size - a.courts.size || a.sd.entry.nom.localeCompare(b.sd.entry.nom, "fr")
+    }[T.tri];
+    res = res.slice().sort(trie);
+    const filtres = ["type", "sous", "cat", "zone", "signes"].some(k => T[k].size);
+    const wrap = document.getElementById("cts-wrap"), titre = document.getElementById("cts-print-titre");
+    const resume = [...T.type, ...T.sous, ...T.cat, ...T.zone, ...[...T.signes].map(s => (DiagSignes.courtsInfo.get(s) || {}).label || s)].join(" · ");
+    titre.textContent = filtres ? `Syndromes — ${resume}` : "Syndromes";
+    // catégories de signes proposées (celles présentes dans les syndromes affichés)
+    const aff = res.slice(0, this.CAP);
+    const cats = [];
+    DiagSignes.courtsData.signes.forEach(s => { if (!cats.includes(s.categorie) && aff.some(x => x.courts.has(s.id))) cats.push(s.categorie); });
+    if (!T.champsInit) { cats.forEach(c => T.champs.add(c)); T.champsInit = true; }
+    document.getElementById("cts-champs").innerHTML = cats.map(c => `<button type="button" class="cat-chip${T.champs.has(c) ? " active" : ""}" data-c="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join("");
+    document.querySelectorAll("#cts-champs [data-c]").forEach(b => b.addEventListener("click", () => { if (T.champs.has(b.dataset.c)) T.champs.delete(b.dataset.c); else T.champs.add(b.dataset.c); this.rendreTabSyn(); }));
+    if (!filtres) { wrap.innerHTML = `<p class="muted">Choisis un ou plusieurs filtres ci-dessus (type, organe, catégorie, zone ou signe) : le tableau compare les syndromes retenus, ${this.CAP} au maximum.</p>`; return; }
+    if (!res.length) { wrap.innerHTML = `<p class="muted">Aucun syndrome ne correspond à ces filtres.</p>`; return; }
+    const note = res.length > this.CAP ? `<p class="muted">${res.length} syndromes correspondent : seuls les ${this.CAP} premiers sont affichés (tri choisi). Ajoute un filtre pour affiner.</p>` : `<p class="muted">${res.length} syndrome(s).</p>`;
+    wrap.innerHTML = note + this.tableauTabSyn(aff, cats);
+    wrap.querySelectorAll("th.tab-comp-formule").forEach(th => th.addEventListener("click", () => {
+      const x = aff.find(y => y.cle === th.dataset.cle); if (x) PostIt.open(x.sd.entry);
+    }));
+  },
+
+  tableauTabSyn(aff, cats) {
+    const n = aff.length, T = this.ts;
+    const tete = aff.map(x => `<th class="tab-comp-formule" data-cle="${escapeHtml(x.cle)}" title="Ouvrir la fiche">${escapeHtml(x.sd.entry.nom)}<br><span class="cts-sous">${escapeHtml(x.sous)}${x.cat !== "—" ? " · " + escapeHtml(x.cat) : ""}</span></th>`).join("");
+    const section = t => `<tr class="tab-comp-section"><th colspan="${n + 1}">${escapeHtml(t)}</th></tr>`;
+    let corps = `<tr><th>Type</th>${aff.map(x => `<td class="tab-comp-syndrome">${escapeHtml(x.type)}</td>`).join("")}</tr>`;
+    corps += `<tr><th>Zones citées</th>${aff.map(x => `<td class="tab-comp-syndrome">${x.zones.length ? escapeHtml(x.zones.slice(0, 8).join(", ")) + (x.zones.length > 8 ? " …" : "") : "—"}</td>`).join("")}</tr>`;
+    const infos = [...DiagSignes.courtsInfo.values()];
+    cats.filter(c => T.champs.has(c)).forEach(c => {
+      const lignes = infos.filter(s => s.categorie === c && aff.some(x => x.courts.has(s.id)));
+      if (!lignes.length) return;
+      corps += section(c) + lignes.map(s => {
+        const tous = aff.every(x => x.courts.has(s.id));
+        return `<tr${tous && n > 1 ? ' class="cts-commun"' : ""}><th>${escapeHtml(s.label)}</th>${aff.map(x => `<td class="tab-comp-x">${x.courts.has(s.id) ? "X" : ""}</td>`).join("")}</tr>`;
+      }).join("");
+    });
+    corps += `<tr><th>Signes courts reconnus</th>${aff.map(x => `<td class="tab-comp-x">${x.courts.size}</td>`).join("")}</tr>`;
+    return `<table class="tab-comp"><thead><tr><th class="tab-comp-corner">SYN</th>${tete}</tr></thead><tbody>${corps}</tbody></table>`;
+  }
+});
+Comparateur.initTabSyn();
 
 /* ============================= Utils ============================= */
 // Aplati récursivement toutes les chaînes de texte d'un objet JSON (indications, points,
