@@ -392,7 +392,7 @@ const CarteMentale = {
   // modifications de la fiche + celles de la carte qui n'y sont pas déjà (même ensemble de plantes ajoutées/retirées) ; chaque entrée garde sa source
   fusion(id, deFiche) {
     const exist = new Set((deFiche || []).map(m => [...m.ajouts.map(this.cleAjout), ...m.retraits.map(x => "-" + this.cleAjout(x))].sort().join("|")).filter(Boolean));
-    const out = (deFiche || []).map(m => ({ ...m, source: "fiche" }));
+    const out = (deFiche || []).map(m => ({ ...m, source: m.source || "fiche" }));
     this.modifications(id).forEach(m => {
       const k = [...m.ajouts.map(this.cleAjout), ...m.retraits.map(x => "-" + this.cleAjout(x))].sort().join("|");
       if (k && exist.has(k)) return;
@@ -421,7 +421,7 @@ const ModifArbre = {
     const noter = (a, sens, i) => { const c = k(a) + ":" + sens; if (!subs.has(c)) subs.set(c, { nom: String(a).replace(/\(.*?\)/g, "").replace(/\s+\d.*$/, "").trim(), sens, liens: [] }); subs.get(c).liens.push(i); };
     liste.forEach((m, i) => { m.ajouts.forEach(a => noter(a, "+", i)); m.retraits.forEach(a => noter(a, "-", i)); });
     const gauche = liste.map((m, i) => `<div class="pm-cond" data-id="m${i}" data-liens="${[...m.ajouts.map(a => k(a) + ":+"), ...m.retraits.map(a => k(a) + ":-")].join(",")}">` +
-      `<div class="pm-si"><span class="pm-si-t">Si</span><span class="pm-cond-t">${escapeHtml(m.condition || m.texte.slice(0, 120))}</span>${m.source === "carte" ? ' <span class="pm-src">carte mentale</span>' : ""}</div>` +
+      `<div class="pm-si"><span class="pm-si-t">Si</span><span class="pm-cond-t">${escapeHtml(m.condition || m.texte.slice(0, 120))}</span>${m.source === "carte" ? ' <span class="pm-src">carte mentale</span>' : m.source === "personnel" ? ' <span class="pm-src">ajout personnel</span>' : ""}</div>` +
       ((m.signes || []).length ? `<div class="pm-sigs">${m.signes.map(i => `<span>${escapeHtml(this.signes.get(i) || i)}</span>`).join("")}</div>` : "") +
       (m.principe ? `<div class="pm-principe">→ ${escapeHtml(m.principe)}</div>` : "") +
       (m.donne ? `<div class="pm-principe">= ${escapeHtml(m.donne)}</div>` : "") +
@@ -4655,7 +4655,7 @@ const Proposer = {
       const ajouts = mod.ajouts.map(a => `<span class="prop-aj">+ ${escapeHtml(a)} ${SubstanceNature.pastille(this.substAjout(a))} ${SubstanceNature.pastilleDose(this.substAjout(a))} ${Animaux.marque(a)}</span>`).join(" ");
       const retraits = mod.retraits.map(a => `<span class="prop-ret">− ${escapeHtml(a)}</span>`).join(" ");
       return `<label class="prop-mod${l.rang ? " pert" : ""}"><input type="checkbox" data-mod="${escapeHtml(cle)}"${(this.choix[f.id] || new Set()).has(l.k) ? " checked" : ""}>` +
-        `<span><strong>${escapeHtml(mod.condition || mod.texte.slice(0, 90))}</strong>${mod.source === "carte" ? ' <span class="pm-src">carte mentale</span>' : ""}${mod.principe && mod.condition ? ` <span class="muted">— ${escapeHtml(mod.principe)}</span>` : ""}` +
+        `<span><strong>${escapeHtml(mod.condition || mod.texte.slice(0, 90))}</strong>${mod.source === "carte" ? ' <span class="pm-src">carte mentale</span>' : mod.source === "personnel" ? ' <span class="pm-src">ajout personnel</span>' : ""}${mod.principe && mod.condition ? ` <span class="muted">— ${escapeHtml(mod.principe)}</span>` : ""}` +
         `<br>${ajouts} ${retraits}${pourquoi ? `<br><span class="prop-pourquoi">${escapeHtml(pourquoi)}</span>` : ""}` +
         `<details class="prop-orig"><summary>texte d'origine</summary>${escapeHtml(mod.texte)}</details></span></label>`;
     };
