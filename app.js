@@ -19,6 +19,7 @@ const Store = {
   mode: "local", // "local" | "github"
   gh: { owner: "", repo: "", branch: "main", token: "" },
   _shaCache: new Map(),
+  _img: new Map(),     // chemin relatif -> promesse d'une adresse locale (blob) de l'image
 
   init() {
     try {
@@ -60,6 +61,36 @@ const Store = {
     const res = await fetch("data/" + relPath, { cache: "no-store" });
     if (!res.ok) throw new Error(relPath + " introuvable (" + res.status + ")");
     return res.json();
+  },
+
+  // Adresse utilisable dans <img> pour une image du dossier data/ : en mode local, le chemin du disque ;
+  // en mode GitHub (téléphone, copie hébergée), l'image est lue dans le dépôt de données avec le token puis servie comme blob.
+  imageUrl(relPath) {
+    if (this.mode !== "github") return Promise.resolve("data/" + relPath);
+    if (!this._img.has(relPath)) {
+      this._img.set(relPath, (async () => {
+        const res = await fetch(this._ghUrl(relPath) + "?ref=" + encodeURIComponent(this.gh.branch),
+          { headers: { "Authorization": "Bearer " + this.gh.token, "Accept": "application/vnd.github.raw+json" } });
+        if (!res.ok) throw new Error(res.status === 404 ? "introuvable dans le dépôt de données" : "erreur GitHub " + res.status);
+        return URL.createObjectURL(await res.blob());
+      })().catch(e => { this._img.delete(relPath); throw e; }));
+    }
+    return this._img.get(relPath);
+  },
+
+  // remplit les images marquées data-gh-rel (lien <a> + <img>) d'une fiche déjà affichée
+  hydrateImages(racine) {
+    racine.querySelectorAll("[data-gh-rel]").forEach(async a => {
+      if (!a.dataset.ghRel) return;           // mode local : l'image se charge directement depuis data/
+      try {
+        const url = await this.imageUrl(a.dataset.ghRel);
+        a.href = url;
+        const img = a.querySelector("img");
+        if (img) img.src = url;
+      } catch (e) {
+        a.insertAdjacentHTML("afterend", `<p class="muted">Image indisponible (${escapeHtml(e.message)}).</p>`);
+      }
+    });
   },
 
   async writeJSON(relPath, obj) {
@@ -302,6 +333,7 @@ const Formules = {
       const f = await Store.readJSON("formules/" + entry.chemin);
       await SubstanceNature.ensureLoaded();
       detail.innerHTML = this.renderFormule(f);
+      Store.hydrateImages(detail);
       addEditControls(detail, "formules/" + entry.chemin, f, {
         onSaved: async (parsed) => {
           const i = this.index.findIndex(e => e.id === entry.id);
@@ -327,9 +359,11 @@ const Formules = {
   // un vrai screenshot de la page, pas une reconstruction : plus fidèle et plus rapide à lire.
   renderSchemaImage(relPathFromFormule, categorieId) {
     if (!relPathFromFormule) return "";
-    const src = "data/formules/" + categorieId + "/" + relPathFromFormule;
+    const rel = "formules/" + categorieId + "/" + relPathFromFormule;
+    const vide = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+    const src = Store.mode === "github" ? vide : "data/" + rel;       // en mode GitHub, remplie ensuite par Store.hydrateImages
     return `<section><h3>Analyse de la formule</h3>
-      <a href="${escapeHtml(src)}" target="_blank" rel="noopener" class="schema-image-link">
+      <a href="${escapeHtml(src)}" target="_blank" rel="noopener" class="schema-image-link" data-gh-rel="${Store.mode === "github" ? escapeHtml(rel) : ""}">
         <img src="${escapeHtml(src)}" alt="Analyse de la formule : rôles et interactions des substances" class="schema-image">
       </a>
       <p class="muted" data-aide>Clique sur l'image pour l'agrandir dans un nouvel onglet.</p>
