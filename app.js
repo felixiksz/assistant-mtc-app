@@ -258,6 +258,29 @@ const SubstanceNature = {
       }).catch(() => { /* pas de données : les fiches s'affichent sans nature */ });
     }
     await this._promesse;
+    if (!this._promesseDoses) {
+      this._promesseDoses = Store.readJSON("reference/posologies/posologies.json").then(d => {
+        d.substances.forEach(p => { this.posoParId.set(p.id, p); this.posoParHanzi.set(p.hanzi, p); this.posoParCle.set(this.cle(p.pinyin), p); });
+      }).catch(() => { /* pas de doses de référence : l'interface dit « dose à définir » */ });
+    }
+    await this._promesseDoses;
+  },
+
+  // doses de référence (champ « posologie » du jeu Connections MTC)
+  posoParId: new Map(), posoParHanzi: new Map(), posoParCle: new Map(), _promesseDoses: null,
+  poso(c) {
+    const r = this.trouver(c);
+    const nom = this.cle(String(c.substance_pinyin || "").replace(/\(.*?\)/g, ""));
+    return (r && this.posoParId.get(r.s.id)) || (c.hanzi && this.posoParHanzi.get(String(c.hanzi).trim())) || this.posoParCle.get(nom) || null;
+  },
+  posoCourt(p) {
+    const n = x => String(x).replace(".", ",").replace(/,0$/, "");
+    return p.min === p.max ? `${n(p.min)} ${p.unite}` : `${n(p.min)} à ${n(p.max)} ${p.unite}`;
+  },
+  // pastille « 5 à 10 g » (info-bulle : texte complet de la posologie)
+  pastilleDose(c) {
+    const p = this.poso(c);
+    return p ? `<span class="poso" title="${escapeHtml("Dose de référence (jeu Connections MTC) : " + p.texte)}">${escapeHtml(this.posoCourt(p))}${p.simple ? "" : " *"}</span>` : "";
   },
 
   // substance de la composition -> fiche de pharmacopée ({ s, alias }) ou null
@@ -3840,6 +3863,9 @@ const Proposer = {
     document.querySelectorAll("#prop-signes [data-s]").forEach(b => b.addEventListener("click", () => { this.signes.delete(b.dataset.s); this.rendreChoix(); this.rendre(); }));
   },
 
+  // « fáng fēng (donne …) », « dì gǔ pí ou huáng qín », « huáng lián 3g » -> substance cherchée dans la pharmacopée
+  substAjout(a) { return { substance_pinyin: String(a).replace(/\(.*?\)/g, "").split(/\s+ou\s+/)[0].replace(/\s+\d.*$/, "").trim() }; },
+
   // texte de traitement d'une fiche de syndrome (normalisé) : sert à repérer les formules qu'elle cite
   texteTraitement(detail) { return SubstanceNature.cle(JSON.stringify([detail.traitement || "", detail.propositions_traitement || ""])); },
 
@@ -3909,7 +3935,7 @@ const Proposer = {
     const ligne = l => {
       const mod = l.mod, cle = `${f.id}|${l.k}`;
       const pourquoi = l.concom.length ? `Signe concomitant : ${l.concom.map(label).join(", ")}` : l.synd.length ? `Signe du syndrome non couvert par la formule : ${l.synd.map(label).join(", ")}` : "";
-      const ajouts = mod.ajouts.map(a => `<span class="prop-aj">+ ${escapeHtml(a)} ${SubstanceNature.pastille({ substance_pinyin: a.replace(/\s+\d.*$/, "") })}</span>`).join(" ");
+      const ajouts = mod.ajouts.map(a => `<span class="prop-aj">+ ${escapeHtml(a)} ${SubstanceNature.pastille(this.substAjout(a))} ${SubstanceNature.pastilleDose(this.substAjout(a))}</span>`).join(" ");
       const retraits = mod.retraits.map(a => `<span class="prop-ret">− ${escapeHtml(a)}</span>`).join(" ");
       return `<label class="prop-mod${l.rang ? " pert" : ""}"><input type="checkbox" data-mod="${escapeHtml(cle)}"${(this.choix[f.id] || new Set()).has(l.k) ? " checked" : ""}>` +
         `<span><strong>${escapeHtml(mod.condition || mod.texte.slice(0, 90))}</strong>${mod.principe && mod.condition ? ` <span class="muted">— ${escapeHtml(mod.principe)}</span>` : ""}` +
@@ -3944,8 +3970,11 @@ const Proposer = {
       const sorti = retirees.has(SubstanceNature.cle(String(c.substance_pinyin).replace(/\(.*?\)/g, "")));
       return `<li class="${sorti ? "prop-sorti" : ""}">${escapeHtml(String(c.substance_pinyin))} <span class="muted">${escapeHtml(c.dose || "")}</span> ${SubstanceNature.pastille(c)}${sorti ? " <em>(retirée)</em>" : ""}</li>`;
     }).join("");
-    const plus = ajoutees.map(a => `<li class="prop-ajoute">+ ${escapeHtml(a)} <span class="muted">dose à définir</span> ${SubstanceNature.pastille({ substance_pinyin: a.replace(/\s+\d.*$/, "") })}</li>`).join("");
-    el.innerHTML = `<h4 class="sec-sub">Formule modifiée (modifications cochées)</h4><ul class="prop-liste">${base}${plus}</ul><p class="muted">Les doses des ajouts ne sont pas données par la base : à définir selon ta source.</p>`;
+    const plus = ajoutees.map(a => {
+      const sub = this.substAjout(a), dose = SubstanceNature.pastilleDose(sub), dejaDose = /\d\s*g\b/i.test(a);
+      return `<li class="prop-ajoute">+ ${escapeHtml(a)} ${dose || (dejaDose ? "" : `<span class="muted">dose à définir</span>`)} ${SubstanceNature.pastille(sub)}</li>`;
+    }).join("");
+    el.innerHTML = `<h4 class="sec-sub">Formule modifiée (modifications cochées)</h4><ul class="prop-liste">${base}${plus}</ul><p class="muted">Dose des ajouts : fourchette de référence du jeu Connections MTC (la base des modifications ne donne pas de dose) ; * = texte complet dans l’info-bulle. À ajuster selon ta source et le patient.</p>`;
   }
 };
 Proposer.init();

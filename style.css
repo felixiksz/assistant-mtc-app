@@ -835,3 +835,4 @@ tr.repli > th.cmp-pli::before { content: "▸ "; }
 .cmp-cache { display: none; }
 tr.repli.cmp-cat .cmp-cell { display: none; }
 tr.repli.cmp-cat td::before { content: attr(data-n); color: var(--muted, #666); font-size: 0.85rem; }
+.poso { display: inline-block; border: 1px dashed var(--ink); padding: 0 0.35rem; font-size: 0.78rem; font-weight: 600; white-space: nowrap; cursor: help; }
