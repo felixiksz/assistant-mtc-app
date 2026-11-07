@@ -840,3 +840,28 @@ tr.repli.cmp-cat td::before { content: attr(data-n); color: var(--muted, #666); 
 .poso-au-dessus, .poso-sous { color: #b85c00; }
 .poso-deborde { color: #8a7a00; }
 .poso-legende { font-size: 0.8rem; margin-top: 0.3rem; }
+
+/* Fiche de formule : comparaison avec formules proches (cartes) */
+.proches-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: 0.8rem; margin: 0.6rem 0; }
+.pf-carte { border: 1px solid var(--line); background: var(--panel); padding: 0.7rem 0.8rem; display: flex; flex-direction: column; gap: 0.5rem; border-top: 4px solid var(--accent); }
+.pf-carte.pf-hors { border-style: dashed; border-top-style: dashed; border-top-color: var(--line); }
+.pf-carte header strong { font-size: 1.05rem; }
+.pf-prox { position: relative; height: 1.3rem; border: 1px solid var(--line); background: var(--bg); }
+.pf-prox i { position: absolute; inset: 0 auto 0 0; background: var(--accent-soft); border-right: 2px solid var(--accent); }
+.pf-prox span { position: relative; font-size: 0.78rem; padding: 0 0.4rem; line-height: 1.3rem; }
+.pf-ligne { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+.pf-etiq { display: block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; width: 100%; opacity: 0.8; }
+.pf-chip { display: inline-block; border: 1px solid var(--line); padding: 0.05rem 0.4rem; font-size: 0.82rem; background: var(--bg); }
+.pf-chip small { opacity: 0.8; }
+.pf-moi { background: color-mix(in srgb, #3a9a40 24%, var(--bg)); border-color: #3a9a40; }
+.pf-autre { background: color-mix(in srgb, #d9822b 26%, var(--bg)); border-color: #d9822b; }
+.pf-commun { background: var(--panel); color: inherit; opacity: 0.9; }
+.pf-communs { font-size: 0.85rem; }
+.pf-communs summary { cursor: pointer; margin-bottom: 0.3rem; }
+.pf-indic { margin: 0; font-size: 0.85rem; }
+.pf-indic .pf-etiq { margin-bottom: 0.1rem; }
+.pf-extrait { margin: 0; padding: 0.4rem 0.6rem; border-left: 3px solid var(--accent); background: var(--bg); font-size: 0.85rem; line-height: 1.5; }
+.pf-carte footer { margin-top: auto; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.proches-legende { font-size: 0.8rem; }
+.proches-texte { margin-top: 0.4rem; }
+.proches-texte summary { cursor: pointer; font-size: 0.85rem; }

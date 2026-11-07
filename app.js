@@ -426,6 +426,7 @@ const Formules = {
       await SubstanceNature.ensureLoaded();
       detail.innerHTML = this.renderFormule(f);
       Store.hydrateImages(detail);
+      ProchesFormules.remplir(detail, f);
       detail.prepend(Comparateur.bouton("", () => Comparateur.ajouterFormule(entry.id)));
       addEditControls(detail, "formules/" + entry.chemin, f, {
         onSaved: async (parsed) => {
@@ -483,7 +484,7 @@ const Formules = {
       ${section("Tableau clinique", f.tableau_clinique)}
       ${f.contre_indications_precautions ? `<section><h3>Contre-indications / précautions</h3><div class="tdah-contre-ind">${formatFormuleField(f.contre_indications_precautions)}</div></section>` : ""}
       ${section("Modifications courantes", f.modifications_courantes)}
-      ${section("Comparaison avec formules proches", f.comparaison_formules_proches)}
+      ${f.comparaison_formules_proches ? `<section class="proches"><h3>Comparaison avec formules proches</h3><div class="proches-corps"><div class="tcm-text">${formatFormuleField(f.comparaison_formules_proches)}</div></div></section>` : ""}
       ${verif}
       <p class="muted">Source : ${escapeHtml(f.source && f.source.fichier || "?")}</p>
     `;
@@ -492,6 +493,114 @@ const Formules = {
 
 document.getElementById("formule-search").addEventListener("input", () => Formules.applyFilters());
 Formules.load().then(() => Ajout.populateCategories());
+
+/* ============ Fiche de formule : « Comparaison avec formules proches » en cartes ============
+   Le texte du cours (champ comparaison_formules_proches) est lu pour repérer les formules citées :
+   - formule de la base : carte avec la différence de composition calculée sur les fiches (jamais déduite du texte),
+     barre de proximité, boutons Fiche / Comparer, extrait du cours qui dit ce qui les distingue ;
+   - formule hors base : carte « variante citée » avec l'extrait et les ajouts « + substance » lus dans le texte.
+   Le texte intégral reste disponible sous les cartes. */
+const ProchesFormules = {
+  TYPE: "(?:T[āáǎà]ng|S[āáǎà]n|W[āáǎà]n|Y[īíǐì]n|D[āáǎà]n|G[āáǎà]o|Ji[āáǎà]n|Pi[āáǎà]n|Tang|San|Wan|Yin|Dan|Gao|Jian|Pian)",
+  MOTS_VIDES: new Set(["Variation", "Variations", "Note", "Par", "Peut", "Voir", "Comparer", "Contrairement", "Selon", "Cette", "Cet", "Ce", "La", "Le", "Les", "Une", "Un", "Aussi", "Ainsi", "Alors", "Dans", "Pour", "Avec", "Sans", "Autre", "Proche", "Contient", "Contiennent", "Citée", "Cité", "Voir"]),
+  NON_FORMULES: new Set(["yizongjinjian", "jingguiyaolue", "shanghanlun"]),     // titres de livres
+  idCle: t => dsNorm(String(t || "")).replace(/[^a-z]/g, ""),
+
+  // noms de formules cités, dans l'ordre d'apparition
+  noms(texte) {
+    const rx = new RegExp("(?:[A-ZÀ-Ý][a-zàâāáǎèéēěêìíīǐòóōǒùúūǔǖǘǚǜüûîô]+\\s+){2,9}" + this.TYPE + "\\b", "g");
+    const connues = new Map((Formules.index || []).map(f => [this.idCle(f.pinyin), f]));
+    const vus = new Map();
+    (texte.match(rx) || []).forEach(brut => {
+      let mots = brut.trim().split(/\s+/);
+      while (mots.length > 3 && this.MOTS_VIDES.has(mots[0])) mots = mots.slice(1);       // « Variation », « Contient »… en tête de phrase
+      const k = this.idCle(mots.join(" "));
+      if (!k || this.NON_FORMULES.has(k) || vus.has(k)) return;
+      const c = connues.get(k);
+      vus.set(k, c ? { nom: c.pinyin, base: c } : { nom: mots.join(" "), base: null });
+    });
+    return [...vus.values()];
+  },
+
+  // phrases du cours qui parlent de cette formule
+  extraits(texte, nom) {
+    const k = this.idCle(nom);
+    const phrases = texte.split(/(?<=[.;])\s+(?=[A-ZÀ-Ý])/);
+    const pris = phrases.filter(p => this.idCle(p).includes(k));
+    const t = pris.join(" ");
+    return t.length > 420 ? t.slice(0, 420).replace(/\s+\S*$/, "") + " …" : t;
+  },
+
+  // une ligne de composition peut citer plusieurs substances (« A ou B », « A, B ») : une clé par substance
+  clesSubstance(c) {
+    const f = t => dsNorm(String(t || "").replace(/\(.*?\)/g, "")).replace(/[^a-z0-9]/g, "");
+    const noms = String(c.substance_pinyin || "").replace(/\(.*?\)/g, "").split(/\s+ou\s+|\s*,\s*|\s+et\s+/).map(f).filter(Boolean);
+    if (noms.length > 1) return noms;
+    return [f(c.hanzi || c.substance_pinyin) || noms[0]].filter(Boolean);
+  },
+  lignes(f) { return (f.composition || []).map(c => ({ c, cles: this.clesSubstance(c) })).filter(x => x.cles.length); },
+  memes: (a, b) => a.cles.some(k => b.cles.includes(k)),
+  chip(c, classe, titre) {
+    const nom = String(c.substance_pinyin || "").replace(/\(.*?\)/g, "").trim();
+    return `<span class="pf-chip ${classe}" title="${escapeHtml(titre || "")}">${escapeHtml(nom)}${c.dose ? ` <small>${escapeHtml(String(c.dose).split("(")[0].trim())}</small>` : ""} ${SubstanceNature.pastille(c)}</span>`;
+  },
+  premierNombre(d) { const m = String(d || "").match(/(\d+(?:[.,]\d+)?)/); return m ? parseFloat(m[1].replace(",", ".")) : null; },
+
+  async remplir(racine, f) {
+    const sec = racine.querySelector("section.proches");
+    if (!sec || !f.comparaison_formules_proches) return;
+    const texte = String(f.comparaison_formules_proches);
+    const moi = this.lignes(f);
+    const liste = this.noms(texte).filter(e => this.idCle(e.nom) !== this.idCle(f.pinyin));
+    if (!liste.length) return;                                   // rien à représenter : le texte reste tel quel
+    const cartes = await Promise.all(liste.map(async e => {
+      if (!e.base) return this.carteHorsBase(e, texte);
+      try { return this.carteBase(e, await Store.readJSON("formules/" + e.base.chemin), moi, texte); }
+      catch (err) { return this.carteHorsBase(e, texte); }
+    }));
+    sec.querySelector(".proches-corps").innerHTML =
+      `<p class="muted proches-legende"><span class="pf-chip pf-moi">seulement dans cette formule</span> <span class="pf-chip pf-autre">seulement dans la formule proche</span> <span class="pf-chip pf-commun">en commun</span> — la composition est comparée sur les fiches ; l'extrait vient du cours.</p>` +
+      `<div class="proches-grille">${cartes.join("")}</div>` +
+      `<details class="proches-texte"><summary>Texte intégral du cours</summary><div class="tcm-text">${formatFormuleField(texte)}</div></details>`;
+    sec.querySelectorAll("[data-pf-fiche]").forEach(b => b.addEventListener("click", () => { const e = Formules.index.find(x => x.id === b.dataset.pfFiche); if (e) Formules.showDetail(e); }));
+    sec.querySelectorAll("[data-pf-cmp]").forEach(b => b.addEventListener("click", () => Comparateur.ajouterFormule(b.dataset.pfCmp)));
+  },
+
+  carteBase(e, g, moi, texte) {
+    const eux = this.lignes(g);
+    const communs = moi.filter(a => eux.some(b => this.memes(a, b)));
+    const seulMoi = moi.filter(a => !eux.some(b => this.memes(a, b))), seulEux = eux.filter(b => !moi.some(a => this.memes(a, b)));
+    const union = communs.length + seulMoi.length + seulEux.length;
+    const pct = union ? Math.round((communs.length / union) * 100) : 0;
+    const nom = c => String(c.substance_pinyin || "").replace(/\(.*?\)/g, "").trim();
+    const chipsCommuns = communs.map(a => {
+      const b = eux.find(x => this.memes(a, x)).c, na = this.premierNombre(a.c.dose), nb = this.premierNombre(b.dose);
+      const diff = na != null && nb != null && na !== nb;
+      return `<span class="pf-chip pf-commun" title="${escapeHtml(diff ? `Dose ici : ${a.c.dose} — dans ${g.pinyin} : ${b.dose}` : "même dose")}">${escapeHtml(nom(a.c))}${diff ? ` <small>${escapeHtml(String(a.c.dose).split("(")[0].trim())} ↔ ${escapeHtml(String(b.dose).split("(")[0].trim())}</small>` : ""}</span>`;
+    }).join(" ");
+    const ex = this.extraits(texte, e.nom);
+    return `<article class="pf-carte">
+      <header><strong>${escapeHtml(g.pinyin)}</strong> <span class="hanzi">${escapeHtml(g.hanzi || "")}</span><div class="muted">${escapeHtml(g.nom_fr || "")} · ${escapeHtml(Formules.court(g.categorie_nom || ""))}</div></header>
+      <div class="pf-prox" title="${communs.length} substance(s) en commun sur ${union}"><i style="width:${pct}%"></i><span>${communs.length}/${union} substances en commun</span></div>
+      <div class="pf-ligne"><span class="pf-etiq">Seulement ici (${seulMoi.length})</span>${seulMoi.length ? seulMoi.map(a => this.chip(a.c, "pf-moi")).join(" ") : '<span class="muted">—</span>'}</div>
+      <div class="pf-ligne"><span class="pf-etiq">Seulement dans ${escapeHtml(g.pinyin)} (${seulEux.length})</span>${seulEux.length ? seulEux.map(b => this.chip(b.c, "pf-autre")).join(" ") : '<span class="muted">—</span>'}</div>
+      ${communs.length ? `<details class="pf-communs"><summary>En commun (${communs.length})</summary>${chipsCommuns}</details>` : ""}
+      ${g.indications_syndrome ? `<p class="pf-indic"><span class="pf-etiq">Indication de ${escapeHtml(g.pinyin)}</span>${escapeHtml(g.indications_syndrome.length > 220 ? g.indications_syndrome.slice(0, 220).replace(/\s+\S*$/, "") + " …" : g.indications_syndrome)}</p>` : ""}
+      ${ex ? `<blockquote class="pf-extrait"><span class="pf-etiq">Selon le cours</span>${escapeHtml(ex)}</blockquote>` : ""}
+      <footer><button type="button" class="edit-toggle-btn" data-pf-fiche="${escapeHtml(e.base.id)}">Fiche</button> <button type="button" class="cmp-add" data-pf-cmp="${escapeHtml(e.base.id)}">⇄ Comparer</button></footer>
+    </article>`;
+  },
+
+  carteHorsBase(e, texte) {
+    const ex = this.extraits(texte, e.nom);
+    const plus = [...ex.matchAll(/\+\s*([^,+;()]+?)(?=\s*(?:,|\+|;|\)|\.|$))/g)].map(m => m[1].trim()).filter(Boolean);
+    return `<article class="pf-carte pf-hors">
+      <header><strong>${escapeHtml(e.nom)}</strong><div class="muted">variante citée dans le cours — pas dans ta base</div></header>
+      ${plus.length ? `<div class="pf-ligne"><span class="pf-etiq">Ajouts cités</span>${plus.map(p => `<span class="pf-chip pf-autre">+ ${escapeHtml(p)}</span>`).join(" ")}</div>` : ""}
+      ${ex ? `<blockquote class="pf-extrait"><span class="pf-etiq">Selon le cours</span>${escapeHtml(ex)}</blockquote>` : ""}
+    </article>`;
+  }
+};
 
 /* ============ Tableaux comparatifs de formules (une famille à la fois) ============
    Données : formules/tableaux/tableaux.json, produit par formules/tableaux/generer_tableaux.py
