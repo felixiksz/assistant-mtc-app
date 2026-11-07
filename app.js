@@ -615,8 +615,7 @@ const Formules = {
           li.addEventListener("click", () => this.showVariation(f, li));
           return;
         }
-        const an = Animaux.data && (Animaux.data.par_formule || {})[f.id];
-        li.innerHTML = `<span class="fl-pinyin">${an && an.length ? Animaux.icone("Contient : " + an.join(", ")) : ""}${dsMarque(f.pinyin || f.id, q)}</span>` +
+        li.innerHTML = `<span class="fl-pinyin">${dsMarque(f.pinyin || f.id, q)}</span>` +
           (f.nom_fr ? `<span class="fl-nomfr">${dsMarque(f.nom_fr, q)}</span>` : "") +
           `<span class="fl-syndrome">${dsMarque(f.indications_syndrome || "", q)}</span>`;
         li.addEventListener("click", () => this.showDetail(f, li));
