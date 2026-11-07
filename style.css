@@ -817,3 +817,21 @@ table.tab-comp tr.cts-commun > td, table.tab-comp tr.cts-commun > th:first-child
 .prop-liste { margin: 0.3rem 0; padding-left: 1.2rem; }
 .prop-sorti { text-decoration: line-through; opacity: 0.55; }
 .prop-ajoute { color: #2a6b2a; font-weight: 600; }
+
+/* Comparer : résultats par signe + catégories repliables */
+#cmp-trouves { margin-top: 0.5rem; }
+.cmp-trouves-tete { margin: 0.3rem 0; }
+.cmp-trouves-liste { list-style: none; margin: 0; padding: 0; max-height: 22rem; overflow: auto; border: 1px solid var(--line); background: var(--panel); }
+.cmp-trouves-liste li { border-bottom: 1px dashed var(--line); }
+.cmp-trouve { display: flex; gap: 0.55rem; align-items: flex-start; padding: 0.4rem 0.6rem; cursor: pointer; }
+.cmp-trouve.coche { background: var(--accent-soft); }
+.cmp-trouve input { margin-top: 0.25rem; flex: none; }
+.cmp-trouve-ou { font-size: 0.8rem; font-weight: 700; }
+.cmp-trouve-texte { font-size: 0.8rem; font-style: italic; }
+.cmp-outils { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0.4rem 0; }
+th.cmp-pli, .tab-comp-section th.cmp-pli { cursor: pointer; user-select: none; }
+th.cmp-pli::before { content: "▾ "; }
+tr.repli > th.cmp-pli::before { content: "▸ "; }
+.cmp-cache { display: none; }
+tr.repli.cmp-cat .cmp-cell { display: none; }
+tr.repli.cmp-cat td::before { content: attr(data-n); color: var(--muted, #666); font-size: 0.85rem; }
