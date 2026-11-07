@@ -511,8 +511,11 @@ const ProchesFormules = {
     const rx = new RegExp("(?:[A-ZÀ-Ý][a-zàâāáǎèéēěêìíīǐòóōǒùúūǔǖǘǚǜüûîô]+\\s+){2,9}" + this.TYPE + "\\b", "g");
     const connues = new Map((Formules.index || []).map(f => [this.idCle(f.pinyin), f]));
     const vus = new Map();
-    (texte.match(rx) || []).forEach(brut => {
-      let mots = brut.trim().split(/\s+/);
+    [...texte.matchAll(rx)].forEach(m => {
+      // nom donné comme alias (« sous le nom de … (Dà Bǔ Wán) », « aussi appelée … ») : ce n'est pas une autre formule
+      const avant = texte.slice(Math.max(0, m.index - 110), m.index);
+      if (/(sous le nom|aussi appel|également appel|encore appel|connue? sous|alias|anciennement)[^.;]*$/i.test(avant)) return;
+      let mots = m[0].trim().split(/\s+/);
       while (mots.length > 3 && this.MOTS_VIDES.has(mots[0])) mots = mots.slice(1);       // « Variation », « Contient »… en tête de phrase
       const k = this.idCle(mots.join(" "));
       if (!k || this.NON_FORMULES.has(k) || vus.has(k)) return;
