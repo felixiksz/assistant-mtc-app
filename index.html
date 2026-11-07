@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=54">
+<link rel="stylesheet" href="style.css?v=57">
 <script src="theme.js?v=2"></script>
 </head>
 <body>
@@ -25,7 +25,7 @@
   <button type="button" id="theme-btn" class="sync-btn" aria-expanded="false" aria-controls="theme-panel">🎨 Thème</button>
   <nav class="tabs">
     <button class="tab-btn active" data-tab="formules">Formules</button>
-    <button class="tab-btn" data-tab="cas">Fiche de cas</button>
+    <button class="tab-btn" data-tab="comparer">Comparer</button>
     <button class="tab-btn" data-tab="psy">Principes Taoïstes</button>
     <button class="tab-btn" data-tab="syndromes">Syndromes</button>
     <button class="tab-btn" data-tab="diag-signes">Diagnostic par signes</button>
@@ -103,123 +103,19 @@
     </div>
   </section>
 
-  <!-- ===================== ONGLET FICHE DE CAS ===================== -->
-  <section id="tab-cas" class="tab-panel">
-    <div class="cas-toolbar">
-      <select id="cas-saved-select"><option value="">— Cas sauvegardés (cette machine) —</option></select>
-      <button id="cas-new">Nouveau cas</button>
-      <button id="cas-export">Exporter ce cas (JSON)</button>
-      <label class="file-btn">Importer un cas
-        <input type="file" id="cas-import" accept="application/json" hidden>
-      </label>
-      <button id="cas-delete" class="danger">Supprimer ce cas</button>
+  <!-- ===================== ONGLET COMPARER (syndromes ou formules côte à côte) ===================== -->
+  <section id="tab-comparer" class="tab-panel">
+    <div class="pts-view-toggle">
+      <button type="button" id="cmp-mode-synd" class="cat-chip active">Syndromes</button>
+      <button type="button" id="cmp-mode-form" class="cat-chip">Formules</button>
     </div>
-
-    <form id="cas-form" class="cas-form">
-      <fieldset>
-        <legend>1. Anamnèse</legend>
-        <label>Identifiant du cas (nom/initiales, date)
-          <input type="text" name="identifiant" placeholder="ex: Patiente 36 ans, 2026-08-06">
-        </label>
-        <label>Motif de consultation
-          <textarea name="motif" rows="2"></textarea>
-        </label>
-        <label>Antécédents (médicaux, gynéco, psy, traitements en cours...)
-          <textarea name="antecedents" rows="3"></textarea>
-        </label>
-        <label>Symptômes actuels détaillés
-          <textarea name="symptomes" rows="4"></textarea>
-        </label>
-        <label>Langue (couleur, enduit, forme)
-          <input type="text" name="langue">
-        </label>
-        <label>Pouls
-          <input type="text" name="pouls">
-        </label>
-      </fieldset>
-
-      <fieldset>
-        <legend>2. Différenciation par les huit règles (Ba Gang)</legend>
-        <div class="bagang-grid">
-          <label>Yin / Yang
-            <select name="bagang_yinyang"><option></option><option>Yang</option><option>Yin</option></select>
-          </label>
-          <label>Extérieur / Intérieur
-            <select name="bagang_extint"><option></option><option>Extérieur</option><option>Intérieur</option><option>Mixte</option></select>
-          </label>
-          <label>Froid / Chaleur
-            <select name="bagang_froidchaleur"><option></option><option>Froid</option><option>Chaleur</option><option>Mixte</option></select>
-          </label>
-          <label>Vide / Plénitude
-            <select name="bagang_videplenitude"><option></option><option>Vide</option><option>Plénitude</option><option>Mixte</option></select>
-          </label>
-        </div>
-      </fieldset>
-
-      <fieldset>
-        <legend>3. Différenciation Zang-Fu / étiologie</legend>
-        <textarea name="zangfu" rows="4" placeholder="Organes/entités impliqués, mécanisme physiopathologique, facteur étiologique..."></textarea>
-      </fieldset>
-
-      <fieldset>
-        <legend>3bis. Différenciation psycho-émotionnelle (Farrell) — si pertinent</legend>
-        <p class="muted" data-aide>Cadre distinct de Zang-Fu : à quel niveau se situe la latence, et faut-il la libérer ou la maintenir selon les ressources du patient.</p>
-        <div class="bagang-grid">
-          <label>Niveau de latence identifié
-            <select name="psy_niveau">
-              <option value=""></option>
-              <option value="tendino_musculaire">Tendino-musculaire (Sinew)</option>
-              <option value="luo">Luo</option>
-              <option value="meridiens_distincts">Méridiens Distincts (Jing Bie)</option>
-              <option value="merveilleux_vaisseaux">Merveilleux Vaisseaux (8 EV)</option>
-              <option value="non_applicable">Non applicable</option>
-            </select>
-          </label>
-          <label>Décision : ressources du patient
-            <select name="psy_decision">
-              <option value=""></option>
-              <option value="maintenir">Maintenir la latence (P-S-P)</option>
-              <option value="liberer">Libérer la latence (S-P-S)</option>
-              <option value="non_determine">Non déterminé / à réévaluer</option>
-            </select>
-          </label>
-        </div>
-        <label>Vaisseau / confluence / structure retenue
-          <input type="text" name="psy_vaisseau" placeholder="ex: Yin Wei Mai, Dai Mai + Ren Mai, 2e confluence VB/Foie...">
-        </label>
-        <label>Justification (signes qui orientent ce niveau et ce vaisseau)
-          <textarea name="psy_justification" rows="3"></textarea>
-        </label>
-      </fieldset>
-
-      <fieldset>
-        <legend>4. Syndrome retenu</legend>
-        <textarea name="syndrome" rows="2"></textarea>
-      </fieldset>
-
-      <fieldset>
-        <legend>5. Principe de traitement (Fa)</legend>
-        <textarea name="principe_traitement" rows="2"></textarea>
-      </fieldset>
-
-      <fieldset>
-        <legend>6. Formule(s) envisagée(s)</legend>
-        <input type="search" id="cas-formule-search" placeholder="Chercher dans la base de formules...">
-        <ul id="cas-formule-results"></ul>
-        <div id="cas-formules-choisies"></div>
-        <p class="muted" data-aide>Seules les formules déjà présentes dans ta base vérifiée apparaissent ici. Si rien ne correspond, c'est que ce chapitre n'est pas encore dans la base — ne pas inventer, marquer "à revoir avec le cours".</p>
-      </fieldset>
-
-      <fieldset>
-        <legend>7. Acupuncture / autres pistes</legend>
-        <textarea name="points_notes" rows="3" placeholder="Points envisagés, diététique, etc. (base points/substances à intégrer plus tard)"></textarea>
-      </fieldset>
-
-      <fieldset>
-        <legend>8. Notes libres / suivi</legend>
-        <textarea name="notes" rows="3"></textarea>
-      </fieldset>
-    </form>
+    <p class="muted" data-aide>Choisis 2 à 4 syndromes (ou formules) à comparer : tape un nom ci-dessous, ou utilise le bouton « ⇄ Comparer » présent sur les fiches, les résultats de la recherche par signes et les post-it. Le tableau montre, catégorie par catégorie, les signes de chacun : ce qui est commun à tous apparaît en pâle, ce qui distingue chaque élément est en couleur.</p>
+    <div class="cmp-ajout">
+      <input type="search" id="cmp-search" placeholder="Ajouter un syndrome à comparer (nom, organe, vaisseau…)" autocomplete="off">
+      <ul id="cmp-suggestions"></ul>
+    </div>
+    <div id="cmp-choisis" class="ds-chips"></div>
+    <div id="cmp-resultat"></div>
   </section>
 
   <!-- ===================== ONGLET PRINCIPES TAOÏSTES (Farrell + Sterman) ===================== -->
@@ -310,7 +206,7 @@
 
   <!-- ===================== ONGLET CAS PRATIQUE ===================== -->
   <section id="tab-cas-pratique" class="tab-panel">
-    <p class="muted" data-aide>Cas réels tirés des livres de référence. Lis l'énoncé, pose ton diagnostic (sur papier ou dans l'onglet Fiche de cas), puis révèle le corrigé de l'auteur pour comparer.</p>
+    <p class="muted" data-aide>Cas réels tirés des livres de référence. Lis l'énoncé, pose ton diagnostic (sur papier), puis révèle le corrigé de l'auteur pour comparer.</p>
     <div class="formules-layout">
       <aside class="formules-sidebar">
         <input type="search" id="casp-search" placeholder="Rechercher (sans spoiler)...">
@@ -479,6 +375,6 @@
 
 </main>
 
-<script src="app.js?v=78"></script>
+<script src="app.js?v=80"></script>
 </body>
 </html>

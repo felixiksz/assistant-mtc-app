@@ -58,8 +58,7 @@ Assistant-Diagnostic/
       jing_fang/                     → Shang Han Lun (6 niveaux) + Jin Gui Yao Lue
       occidental/                    → herboristerie occidentale
     reference/                       → bases substances et points
-  cas/                              → cas cliniques exportés en JSON
-                                       (bouton « Exporter ce cas » dans l'onglet Fiche de cas)
+  cas/                              → anciens cas cliniques exportés en JSON (l'onglet « Fiche de cas » a été remplacé par « Comparer »)
 ```
 
 ## Pourquoi plusieurs approches

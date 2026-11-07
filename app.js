@@ -334,6 +334,7 @@ const Formules = {
       await SubstanceNature.ensureLoaded();
       detail.innerHTML = this.renderFormule(f);
       Store.hydrateImages(detail);
+      detail.prepend(Comparateur.bouton("", () => Comparateur.ajouterFormule(entry.id)));
       addEditControls(detail, "formules/" + entry.chemin, f, {
         onSaved: async (parsed) => {
           const i = this.index.findIndex(e => e.id === entry.id);
@@ -1265,6 +1266,7 @@ const Syndromes = {
     try {
       const d = await Store.readJSON(`syndromes/${entry.domaine}/${entry.chemin}`);
       detail.innerHTML = this.renderSyndrome(d, entry.domaine);
+      detail.prepend(Comparateur.bouton("", () => Comparateur.ajouterSyndrome(entry)));
       this.surligner(detail, document.getElementById("syn-search").value);
       addEditControls(detail, "syndromes/" + entry.domaine + "/" + entry.chemin, d, {
         onSaved: async (parsed) => {
@@ -1847,6 +1849,7 @@ const DiagSignes = {
         <div class="ds-result-top">
           <span class="ds-result-name">${escapeHtml(sd.entry.nom)}</span>
           <span class="ds-result-pct">${pct}%</span>
+          <button type="button" class="cmp-add cmp-mini" data-comparer="${escapeHtml(this.cleSynd(sd))}" title="Ajouter au comparateur" aria-label="Comparer">⇄</button>
           <button type="button" class="ds-exclure" data-exclure="${escapeHtml(this.cleSynd(sd))}" title="Écarter ce syndrome des résultats" aria-label="Écarter ce syndrome">✕</button>
         </div>
         <p class="muted">${escapeHtml(Syndromes.domaineLabels[sd.entry.domaine] || "")}${sd.entry.sousLabel ? " · " + escapeHtml(sd.entry.sousLabel) : ""}</p>
@@ -1856,6 +1859,11 @@ const DiagSignes = {
       </div>
     `).join("");
     el.querySelectorAll(".ds-exclure").forEach(b => b.addEventListener("click", ev => { ev.stopPropagation(); this.basculerExclu(b.dataset.exclure); }));
+    el.querySelectorAll("[data-comparer]").forEach(b => b.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const sd = this.syndromesData.find(x => this.cleSynd(x) === b.dataset.comparer);
+      if (sd) Comparateur.ajouterSyndrome(sd.entry);
+    }));
     el.querySelectorAll(".ds-result").forEach(div => {
       div.addEventListener("click", () => {
         const sd = this.syndromesData.find(x => this.cleSynd(x) === div.dataset.cle);
@@ -2480,6 +2488,7 @@ const PostIt = {
     el.style.top = (Math.min(70 + n * 28, window.innerHeight - 200)) + "px";
     el.style.left = etroit ? "3vw" : Math.max(8, window.innerWidth - Math.min(560, window.innerWidth * 0.94) - 20 - n * 30) + "px";
     el.innerHTML = `<div class="postit-tete"><span class="postit-titre">${escapeHtml(entry.nom)}</span>` +
+      `<button type="button" class="postit-comparer" title="Ajouter au comparateur" aria-label="Comparer">⇄</button>` +
       `<button type="button" class="postit-ouvrir" title="Ouvrir dans l'onglet Syndromes">↗</button>` +
       `<button type="button" class="postit-fermer" title="Fermer" aria-label="Fermer">✕</button></div>` +
       `<div class="postit-corps formule-detail"><p class="muted">Chargement...</p></div>`;
@@ -2490,6 +2499,7 @@ const PostIt = {
     el.dataset.cle = cle;
     el.dataset.titre = entry.nom;
     el.querySelector(".postit-fermer").addEventListener("click", () => this.fermer(cle));
+    el.querySelector(".postit-comparer").addEventListener("click", () => Comparateur.ajouterSyndrome(entry));
     el.querySelector(".postit-ouvrir").addEventListener("click", () => {
       document.querySelector('.tab-btn[data-tab="syndromes"]').click();
       Syndromes.showDetail(entry);
@@ -3311,157 +3321,228 @@ document.getElementById("pts-view-croisements").addEventListener("click", () => 
   if (Croisement.data) Croisement.render(Croisement.data.points);
 });
 
-/* ============================= Fiche de cas ============================= */
-const CAS_STORAGE_KEY = "mtc_assistant_cas_v1";
-const form = document.getElementById("cas-form");
-let currentCasId = null;
-let currentCasFormules = []; // [{id, pinyin}]
+/* ============================= Comparer (syndromes ou formules côte à côte) ============================= */
+/* Un tableau pour voir d'un coup d'œil ce qui est commun et ce qui distingue 2 à 4 syndromes (par signes courts, catégorie par catégorie)
+   ou 2 à 4 formules (composition, actions, signes, contre-indications). Le bouton « ⇄ Comparer » ajoute un élément depuis une fiche. */
+const Comparateur = {
+  MAX: 4,
+  mode: "synd",                 // "synd" | "form"
+  synd: [],                     // clés "domaine/chemin"
+  form: [],                     // identifiants de formules
+  _norm: null,
 
-function loadAllCas() {
-  try { return JSON.parse(localStorage.getItem(CAS_STORAGE_KEY) || "{}"); }
-  catch { return {}; }
-}
-function saveAllCas(all) {
-  localStorage.setItem(CAS_STORAGE_KEY, JSON.stringify(all));
-}
+  init() {
+    try {
+      const sauve = JSON.parse(localStorage.getItem("mtc_comparer") || "null");
+      if (sauve) { this.synd = (sauve.synd || []).slice(0, this.MAX); this.form = (sauve.form || []).slice(0, this.MAX); this.mode = sauve.mode === "form" ? "form" : "synd"; }
+    } catch (e) { /* pas de sélection mémorisée */ }
+    document.getElementById("cmp-mode-synd").addEventListener("click", () => this.setMode("synd"));
+    document.getElementById("cmp-mode-form").addEventListener("click", () => this.setMode("form"));
+    document.getElementById("cmp-search").addEventListener("input", e => this.suggerer(e.target.value));
+    document.querySelector('.tab-btn[data-tab="comparer"]').addEventListener("click", () => this.ouvert());
+    this.pastille();
+  },
 
-function refreshCasSelect() {
-  const all = loadAllCas();
-  const sel = document.getElementById("cas-saved-select");
-  sel.innerHTML = '<option value="">— Cas sauvegardés (cette machine) —</option>';
-  Object.values(all)
-    .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))
-    .forEach(c => {
-      const opt = document.createElement("option");
-      opt.value = c._id;
-      opt.textContent = (c.identifiant || "(sans nom)") + " — " + (c.updated_at || "").slice(0, 16).replace("T", " ");
-      sel.appendChild(opt);
+  memoriser() {
+    try { localStorage.setItem("mtc_comparer", JSON.stringify({ synd: this.synd, form: this.form, mode: this.mode })); } catch (e) { /* ignoré */ }
+  },
+
+  liste() { return this.mode === "synd" ? this.synd : this.form; },
+
+  setMode(m) {
+    this.mode = m;
+    document.getElementById("cmp-mode-synd").classList.toggle("active", m === "synd");
+    document.getElementById("cmp-mode-form").classList.toggle("active", m === "form");
+    document.getElementById("cmp-search").placeholder = m === "synd" ? "Ajouter un syndrome à comparer (nom, organe, vaisseau…)" : "Ajouter une formule à comparer (pinyin, indication…)";
+    document.getElementById("cmp-search").value = "";
+    document.getElementById("cmp-suggestions").innerHTML = "";
+    this.memoriser();
+    this.rendre();
+  },
+
+  ouvert() { this.setMode(this.mode); },
+
+  // --- ajout / retrait depuis les fiches
+  ajouterSyndrome(entry) {
+    const cle = `${entry.domaine}/${entry.chemin}`;
+    this.ajouter("synd", cle);
+  },
+  ajouterFormule(id) { this.ajouter("form", id); },
+
+  ajouter(type, cle) {
+    const l = type === "synd" ? this.synd : this.form;
+    if (l.includes(cle)) { this.toast(type, "déjà dans le comparateur"); return; }
+    if (l.length >= this.MAX) l.shift();                       // le plus ancien est remplacé : 4 au maximum
+    l.push(cle);
+    this.memoriser();
+    this.pastille();
+    this.toast(type, "ajouté");
+    if (document.getElementById("tab-comparer").classList.contains("active")) { this.rendre(); }
+  },
+
+  retirer(cle) {
+    const l = this.liste();
+    const i = l.indexOf(cle);
+    if (i >= 0) l.splice(i, 1);
+    this.memoriser(); this.pastille(); this.rendre();
+  },
+
+  toast(type, texte) {
+    const n = (type === "synd" ? this.synd : this.form).length;
+    const p = document.getElementById("cmp-pastille");
+    if (p) { p.dataset.msg = `${texte} (${n}/${this.MAX})`; p.classList.add("msg"); clearTimeout(this._t); this._t = setTimeout(() => p.classList.remove("msg"), 1800); }
+  },
+
+  // pastille flottante « Comparer (n) » : visible dès qu'au moins un élément est choisi
+  pastille() {
+    let p = document.getElementById("cmp-pastille");
+    const n = this.synd.length + this.form.length;
+    if (!n) { if (p) p.remove(); return; }
+    if (!p) {
+      p = document.createElement("button");
+      p.id = "cmp-pastille"; p.type = "button";
+      p.addEventListener("click", () => document.querySelector('.tab-btn[data-tab="comparer"]').click());
+      document.body.appendChild(p);
+    }
+    p.textContent = `⇄ Comparer (${this.synd.length + this.form.length})`;
+  },
+
+  // bouton « ⇄ Comparer » réutilisable
+  bouton(classe, action) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "cmp-add " + (classe || ""); b.textContent = "⇄ Comparer"; b.title = "Ajouter au comparateur";
+    b.addEventListener("click", ev => { ev.stopPropagation(); action(); });
+    return b;
+  },
+
+  // --- recherche dans l'onglet
+  suggerer(q) {
+    const ul = document.getElementById("cmp-suggestions");
+    const nq = dsNorm((q || "").trim());
+    if (!nq) { ul.innerHTML = ""; return; }
+    let res = [];
+    if (this.mode === "synd") {
+      res = Syndromes.entries.filter(e => dsNorm(e.nom).includes(nq) || dsNorm(e.sousLabel).includes(nq))
+        .slice(0, 12).map(e => ({ cle: `${e.domaine}/${e.chemin}`, titre: e.nom, sous: (Syndromes.domaineLabels[e.domaine] || "") + (e.sousLabel ? " · " + e.sousLabel : "") }));
+    } else {
+      res = (Formules.index || []).filter(f => dsNorm([f.pinyin, f.nom_fr, f.indications_syndrome].join(" ")).includes(nq))
+        .slice(0, 12).map(f => ({ cle: f.id, titre: f.pinyin || f.id, sous: f.nom_fr || f.categorie_nom || "" }));
+    }
+    ul.innerHTML = res.length ? res.map(r => `<li data-c="${escapeHtml(r.cle)}"><strong>${escapeHtml(r.titre)}</strong> <span class="muted">${escapeHtml(r.sous)}</span></li>`).join("")
+      : `<li class="muted">Aucun résultat.</li>`;
+    ul.querySelectorAll("li[data-c]").forEach(li => li.addEventListener("click", () => {
+      this.ajouter(this.mode, li.dataset.c);
+      document.getElementById("cmp-search").value = ""; ul.innerHTML = "";
+    }));
+  },
+
+  // --- affichage
+  async rendre() {
+    const choisis = document.getElementById("cmp-choisis");
+    const res = document.getElementById("cmp-resultat");
+    const l = this.liste();
+    choisis.innerHTML = l.length ? l.map(c => `<span class="chosen-item">${escapeHtml(this.nomDe(c))}<button type="button" data-r="${escapeHtml(c)}" aria-label="Retirer">✕</button></span>`).join("") +
+      ` <button type="button" class="edit-toggle-btn" id="cmp-vider">Tout retirer</button>` : "";
+    choisis.querySelectorAll("[data-r]").forEach(b => b.addEventListener("click", () => this.retirer(b.dataset.r)));
+    const vider = document.getElementById("cmp-vider");
+    if (vider) vider.addEventListener("click", () => { l.length = 0; this.memoriser(); this.pastille(); this.rendre(); });
+    if (l.length < 2) {
+      res.innerHTML = `<p class="muted">${l.length ? "Ajoute au moins un deuxième élément pour comparer." : "Aucun élément choisi : ajoute-en deux ou plus."}</p>`;
+      return;
+    }
+    res.innerHTML = `<p class="muted">Chargement…</p>`;
+    try {
+      res.innerHTML = this.mode === "synd" ? await this.tableauSyndromes(l) : await this.tableauFormules(l);
+    } catch (e) { res.innerHTML = `<p class="muted">Impossible de construire le tableau (${escapeHtml(e.message)}).</p>`; return; }
+    res.querySelectorAll("[data-fiche]").forEach(b => b.addEventListener("click", () => this.ouvrirFiche(b.dataset.fiche)));
+    res.querySelectorAll("[data-r]").forEach(b => b.addEventListener("click", () => this.retirer(b.dataset.r)));
+  },
+
+  nomDe(cle) {
+    if (this.mode === "synd") { const e = Syndromes.entries.find(x => `${x.domaine}/${x.chemin}` === cle); return e ? e.nom : cle; }
+    const f = (Formules.index || []).find(x => x.id === cle); return f ? (f.pinyin || f.id) : cle;
+  },
+
+  ouvrirFiche(cle) {
+    if (this.mode === "synd") { const e = Syndromes.entries.find(x => `${x.domaine}/${x.chemin}` === cle); if (e) PostIt.open(e); }
+    else { const f = (Formules.index || []).find(x => x.id === cle); if (f) { document.querySelector('.tab-btn[data-tab="formules"]').click(); Formules.showDetail(f); } }
+  },
+
+  puce(texte, commun) {
+    return `<span class="cmp-chip ${commun ? "cmp-commun" : "cmp-propre"}">${escapeHtml(texte)}</span>`;
+  },
+
+  // ---- syndromes : signes courts classés par catégorie ; commun = présent chez tous
+  async tableauSyndromes(cles) {
+    await DiagSignes.ensureLoaded();
+    const sds = cles.map(c => DiagSignes.syndromesData.find(sd => DiagSignes.cleSynd(sd) === c) || { cle: c, entry: Syndromes.entries.find(e => `${e.domaine}/${e.chemin}` === c), rows: [], courtsParCle: new Map(), signKeys: new Set() });
+    const courts = sds.map(sd => { const s = new Set(); (sd.courtsParCle || new Map()).forEach(ids => ids.forEach(i => s.add(i))); return s; });
+    const infos = DiagSignes.courtsInfo;
+    const cats = [];
+    (DiagSignes.courtsData ? DiagSignes.courtsData.signes : []).forEach(s => { if (!cats.includes(s.categorie)) cats.push(s.categorie); });
+    const entete = sds.map((sd, i) => `<th scope="col"><div class="cmp-nom">${escapeHtml(sd.entry ? sd.entry.nom : sd.cle)}</div>` +
+      `<div class="muted">${escapeHtml(sd.entry ? (Syndromes.domaineLabels[sd.entry.domaine] || "") + (sd.entry.sousLabel ? " · " + sd.entry.sousLabel : "") : "")}</div>` +
+      `<div class="cmp-actions"><button type="button" class="edit-toggle-btn" data-fiche="${escapeHtml(cles[i])}">Fiche</button> <button type="button" class="edit-toggle-btn" data-r="${escapeHtml(cles[i])}" aria-label="Retirer">✕</button></div></th>`).join("");
+    let lignes = "", nCommuns = 0;
+    cats.forEach(cat => {
+      const ids = [...infos.values()].filter(s => s.categorie === cat).map(s => s.id);
+      if (!ids.some(id => courts.some(set => set.has(id)))) return;
+      const cells = courts.map(set => ids.filter(id => set.has(id)).map(id => this.puce(infos.get(id).label, courts.every(x => x.has(id)))).join(" "));
+      ids.forEach(id => { if (courts.every(x => x.has(id))) nCommuns++; });
+      lignes += `<tr><th scope="row">${escapeHtml(cat)}</th>${cells.map(c => `<td>${c || '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
     });
-}
+    // lignes sans signe court : phrases entières, repliées
+    const sans = sds.map(sd => { const vus = new Set(); (sd.courtsParCle || new Map()).forEach((ids, k) => { if (ids.size) vus.add(k); }); return (sd.rows || []).filter(r => !vus.has(r.key)); });
+    const phrases = `<tr><th scope="row">Autres lignes <span class="muted">(phrases entières)</span></th>${sans.map(l => `<td>${l.length ? `<details><summary>${l.length} ligne(s)</summary><ul class="cmp-phrases">${l.map(r => `<li>${escapeHtml(r.text)}</li>`).join("")}</ul></details>` : '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
+    const nb = `<tr><th scope="row">Lignes du tableau</th>${sds.map((sd, i) => `<td class="muted">${(sd.rows || []).length} ligne(s), ${courts[i].size} signe(s) court(s)</td>`).join("")}</tr>`;
+    return `<p class="muted cmp-legende"><span class="cmp-chip cmp-commun">pâle</span> commun à tous · <span class="cmp-chip cmp-propre">couleur</span> propre à certains ${nCommuns ? `· ${nCommuns} signe(s) commun(s) à tous` : "· aucun signe court commun à tous"}</p>` +
+      `<div class="cmp-defile"><table class="cmp-table"><thead><tr><th></th>${entete}</tr></thead><tbody>${nb}${lignes || `<tr><td colspan="${sds.length + 1}" class="muted">Aucun signe court reconnu dans ces syndromes.</td></tr>`}${phrases}</tbody></table></div>`;
+  },
 
-function formToObject() {
-  const data = {};
-  new FormData(form).forEach((v, k) => data[k] = v);
-  data.formules_choisies = currentCasFormules;
-  data._id = currentCasId;
-  data.updated_at = new Date().toISOString();
-  return data;
-}
-
-function objectToForm(data) {
-  [...form.elements].forEach(el => {
-    if (!el.name) return;
-    el.value = data[el.name] || "";
-  });
-  currentCasFormules = data.formules_choisies || [];
-  renderChosenFormules();
-}
-
-function newCas() {
-  form.reset();
-  currentCasId = "cas_" + Date.now();
-  currentCasFormules = [];
-  renderChosenFormules();
-  document.getElementById("cas-saved-select").value = "";
-}
-
-function persistCurrentCas() {
-  if (!currentCasId) currentCasId = "cas_" + Date.now();
-  const all = loadAllCas();
-  const data = formToObject();
-  all[currentCasId] = data;
-  saveAllCas(all);
-  refreshCasSelect();
-  document.getElementById("cas-saved-select").value = currentCasId;
-}
-
-form.addEventListener("input", () => persistCurrentCas());
-
-document.getElementById("cas-new").addEventListener("click", () => newCas());
-
-document.getElementById("cas-saved-select").addEventListener("change", (e) => {
-  const id = e.target.value;
-  if (!id) { newCas(); return; }
-  const all = loadAllCas();
-  if (all[id]) { currentCasId = id; objectToForm(all[id]); }
-});
-
-document.getElementById("cas-delete").addEventListener("click", () => {
-  if (!currentCasId) return;
-  const all = loadAllCas();
-  delete all[currentCasId];
-  saveAllCas(all);
-  refreshCasSelect();
-  newCas();
-});
-
-document.getElementById("cas-export").addEventListener("click", () => {
-  const data = formToObject();
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  const safeName = (data.identifiant || "cas").replace(/[^a-z0-9_\-]+/gi, "_");
-  a.download = safeName + ".json";
-  a.click();
-  URL.revokeObjectURL(a.href);
-});
-
-document.getElementById("cas-import").addEventListener("change", async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const text = await file.text();
-  try {
-    const data = JSON.parse(text);
-    currentCasId = data._id || ("cas_" + Date.now());
-    objectToForm(data);
-    persistCurrentCas();
-  } catch {
-    alert("Fichier JSON invalide.");
+  // ---- formules : composition, actions, signes, contre-indications
+  async tableauFormules(ids) {
+    if (!this._norm) { try { this._norm = await Store.readJSON("formules/tableaux/normalisation.json"); } catch (e) { this._norm = {}; } }
+    await SubstanceNature.ensureLoaded();
+    const fiches = [];
+    for (const id of ids) {
+      const e = (Formules.index || []).find(f => f.id === id);
+      const f = e ? await Store.readJSON("formules/" + e.chemin) : { id, pinyin: id, composition: [] };
+      const n = (this._norm[f.categorie_id] || {})[f.id] || {};
+      fiches.push({ id, f, n });
+    }
+    const cle = t => dsNorm(String(t || "").replace(/\(.*?\)/g, "")).replace(/[^a-z0-9]/g, "");
+    const entete = fiches.map(({ id, f }) => `<th scope="col"><div class="cmp-nom">${escapeHtml(f.pinyin || id)} <span class="hanzi">${escapeHtml(f.hanzi || "")}</span></div>` +
+      `<div class="muted">${escapeHtml(f.nom_fr || "")}</div><div class="muted">${escapeHtml(f.categorie_nom || "")}</div>` +
+      `<div class="cmp-actions"><button type="button" class="edit-toggle-btn" data-fiche="${escapeHtml(id)}">Fiche</button> <button type="button" class="edit-toggle-btn" data-r="${escapeHtml(id)}" aria-label="Retirer">✕</button></div></th>`).join("");
+    const listeAtomique = (champ, titre) => {
+      const sets = fiches.map(x => (x.n[champ] || []));
+      if (!sets.some(s => s.length)) return "";
+      const k = sets.map(s => new Set(s.map(cle)));
+      const cells = sets.map(s => s.map(t => this.puce(t, k.every(set => set.has(cle(t))))).join(" "));
+      return `<tr><th scope="row">${titre}</th>${cells.map(c => `<td>${c || '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
+    };
+    // composition : une ligne par substance (communes en premier)
+    const subs = new Map();
+    fiches.forEach(({ f }, i) => (f.composition || []).forEach(c => {
+      const k = cle(c.hanzi || c.substance_pinyin) || cle(c.substance_pinyin);
+      if (!subs.has(k)) subs.set(k, { nom: String(c.substance_pinyin || "").replace(/\(.*?\)/g, "").trim(), cells: new Array(fiches.length).fill(null) });
+      subs.get(k).cells[i] = c;
+    }));
+    const lignesSubs = [...subs.values()].sort((a, b) => b.cells.filter(Boolean).length - a.cells.filter(Boolean).length || a.nom.localeCompare(b.nom, "fr")).map(s => {
+      const commun = s.cells.every(Boolean);
+      return `<tr><th scope="row">${escapeHtml(s.nom)}</th>${s.cells.map(c => `<td class="${c ? (commun ? "cmp-commun-c" : "cmp-propre-c") : ""}">${c ? `${escapeHtml(c.dose || "")} <span class="muted">${escapeHtml((c.role_hierarchique || "").split(" ")[0])}</span> ${SubstanceNature.pastille(c)}` : '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
+    }).join("");
+    const textes = (titre, fn) => `<tr><th scope="row">${titre}</th>${fiches.map(x => `<td>${escapeHtml(fn(x) || "") || '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
+    return `<p class="muted cmp-legende"><span class="cmp-chip cmp-commun">pâle</span> commun à toutes · <span class="cmp-chip cmp-propre">couleur</span> propre à certaines</p>` +
+      `<div class="cmp-defile"><table class="cmp-table"><thead><tr><th></th>${entete}</tr></thead><tbody>` +
+      textes("Syndrome", x => x.n.syndrome_court || x.f.indications_syndrome) +
+      listeAtomique("actions", "Actions") +
+      `<tr><th scope="row" colspan="${fiches.length + 1}" class="cmp-section">Composition</th></tr>${lignesSubs}` +
+      listeAtomique("signes", "Signes") + listeAtomique("contre_indications", "Contre-indications") +
+      `</tbody></table></div>`;
   }
-  e.target.value = "";
-});
-
-/* --- recherche de formule dans la fiche de cas --- */
-document.getElementById("cas-formule-search").addEventListener("input", (e) => {
-  const results = Formules.search(e.target.value).slice(0, 30);
-  const ul = document.getElementById("cas-formule-results");
-  ul.innerHTML = "";
-  if (e.target.value.trim() && results.length === 0) {
-    ul.innerHTML = `<li class="muted">Rien dans la base pour l'instant — chapitre pas encore couvert, ne pas inventer.</li>`;
-    return;
-  }
-  results.forEach(f => {
-    const li = document.createElement("li");
-    li.innerHTML = `<strong>${escapeHtml(f.pinyin)}</strong> — <span class="muted">${escapeHtml(f.indications_syndrome || "")}</span>`;
-    li.addEventListener("click", () => {
-      if (!currentCasFormules.find(x => x.id === f.id)) {
-        currentCasFormules.push({ id: f.id, pinyin: f.pinyin });
-        renderChosenFormules();
-        persistCurrentCas();
-      }
-    });
-    ul.appendChild(li);
-  });
-});
-
-function renderChosenFormules() {
-  const el = document.getElementById("cas-formules-choisies");
-  el.innerHTML = "";
-  currentCasFormules.forEach(f => {
-    const span = document.createElement("span");
-    span.className = "chosen-item";
-    span.innerHTML = `${escapeHtml(f.pinyin)} <button type="button" title="retirer">×</button>`;
-    span.querySelector("button").addEventListener("click", () => {
-      currentCasFormules = currentCasFormules.filter(x => x.id !== f.id);
-      renderChosenFormules();
-      persistCurrentCas();
-    });
-    el.appendChild(span);
-  });
-}
-
-refreshCasSelect();
-newCas();
+};
+Comparateur.init();
 
 /* ============================= Utils ============================= */
 // Aplati récursivement toutes les chaînes de texte d'un objet JSON (indications, points,
