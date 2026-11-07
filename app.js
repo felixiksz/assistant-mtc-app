@@ -564,31 +564,17 @@ const FormuleTableaux = {
     wrap.querySelectorAll("th.tab-comp-formule").forEach(th => th.addEventListener("click", () => {
       const entry = Formules.index.find(f => f.id === th.dataset.id && f.categorie_id === this.famille);
       if (!entry) return;
-      document.getElementById("formules-view-fiches").click();
+      document.querySelector('.tab-btn[data-tab="formules"]').click();
       Formules.showDetail(entry);
     }));
   }
 };
 
 // Impression : on n'imprime que le tableau (voir @media print dans style.css), y compris avec Ctrl+P.
-function tabCompPrintable() { return document.getElementById("formules-view-tableaux-panel").style.display !== "none"; }
+function tabCompPrintable() { return document.getElementById("formules-view-tableaux-panel").style.display !== "none" && document.getElementById("tab-comparer").classList.contains("active"); }
 window.addEventListener("beforeprint", () => { if (tabCompPrintable()) document.body.classList.add("print-tab-comp"); });
 window.addEventListener("afterprint", () => document.body.classList.remove("print-tab-comp"));
 document.getElementById("tab-comp-print").addEventListener("click", () => window.print());
-
-document.getElementById("formules-view-fiches").addEventListener("click", () => {
-  document.getElementById("formules-view-fiches").classList.add("active");
-  document.getElementById("formules-view-tableaux").classList.remove("active");
-  document.getElementById("formules-view-fiches-panel").style.display = "";
-  document.getElementById("formules-view-tableaux-panel").style.display = "none";
-});
-document.getElementById("formules-view-tableaux").addEventListener("click", () => {
-  document.getElementById("formules-view-tableaux").classList.add("active");
-  document.getElementById("formules-view-fiches").classList.remove("active");
-  document.getElementById("formules-view-fiches-panel").style.display = "none";
-  document.getElementById("formules-view-tableaux-panel").style.display = "";
-  FormuleTableaux.ensureLoaded();
-});
 
 /* ============================= Réf. Psy (Farrell) ============================= */
 const Psy = {
@@ -3394,10 +3380,11 @@ const Comparateur = {
   init() {
     try {
       const sauve = JSON.parse(localStorage.getItem("mtc_comparer") || "null");
-      if (sauve) { this.synd = (sauve.synd || []).slice(0, this.MAX); this.form = (sauve.form || []).slice(0, this.MAX); this.mode = sauve.mode === "form" ? "form" : "synd"; }
+      if (sauve) { this.synd = (sauve.synd || []).slice(0, this.MAX); this.form = (sauve.form || []).slice(0, this.MAX); this.mode = ["form", "fam"].includes(sauve.mode) ? sauve.mode : "synd"; }
     } catch (e) { /* pas de sélection mémorisée */ }
     document.getElementById("cmp-mode-synd").addEventListener("click", () => this.setMode("synd"));
     document.getElementById("cmp-mode-form").addEventListener("click", () => this.setMode("form"));
+    document.getElementById("cmp-mode-fam").addEventListener("click", () => this.setMode("fam"));
     document.getElementById("cmp-search").addEventListener("input", e => this.suggerer(e.target.value));
     document.getElementById("cmp-diff").addEventListener("change", e => document.getElementById("cmp-resultat").classList.toggle("cmp-sans-commun", e.target.checked));
     document.querySelector('.tab-btn[data-tab="comparer"]').addEventListener("click", () => this.ouvert());
@@ -3408,12 +3395,21 @@ const Comparateur = {
     try { localStorage.setItem("mtc_comparer", JSON.stringify({ synd: this.synd, form: this.form, mode: this.mode })); } catch (e) { /* ignoré */ }
   },
 
-  liste() { return this.mode === "synd" ? this.synd : this.form; },
+  liste() { return this.mode === "form" ? this.form : this.synd; },
 
   setMode(m) {
     this.mode = m;
     document.getElementById("cmp-mode-synd").classList.toggle("active", m === "synd");
     document.getElementById("cmp-mode-form").classList.toggle("active", m === "form");
+    document.getElementById("cmp-mode-fam").classList.toggle("active", m === "fam");
+    // le mode « tableaux par famille » a ses propres commandes ; les autres partagent la zone de recherche et le tableau
+    const fam = m === "fam";
+    document.querySelector("#tab-comparer .cmp-ajout").style.display = fam ? "none" : "";
+    document.getElementById("cmp-choisis").style.display = fam ? "none" : "";
+    document.querySelector("#tab-comparer .cmp-option").style.display = fam ? "none" : "";
+    document.getElementById("cmp-resultat").style.display = fam ? "none" : "";
+    document.getElementById("formules-view-tableaux-panel").style.display = fam ? "" : "none";
+    if (fam) { FormuleTableaux.ensureLoaded(); this.memoriser(); return; }
     document.getElementById("cmp-search").placeholder = m === "synd" ? "Ajouter un syndrome à comparer (nom, organe, vaisseau…)" : "Ajouter une formule à comparer (pinyin, indication…)";
     document.getElementById("cmp-search").value = "";
     document.getElementById("cmp-suggestions").innerHTML = "";
@@ -3438,7 +3434,7 @@ const Comparateur = {
     this.memoriser();
     this.pastille();
     this.toast(type, "ajouté");
-    if (document.getElementById("tab-comparer").classList.contains("active")) { this.rendre(); }
+    if (document.getElementById("tab-comparer").classList.contains("active") && this.mode !== "fam") { this.rendre(); }
   },
 
   retirer(cle) {

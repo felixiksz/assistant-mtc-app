@@ -455,8 +455,8 @@ table.tab-comp td.tab-comp-syndrome p { margin: 0 0 0.4rem; }
   /* seul le tableau s'imprime : tout le reste est masqué quand la vue Tableaux est ouverte */
   body.print-tab-comp header.topbar,
   body.print-tab-comp .sync-panel,
-  body.print-tab-comp main > section:not(#tab-formules),
-  body.print-tab-comp #tab-formules > :not(#formules-view-tableaux-panel),
+  body.print-tab-comp main > section:not(#tab-comparer),
+  body.print-tab-comp #tab-comparer > :not(#formules-view-tableaux-panel),
   body.print-tab-comp #formules-view-tableaux-panel > :not(#tab-comp-print-area) { display: none !important; }
   :root {
     --bg: #fff !important; --panel: #fff !important; --ink: #000 !important; --muted: #555 !important; --line: #000 !important;

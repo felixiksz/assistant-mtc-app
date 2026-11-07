@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=60">
+<link rel="stylesheet" href="style.css?v=61">
 <script src="theme.js?v=2"></script>
 </head>
 <body>
@@ -69,24 +69,6 @@
 
   <!-- ===================== ONGLET FORMULES ===================== -->
   <section id="tab-formules" class="tab-panel active">
-    <div class="pts-view-toggle">
-      <button type="button" id="formules-view-fiches" class="cat-chip active">Fiches</button>
-      <button type="button" id="formules-view-tableaux" class="cat-chip">Tableaux comparatifs par famille</button>
-    </div>
-    <div id="formules-view-tableaux-panel" style="display:none;">
-      <div id="tab-comp-familles" class="cat-chip-row"></div>
-      <div class="tab-comp-options">
-        <div class="tab-comp-options-row"><strong>Champs à comparer</strong><div id="tab-comp-champs" class="cat-chip-row"></div></div>
-        <div class="tab-comp-options-row"><span class="muted">Préréglages</span><div id="tab-comp-presets" class="cat-chip-row"></div></div>
-        <details class="tab-comp-formules-details"><summary>Formules affichées</summary><div id="tab-comp-formules-choix" class="cat-chip-row"></div></details>
-        <button type="button" id="tab-comp-print" class="edit-toggle-btn">🖨 Imprimer ce tableau (A4 paysage)</button>
-      </div>
-      <p class="muted" data-aide id="tab-comp-aide">Clique sur le nom d'une formule (en-tête) pour ouvrir sa fiche. Les lignes communes au plus de formules sont en haut.</p>
-      <div id="tab-comp-print-area">
-        <h3 id="tab-comp-print-titre"></h3>
-        <div id="tab-comp-wrap" class="tab-comp-scroll"><p class="muted">Chargement...</p></div>
-      </div>
-    </div>
     <div class="formules-layout" id="formules-view-fiches-panel">
       <aside class="formules-sidebar">
         <div class="sidebar-header-row">
@@ -108,6 +90,7 @@
     <div class="pts-view-toggle">
       <button type="button" id="cmp-mode-synd" class="cat-chip active">Syndromes</button>
       <button type="button" id="cmp-mode-form" class="cat-chip">Formules</button>
+      <button type="button" id="cmp-mode-fam" class="cat-chip">Tableaux par famille de formules</button>
     </div>
     <p class="muted" data-aide>Choisis 2 à 4 syndromes (ou formules) à comparer : tape un nom ci-dessous, ou utilise le bouton « ⇄ Comparer » présent sur les fiches, les résultats de la recherche par signes et les post-it. Le tableau montre, catégorie par catégorie, les signes de chacun : ce qui est commun à tous apparaît en pâle, ce qui distingue chaque élément est en couleur.</p>
     <div class="cmp-ajout">
@@ -117,6 +100,20 @@
     <div id="cmp-choisis" class="ds-chips"></div>
     <label class="cmp-option"><input type="checkbox" id="cmp-diff"> Montrer seulement ce qui diffère</label>
     <div id="cmp-resultat"></div>
+    <div id="formules-view-tableaux-panel" class="cmp-familles" style="display:none;">
+      <div id="tab-comp-familles" class="cat-chip-row"></div>
+      <div class="tab-comp-options">
+        <div class="tab-comp-options-row"><strong>Champs à comparer</strong><div id="tab-comp-champs" class="cat-chip-row"></div></div>
+        <div class="tab-comp-options-row"><span class="muted">Préréglages</span><div id="tab-comp-presets" class="cat-chip-row"></div></div>
+        <details class="tab-comp-formules-details"><summary>Formules affichées</summary><div id="tab-comp-formules-choix" class="cat-chip-row"></div></details>
+        <button type="button" id="tab-comp-print" class="edit-toggle-btn">🖨 Imprimer ce tableau (A4 paysage)</button>
+      </div>
+      <p class="muted" data-aide id="tab-comp-aide">Clique sur le nom d'une formule (en-tête) pour ouvrir sa fiche. Les lignes communes au plus de formules sont en haut.</p>
+      <div id="tab-comp-print-area">
+        <h3 id="tab-comp-print-titre"></h3>
+        <div id="tab-comp-wrap" class="tab-comp-scroll"><p class="muted">Chargement...</p></div>
+      </div>
+    </div>
   </section>
 
   <!-- ===================== ONGLET PRINCIPES TAOÏSTES (Farrell + Sterman) ===================== -->
@@ -376,6 +373,6 @@
 
 </main>
 
-<script src="app.js?v=81"></script>
+<script src="app.js?v=82"></script>
 </body>
 </html>
