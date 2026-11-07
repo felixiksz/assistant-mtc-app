@@ -333,7 +333,7 @@ const SubstanceNature = {
 const CarteMentale = {
   NAT: { T: "tiède", N: "neutre", F: "froid", C: "chaud", lgF: "légèrement froid", lgT: "légèrement tiède", Tox: "toxique" },
   SAV: { D: "doux", P: "piquant", Am: "amer", am: "amer", Ac: "acide", S: "salé" },
-  TITRES: { syndromes: "Syndromes et applications", description: "Description", action: "Action", indications: "Indications", preparation: "Préparation", contre_indications: "Contre-indications" },
+  TITRES: { syndromes: "Syndromes et applications", description: "Description", action: "Action", indications: "Indications", preparation: "Préparation", contre_indications: "Contre-indications", variation: "Variation" },
   cle(t) { return SubstanceNature.cle(String(t || "").replace(/[\u4e00-\u9fff]/g, "").replace(/\(.*?\)/g, "")); },
   carte(id, variation) { const d = Formules.cartes; return d ? ((variation ? d.variations : d.formules) || {})[id] || null : null; },
   PREFIXES: /^(zhi|sheng|chao|jiu|pao|yan|shu|xi|mizhi)/,
@@ -366,14 +366,26 @@ const CarteMentale = {
   },
   // sections de la carte absentes de la fiche (part des mots déjà dans la fiche < 75 %) ; pour une variation : toutes
   bloc(id, variation) {
-    const c = this.carte(id, variation);
-    if (!c) return "";
+    const c0 = this.carte(id, variation);
+    const sf = Formules.cartes && Formules.cartes.syndromes_famille ? Formules.cartes.syndromes_famille[variation ? "variations" : "formules"][id] : null;
+    const sfMontre = sf && (variation || sf.couverture == null || sf.couverture < 0.75);
+    if (!c0 && !sfMontre) return "";
+    const c = c0 || { sections: {}, couverture: {}, modifications: [], ingredients: [], nat: null, sav: null, fichier: "carte de la famille" };
     const secs = Object.entries(c.sections).filter(([k, v]) => variation || c.couverture[k] == null || c.couverture[k] < 0.75);
     const nat = c.nat || c.sav ? `<p><span class="cm-etiq">Nature</span> ${this.decoder(c.nat, this.NAT) || "—"} · <span class="cm-etiq">Saveur</span> ${this.decoder(c.sav, this.SAV) || "—"} <span class="muted">(codes de ta carte)</span></p>` : "";
     const sections = secs.map(([k, v]) => `<div class="cm-sec"><span class="cm-etiq">${escapeHtml(this.TITRES[k] || k)}</span><div class="cm-texte">${escapeHtml(v)}</div></div>`).join("");
     const mods = !variation && c.modifications.length ? `<div class="cm-sec"><span class="cm-etiq">Modifications (ta carte)</span><table class="cm-tab"><thead><tr><th>Si…</th><th>Action</th><th>Plantes</th></tr></thead><tbody>${c.modifications.map(m => `<tr><td>${escapeHtml(m.condition)}</td><td>${escapeHtml(m.action)}</td><td>${[...m.ajouts.map(a => `<span class="cm-aj">+ ${escapeHtml(a)}</span>`), ...m.retraits.map(a => `<span class="cm-re">− ${escapeHtml(a)}</span>`), m.plantes_sans_signe ? `<span class="muted">à renforcer : ${escapeHtml(m.plantes_sans_signe)}</span>` : "", m.donne ? `<span class="muted">= ${escapeHtml(m.donne)}</span>` : ""].filter(Boolean).join(" ") || escapeHtml(m.plantes)}</td></tr>`).join("")}</tbody></table></div>` : "";
-    if (!nat && !sections && !mods) return "";
-    return `<section class="carte-mentale"><h3>Ta carte mentale${variation ? "" : " — en plus de la fiche"}</h3>${nat}${sections}${mods}<p class="muted cm-note">Textes de ta carte « ${escapeHtml(c.fichier.split("\\").pop().replace(/\.pdf$/, ""))} », copiés tels quels.</p></section>`;
+    const synd = sfMontre ? `<div class="cm-sec"><span class="cm-etiq">Syndrome (carte de la famille)</span><div class="cm-texte">${escapeHtml(sf.texte)}</div></div>` : "";
+    if (!nat && !sections && !mods && !synd) return "";
+    return `<section class="carte-mentale"><h3>Ta carte mentale${variation ? "" : " — en plus de la fiche"}</h3>${nat}${synd}${sections}${mods}<p class="muted cm-note">Textes de ta carte « ${escapeHtml(c.fichier.split("\\").pop().replace(/\.pdf$/, ""))} »${c0 ? "" : ""}, copiés tels quels.</p></section>`;
+  },
+  // texte des cartes de famille (blocs de la page, dans l'ordre de lecture), pour une famille de l'app
+  blocFamille(categorieId) {
+    const fams = (Formules.cartes && Formules.cartes.familles || []).filter(f => f.categories.includes(categorieId));
+    if (!fams.length) return "";
+    return fams.map(f => `<details class="cm-famille"><summary>Ta carte mentale de la famille « ${escapeHtml(f.fichier.replace(/^Cartes mentales /, "").replace(/\.pdf$/, ""))} »</summary>` +
+      `<div class="cm-famille-corps">${f.blocs.map(b => `<p>${escapeHtml(b.texte)}</p>`).join("")}</div>` +
+      `<p class="muted cm-note">Texte de ta carte, dans l'ordre de lecture ; le schéma (cercles, triangle) n'est pas reproduit.</p></details>`).join("");
   },
   // composition de la carte d'une variation (avec doses)
   tableauIngredients(c) {
@@ -683,7 +695,8 @@ const Formules = {
     const an = Animaux.depuisLignes(lignes.length ? lignes.filter(l => l.statut !== "retire").map(l => l.c) : (v.non_detaillee && !v.ajouts.length ? [] : fp.composition), v.ajouts, fp.mode_de_preparation_posologie, v.nom);
     return `<h2>${escapeHtml(v.nom)} ${v.hanzi ? `<span class="hanzi">${escapeHtml(v.hanzi)}</span>` : ""}</h2>
       <p class="muted">${v.type === "variation" ? "Variation" : escapeHtml(v.type)} de <button type="button" class="edit-toggle-btn" data-parent="1">${escapeHtml(parent.pinyin)}</button>${base ? ` (à partir de ${escapeHtml(base.nom)})` : ""}${v.alias.length ? ` · aussi appelée ${v.alias.map(escapeHtml).join(", ")}` : ""}</p>
-      ${v.non_detaillee ? `<p class="sx-alerte">Variation seulement citée par le cours : sa composition n'y est pas détaillée.</p>` : ""}
+      ${v.non_detaillee && !carteVar ? `<p class="sx-alerte">Variation seulement citée par le cours : sa composition n'y est pas détaillée.</p>` : ""}
+      ${v.non_detaillee && carteVar ? `<p class="muted">Le cours ne détaille pas cette variation ; sa composition vient de ta carte mentale.</p>` : ""}
       ${v.note ? `<p class="muted">${escapeHtml(v.note)}</p>` : ""}
       ${Sinolux.blocCodes(v.sinolux, v.nom, v.sinolux_proches)}
       ${Animaux.bloc(an)}
@@ -4770,7 +4783,7 @@ Object.assign(Comparateur, {
     const cols = [];
     for (const e of Formules.index.filter(f => f.categorie_id === id)) { try { cols.push({ g: await Store.readJSON("formules/" + e.chemin), id: e.id, nom: e.pinyin }); } catch (err) { /* formule illisible : ignorée */ } }
     if (cols.length < 2) { corps.innerHTML = `<p class="muted">Cette famille n'a qu'une formule : rien à comparer.</p>`; return; }
-    corps.innerHTML = `<div class="pf-vue">${ProchesFormules.arbre(cols, null)}</div>`;
+    corps.innerHTML = `<div class="pf-vue">${ProchesFormules.arbre(cols, null)}</div>${CarteMentale.blocFamille(id)}`;
     corps.querySelectorAll("[data-pf-fiche]").forEach(b => b.addEventListener("click", () => { const e = Formules.index.find(x => x.id === b.dataset.pfFiche); if (e) { document.querySelector('.tab-btn[data-tab="formules"]').click(); Formules.showDetail(e); } }));
     corps.querySelectorAll("[data-pf-cmp]").forEach(b => b.addEventListener("click", () => this.ajouterFormule(b.dataset.pfCmp)));
     ProchesFormules.survol(corps);
