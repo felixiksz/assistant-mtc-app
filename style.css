@@ -997,3 +997,4 @@ section.carte-mentale h3 { margin-top: 0; }
 .pm-retrait strong { text-decoration: line-through; text-decoration-thickness: 1.5px; }
 .cm-aj, .cm-re { display: inline-block; border: 1px solid var(--ink); padding: 0 0.3rem; margin: 0.1rem 0.2rem 0.1rem 0; white-space: nowrap; }
 .cm-re { border-style: dashed; text-decoration: line-through; }
+.cm-pharma { font-size: 0.85rem; cursor: help; }

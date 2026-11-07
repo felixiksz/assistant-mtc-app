@@ -336,12 +336,29 @@ const CarteMentale = {
   TITRES: { syndromes: "Syndromes et applications", description: "Description", action: "Action", indications: "Indications", preparation: "Préparation", contre_indications: "Contre-indications" },
   cle(t) { return SubstanceNature.cle(String(t || "").replace(/[\u4e00-\u9fff]/g, "").replace(/\(.*?\)/g, "")); },
   carte(id, variation) { const d = Formules.cartes; return d ? ((variation ? d.variations : d.formules) || {})[id] || null : null; },
-  // fonction de chaque plante telle qu'écrite dans la carte (« Tonifie le Qi », « Piquante fraiche »…)
+  PREFIXES: /^(zhi|sheng|chao|jiu|pao|yan|shu|xi|mizhi)/,
+  // fonction d'une plante dans la formule : d'abord celle de ta carte mentale (« Tonifie le Qi », « Piquante fraiche »…),
+  // sinon les actions de la pharmacopée du jeu (marquées comme telles)
   fonction(id, c, variation) {
-    const k = this.cle(c.substance_pinyin), carte = this.carte(id, variation);
-    if (!carte) return "";
-    const l = carte.ingredients.find(x => this.cle(x.nom) === k);
-    return l ? l.fonction : "";
+    const carte = this.carte(id, variation);
+    const k = this.cle(c.substance_pinyin), hz = String(c.hanzi || "").replace(/[^\u4e00-\u9fff]/g, "");
+    if (carte) {
+      const l = carte.ingredients.find(x => this.cle(x.nom) === k)
+        || (hz.length >= 2 && carte.ingredients.find(x => x.hanzi && x.hanzi.length >= 2 && (x.hanzi === hz || hz.endsWith(x.hanzi) || x.hanzi.endsWith(hz))))
+        || carte.ingredients.find(x => this.cle(x.nom) === k.replace(this.PREFIXES, ""));
+      if (l) return { texte: l.fonction, source: "carte" };
+    }
+    const im = Formules.fonctionsImages && (Formules.fonctionsImages[id] || {})[k];
+    if (im && !variation) return { texte: im.texte, source: "image" };
+    const r = SubstanceNature.trouver(c), f = r && Formules.fonctions ? Formules.fonctions.get(r.s.id) : null;
+    if (f && f.actions.length) return { texte: f.actions.slice(0, 3).join(" · "), source: "pharma", classe: f.classe };
+    return { texte: "", source: "" };
+  },
+  celluleFonction(id, c, variation) {
+    const r = this.fonction(id, c, variation);
+    if (!r.texte) return '<span class="muted">—</span>';
+    if (r.source === "image") return `${escapeHtml(r.texte)} <small class="muted">image d'analyse</small>`;
+    return r.source === "carte" ? escapeHtml(r.texte) : `<span class="cm-pharma" title="${escapeHtml(r.classe || "")}">${escapeHtml(r.texte)}</span> <small class="muted">pharmacopée</small>`;
   },
   decoder(codes, table) {
     if (!codes) return "";
@@ -469,6 +486,8 @@ const Formules = {
   variations: [],
   varParId: new Map(),
   cartes: null,
+  fonctions: null,
+  fonctionsImages: null,
 
   async load() {
     try {
@@ -483,6 +502,8 @@ const Formules = {
       this.variations = (await Store.readJSON("formules/variations/variations.json")).variations;
       this.varParId = new Map(this.variations.map(v => [v.id, v]));
     } catch (e) { /* pas de variations : la liste reste celle des formules */ }
+    try { this.fonctions = new Map((await Store.readJSON("reference/pharmacopee_fonctions/fonctions.json")).substances.map(x => [x.id, x])); } catch (e) { /* pas de pharmacopée : seules les fonctions des cartes s'affichent */ }
+    try { this.fonctionsImages = (await Store.readJSON("formules/cartes_mentales/fonctions_images.json")).formules; } catch (e) { /* pas de transcription des images */ }
     try { this.cartes = await Store.readJSON("formules/cartes_mentales/cartes.json"); } catch (e) { /* pas de cartes : les fiches restent celles du cours */ }
     this.renderCategories();
     this.renderList(this.index);
@@ -657,7 +678,7 @@ const Formules = {
     const lignes = ((v.non_detaillee && !v.ajouts.length && !v.retraits.length) || v.composition_deduite === false) ? [] : this.compositionVariation(v, fp);
     const base = v.base !== v.parent && this.varParId.get(v.base) ? this.varParId.get(v.base) : null;
     const chips = [...v.ajouts.map(a => `<span class="pf-chip pf-moi">+ ${escapeHtml(a)}</span>`), ...v.retraits.map(a => `<span class="pf-chip pf-autre">− ${escapeHtml(a)}</span>`)].join(" ");
-    const tableau = lignes.length ? `<table><thead><tr><th>Substance</th><th>Dose</th><th>Nature</th><th>Écart</th></tr></thead><tbody>${lignes.map(l => `<tr class="${l.statut === "retire" ? "prop-sorti" : ""}"><td>${escapeHtml(String(l.c.substance_pinyin || "").replace(/\(.*?\)/g, "").trim())} ${Animaux.marque(l.c.substance_pinyin)}</td><td>${escapeHtml(l.c.dose || "")}</td><td>${SubstanceNature.pastille(l.c)}</td><td>${l.statut === "ajoute" ? "ajoutée" : l.statut === "retire" ? "retirée" : ""}</td></tr>`).join("")}</tbody></table>` : "";
+    const tableau = lignes.length ? `<table><thead><tr><th>Substance</th><th>Dose</th><th>Nature</th><th>Fonction</th><th>Écart</th></tr></thead><tbody>${lignes.map(l => `<tr class="${l.statut === "retire" ? "prop-sorti" : ""}"><td>${escapeHtml(String(l.c.substance_pinyin || "").replace(/\(.*?\)/g, "").trim())} ${Animaux.marque(l.c.substance_pinyin)}</td><td>${escapeHtml(l.c.dose || "")}</td><td>${SubstanceNature.pastille(l.c)}</td><td>${CarteMentale.celluleFonction(v.parent, l.c)}</td><td>${l.statut === "ajoute" ? "ajoutée" : l.statut === "retire" ? "retirée" : ""}</td></tr>`).join("")}</tbody></table>` : "";
     const carteVar = CarteMentale.carte(v.id, true);
     const an = Animaux.depuisLignes(lignes.length ? lignes.filter(l => l.statut !== "retire").map(l => l.c) : (v.non_detaillee && !v.ajouts.length ? [] : fp.composition), v.ajouts, fp.mode_de_preparation_posologie, v.nom);
     return `<h2>${escapeHtml(v.nom)} ${v.hanzi ? `<span class="hanzi">${escapeHtml(v.hanzi)}</span>` : ""}</h2>
@@ -676,7 +697,7 @@ const Formules = {
 
   renderFormule(f) {
     const comp = (f.composition || []).map(c =>
-      `<tr><td>${escapeHtml(c.substance_pinyin || "")}</td><td>${escapeHtml(c.hanzi || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td><td>${SubstanceNature.pastille(c)}</td><td>${SubstanceNature.celluleDose(c)}</td><td>${Sinolux.cellule(c)}</td>${Formules.cartes && Formules.cartes.formules[f.id] ? `<td>${escapeHtml(CarteMentale.fonction(f.id, c))}</td>` : ""}</tr>`
+      `<tr><td>${escapeHtml(c.substance_pinyin || "")}</td><td>${escapeHtml(c.hanzi || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td><td>${SubstanceNature.pastille(c)}</td><td>${SubstanceNature.celluleDose(c)}</td><td>${Sinolux.cellule(c)}</td><td>${CarteMentale.celluleFonction(f.id, c)}</td></tr>`
     ).join("");
     const verif = (f.a_verifier && f.a_verifier.length)
       ? `<section><h3>À vérifier contre la source</h3>${f.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("")}</section>`
@@ -688,7 +709,7 @@ const Formules = {
       ${f.nom_fr ? `<p><em>${escapeHtml(f.nom_fr)}</em></p>` : ""}
       ${Sinolux.blocFormule(f.id)}
       ${Animaux.bloc(Animaux.depuisFiche(f))}
-      ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th><th>Dose de référence</th><th>Code SINOLUX</th>${Formules.cartes && Formules.cartes.formules[f.id] ? "<th>Fonction (ta carte)</th>" : ""}</tr></thead><tbody>${comp}</tbody></table><p class="muted poso-legende">⚠ à côté d'un code = l'équivalence avec le catalogue SINOLUX n'est pas stricte (survole le signe). Dose de référence : jeu Connections MTC. ▲ ▼ ≈ = la dose de la fiche sort (ou déborde) de cette fourchette : pas forcément une erreur (dose classique, pilules, valeur propre à la formule). * = précisions dans l'info-bulle.</p></section>` : ""}
+      ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th><th>Dose de référence</th><th>Code SINOLUX</th><th>Fonction dans la formule</th></tr></thead><tbody>${comp}</tbody></table><p class="muted poso-legende">⚠ à côté d'un code = l'équivalence avec le catalogue SINOLUX n'est pas stricte (survole le signe). Dose de référence : jeu Connections MTC. ▲ ▼ ≈ = la dose de la fiche sort (ou déborde) de cette fourchette : pas forcément une erreur (dose classique, pilules, valeur propre à la formule). * = précisions dans l'info-bulle.</p></section>` : ""}
       ${this.renderSchemaImage(f.schema_image, f.categorie_id)}
       ${section("Préparation / posologie", f.mode_de_preparation_posologie)}
       ${section("Actions thérapeutiques", f.actions_therapeutiques)}
