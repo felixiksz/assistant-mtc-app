@@ -283,6 +283,28 @@ const SubstanceNature = {
     return p ? `<span class="poso" title="${escapeHtml("Dose de référence (jeu Connections MTC) : " + p.texte)}">${escapeHtml(this.posoCourt(p))}${p.simple ? "" : " *"}</span>` : "";
   },
 
+  // dose de la fiche vs fourchette de référence : "ok" (une des valeurs en g est dans la fourchette, y compris entre parenthèses),
+  // "deborde" (chevauche sans y rentrer), "sous" / "au-dessus" (aucune valeur dans la fourchette) ; null si comparaison impossible (autre unité, QS…)
+  etatDose(c) {
+    const p = this.poso(c);
+    if (!p || p.unite !== "g") return null;
+    const qs = [...String(c.dose || "").matchAll(/(\d+(?:[.,]\d+)?)(?:\s*(?:à|-)\s*(\d+(?:[.,]\d+)?))?\s*g\b/g)]
+      .map(m => { const a = parseFloat(m[1].replace(",", ".")); return [a, m[2] ? parseFloat(m[2].replace(",", ".")) : a]; });
+    if (!qs.length) return null;
+    if (qs.some(([a, b]) => a >= p.min && b <= p.max)) return { etat: "ok", p };
+    if (qs.some(([a, b]) => !(b < p.min || a > p.max))) return { etat: "deborde", p };
+    return { etat: qs[0][1] < p.min ? "sous" : "au-dessus", p };
+  },
+  // petit signe à côté de la dose (vide si dans la fourchette ou comparaison impossible)
+  marqueDose(c) {
+    const r = this.etatDose(c);
+    if (!r || r.etat === "ok") return "";
+    const txt = { deborde: "déborde de", sous: "est en dessous de", "au-dessus": "est au-dessus de" }[r.etat];
+    const sym = { deborde: "≈", sous: "▼", "au-dessus": "▲" }[r.etat];
+    return `<span class="poso-hors poso-${r.etat}" title="${escapeHtml(`La dose de la fiche (${c.dose}) ${txt} la fourchette de référence (${this.posoCourt(r.p)}). Pas forcément une erreur : dose classique, pilules, valeur propre à la formule…`)}">${sym}</span>`;
+  },
+  celluleDose(c) { return [this.pastilleDose(c), this.marqueDose(c)].filter(Boolean).join(" ") || '<span class="muted">—</span>'; },
+
   // substance de la composition -> fiche de pharmacopée ({ s, alias }) ou null
   trouver(c) {
     if (!this.data) return null;
@@ -443,7 +465,7 @@ const Formules = {
 
   renderFormule(f) {
     const comp = (f.composition || []).map(c =>
-      `<tr><td>${escapeHtml(c.substance_pinyin || "")}</td><td>${escapeHtml(c.hanzi || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td><td>${SubstanceNature.pastille(c)}</td></tr>`
+      `<tr><td>${escapeHtml(c.substance_pinyin || "")}</td><td>${escapeHtml(c.hanzi || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td><td>${SubstanceNature.pastille(c)}</td><td>${SubstanceNature.celluleDose(c)}</td></tr>`
     ).join("");
     const verif = (f.a_verifier && f.a_verifier.length)
       ? `<section><h3>À vérifier contre la source</h3>${f.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("")}</section>`
@@ -453,7 +475,7 @@ const Formules = {
       <h2>${escapeHtml(f.pinyin || f.id)} <span class="hanzi">${escapeHtml(f.hanzi || "")}</span></h2>
       <p class="muted">${escapeHtml(f.categorie_nom || "")}${f.sous_type ? " · " + escapeHtml(f.sous_type) : ""}</p>
       ${f.nom_fr ? `<p><em>${escapeHtml(f.nom_fr)}</em></p>` : ""}
-      ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th></tr></thead><tbody>${comp}</tbody></table></section>` : ""}
+      ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th><th>Dose de référence</th></tr></thead><tbody>${comp}</tbody></table><p class="muted poso-legende">Dose de référence : jeu Connections MTC. ▲ ▼ ≈ = la dose de la fiche sort (ou déborde) de cette fourchette : pas forcément une erreur (dose classique, pilules, valeur propre à la formule). * = précisions dans l'info-bulle.</p></section>` : ""}
       ${this.renderSchemaImage(f.schema_image, f.categorie_id)}
       ${section("Préparation / posologie", f.mode_de_preparation_posologie)}
       ${section("Actions thérapeutiques", f.actions_therapeutiques)}
@@ -3737,7 +3759,7 @@ const Comparateur = {
     }));
     const lignesSubs = [...subs.values()].sort((a, b) => b.cells.filter(Boolean).length - a.cells.filter(Boolean).length || a.nom.localeCompare(b.nom, "fr")).map(s => {
       const commun = s.cells.every(Boolean);
-      return `<tr class="cmp-sub-compo${commun ? " cmp-ligne-commune" : ""}"><th scope="row">${escapeHtml(s.nom)}</th>${s.cells.map(c => `<td class="${c ? (commun ? "cmp-commun-c" : "cmp-propre-c") : ""}">${c ? `${escapeHtml(c.dose || "")} <span class="muted">${escapeHtml((c.role_hierarchique || "").split(" ")[0])}</span> ${SubstanceNature.pastille(c)}` : '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
+      return `<tr class="cmp-sub-compo${commun ? " cmp-ligne-commune" : ""}"><th scope="row">${escapeHtml(s.nom)}</th>${s.cells.map(c => `<td class="${c ? (commun ? "cmp-commun-c" : "cmp-propre-c") : ""}">${c ? `${escapeHtml(c.dose || "")} <span class="muted">${escapeHtml((c.role_hierarchique || "").split(" ")[0])}</span> ${SubstanceNature.pastille(c)} ${SubstanceNature.marqueDose(c)}` :'<span class="muted">—</span>'}</td>`).join("")}</tr>`;
     }).join("");
     const textes = (titre, fn) => `<tr><th scope="row">${titre}</th>${fiches.map(x => `<td>${escapeHtml(fn(x) || "") || '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
     return `<p class="muted cmp-legende"><span class="cmp-chip cmp-commun">pâle</span> commun à toutes · <span class="cmp-chip cmp-propre">couleur</span> propre à certaines</p>` +

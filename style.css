@@ -836,3 +836,7 @@ tr.repli > th.cmp-pli::before { content: "▸ "; }
 tr.repli.cmp-cat .cmp-cell { display: none; }
 tr.repli.cmp-cat td::before { content: attr(data-n); color: var(--muted, #666); font-size: 0.85rem; }
 .poso { display: inline-block; border: 1px dashed var(--ink); padding: 0 0.35rem; font-size: 0.78rem; font-weight: 600; white-space: nowrap; cursor: help; }
+.poso-hors { display: inline-block; margin-left: 0.2rem; font-weight: 700; cursor: help; }
+.poso-au-dessus, .poso-sous { color: #b85c00; }
+.poso-deborde { color: #8a7a00; }
+.poso-legende { font-size: 0.8rem; margin-top: 0.3rem; }
