@@ -998,3 +998,12 @@ section.carte-mentale h3 { margin-top: 0; }
 .cm-aj, .cm-re { display: inline-block; border: 1px solid var(--ink); padding: 0 0.3rem; margin: 0.1rem 0.2rem 0.1rem 0; white-space: nowrap; }
 .cm-re { border-style: dashed; text-decoration: line-through; }
 .cm-pharma { font-size: 0.85rem; cursor: help; }
+
+/* Tortue : substance animale */
+.an-tortue { width: 1.6em; height: 1.6em; vertical-align: -0.5em; margin-right: 0.35em; flex: none; color: var(--ink); }
+.an-ligne > td:first-child, .an-ligne > th:first-child { box-shadow: inset 3px 0 0 var(--ink); }
+section.animaux ul { list-style: none; padding-left: 0; }
+.an-li { display: flex; gap: 0.5rem; align-items: flex-start; margin: 0.3rem 0; }
+.an-li .an-tortue { width: 1.5em; height: 1.5em; margin: 0.1em 0 0; }
+.an-li-sans { padding-left: 2rem; }
+.prop-aj .an-tortue, .pm-sub .an-tortue { margin-right: 0.3em; }
