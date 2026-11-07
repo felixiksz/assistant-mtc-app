@@ -3610,6 +3610,228 @@ const Comparateur = {
 };
 Comparateur.init();
 
+/* ============================= Proposer des formules (diagnostic -> formules -> modifications) ============================= */
+/* Tu indiques le diagnostic (un ou plusieurs syndromes) et, si tu veux, des signes concomitants.
+   L'outil classe les formules de ta base (lien cité dans la fiche du syndrome, indication proche, signes en commun)
+   puis propose, pour chacune, les modifications de ta base « modifications » qui correspondent. Aide à la réflexion : ce n'est pas une prescription. */
+const Proposer = {
+  diag: [],                    // clés de syndromes « domaine/chemin »
+  signes: new Set(),           // signes courts concomitants
+  choix: {},                   // formule -> Set d'indices de modifications cochées
+  mods: null,
+  MAX_DIAG: 3,
+  STOP: new Set("de du des la le les et en d l un une avec par au aux dans sur qui ou a est son sa ses pour".split(" ")),
+
+  init() {
+    document.getElementById("prop-search").addEventListener("input", e => this.suggererDiag(e.target.value));
+    document.getElementById("prop-signe").addEventListener("input", e => this.suggererSigne(e.target.value));
+    document.querySelector('.tab-btn[data-tab="proposer"]').addEventListener("click", () => this.ouvert());
+  },
+
+  async ouvert() {
+    this.rendreChoix();
+    document.getElementById("prop-res").innerHTML = this.diag.length ? `<p class="muted">Chargement…</p>` : "";
+    try { await this.charger(); } catch (e) { document.getElementById("prop-res").innerHTML = `<p class="muted">Chargement impossible (${escapeHtml(e.message)}).</p>`; return; }
+    this.rendre();
+  },
+
+  async charger() {
+    await DiagSignes.ensureLoaded();
+    if (!this.mods) this.mods = (await Store.readJSON("formules/modifications/modifications.json")).formules;
+    if (!Comparateur._norm) { try { Comparateur._norm = await Store.readJSON("formules/tableaux/normalisation.json"); } catch (e) { Comparateur._norm = {}; } }
+    await SubstanceNature.ensureLoaded();
+  },
+
+  jetons(t) { return new Set(dsNorm(String(t || "")).split(/[^a-z]+/).filter(w => w.length > 1 && !this.STOP.has(w))); },
+  // un diagnostic = « domaine/chemin » ou, pour un canal, « domaine/chemin#variante » (régulier, luo plénitude, luo vide, grand luo, tendineux)
+  VARIANTES: { regulier: "canal principal", luo_plenitude: "luo, plénitude", luo_vide: "luo, vide", grand_luo: "grand luo", tendineux: "canal tendineux" },
+  sd(c) { const cle = String(c).split("#")[0]; return DiagSignes.syndromesData.find(x => DiagSignes.cleSynd(x) === cle); },
+  variante(c) { return String(c).split("#")[1] || null; },
+  lignesVariante(sd, v) {
+    const d = sd.detail || {};
+    const L = k => ((d[k] || {}).lignes || []);
+    if (v === "regulier") return L("regulier");
+    if (v === "luo_plenitude") return L("luo").filter(l => l.plein_vide === "plénitude");
+    if (v === "luo_vide") return L("luo").filter(l => l.plein_vide === "vide");
+    if (v === "grand_luo") return L("grand_luo");
+    if (v === "tendineux") return L("tendineux");
+    return [];
+  },
+  // signes courts d'un diagnostic (fiche entière, ou seulement la variante d'un canal)
+  signesDe(c) {
+    const sd = this.sd(c), v = this.variante(c), out = new Set();
+    if (!sd) return out;
+    if (!v) { sd.courtsParCle.forEach(ids => ids.forEach(i => out.add(i))); return out; }
+    this.lignesVariante(sd, v).forEach(l => {
+      const [t] = dsSplitSigns(l.symptome || "");
+      const k = t && dsNormalizeKey(t);
+      (sd.courtsParCle.get(k) || []).forEach(i => out.add(i));
+    });
+    return out;
+  },
+  nomDiag(c) {
+    const sd = this.sd(c); if (!sd) return c;
+    const v = this.variante(c);
+    return v ? `${sd.entry.sousLabel || sd.entry.nom} — ${this.VARIANTES[v]}` : sd.entry.nom;
+  },
+  // tous les diagnostics proposables (les canaux sont éclatés en variantes)
+  options() {
+    const out = [];
+    DiagSignes.syndromesData.forEach(sd => {
+      const cle = DiagSignes.cleSynd(sd), e = sd.entry, dom = Syndromes.domaineLabels[e.domaine] || "";
+      if (e.domaine === "canaux") {
+        Object.keys(this.VARIANTES).forEach(v => { if (this.lignesVariante(sd, v).length) out.push({ c: cle + "#" + v, nom: this.nomDiag(cle + "#" + v), sous: dom }); });
+      } else out.push({ c: cle, nom: e.nom, sous: dom + (e.sousLabel ? " · " + e.sousLabel : "") });
+    });
+    return out;
+  },
+
+  // --- saisie du diagnostic
+  async suggererDiag(q) {
+    const ul = document.getElementById("prop-sugg"), nq = dsNorm((q || "").trim());
+    if (!nq) { ul.innerHTML = ""; return; }
+    await DiagSignes.ensureLoaded();
+    if (document.getElementById("prop-search").value !== q) return;   // saisie dépassée
+    const mots = nq.split(/\s+/);
+    const l = this.options().filter(o => { const t = dsNorm(o.nom + " " + o.sous); return mots.every(m => t.includes(m)); }).slice(0, 14);
+    ul.innerHTML = l.length ? l.map(o => `<li data-c="${escapeHtml(o.c)}"><strong>${escapeHtml(o.nom)}</strong> <span class="muted">${escapeHtml(o.sous)}</span></li>`).join("") : `<li class="muted">Aucun résultat.</li>`;
+    ul.querySelectorAll("li[data-c]").forEach(li => li.addEventListener("click", () => {
+      const c = li.dataset.c;
+      if (!this.diag.includes(c)) { if (this.diag.length >= this.MAX_DIAG) this.diag.shift(); this.diag.push(c); }
+      document.getElementById("prop-search").value = ""; ul.innerHTML = "";
+      this.ouvert();
+    }));
+  },
+
+  suggererSigne(q) {
+    const ul = document.getElementById("prop-signe-sugg"), nq = dsNorm((q || "").trim());
+    if (!nq || !DiagSignes.courtsData) { ul.innerHTML = ""; return; }
+    const l = DiagSignes.courtsData.signes.filter(s => !this.signes.has(s.id) && dsNorm(s.label).includes(nq)).slice(0, 10);
+    ul.innerHTML = l.map(s => `<li data-s="${escapeHtml(s.id)}">${escapeHtml(s.label)} <span class="muted">${escapeHtml(s.categorie)}</span></li>`).join("");
+    ul.querySelectorAll("li").forEach(li => li.addEventListener("click", () => {
+      this.signes.add(li.dataset.s);
+      document.getElementById("prop-signe").value = ""; ul.innerHTML = "";
+      this.rendreChoix(); this.rendre();
+    }));
+  },
+
+  rendreChoix() {
+    document.getElementById("prop-diag").innerHTML = this.diag.map(c => `<span class="chosen-item">${escapeHtml(DiagSignes.loaded ? this.nomDiag(c) : c)}<button type="button" data-d="${escapeHtml(c)}" aria-label="Retirer">✕</button></span>`).join("") || `<span class="muted">Aucun diagnostic choisi.</span>`;
+    document.getElementById("prop-signes").innerHTML = [...this.signes].map(s => `<span class="chosen-item chosen-court">${escapeHtml((DiagSignes.courtsInfo.get(s) || {}).label || s)}<button type="button" data-s="${escapeHtml(s)}" aria-label="Retirer">✕</button></span>`).join("");
+    document.querySelectorAll("#prop-diag [data-d]").forEach(b => b.addEventListener("click", () => { this.diag.splice(this.diag.indexOf(b.dataset.d), 1); this.rendreChoix(); this.rendre(); }));
+    document.querySelectorAll("#prop-signes [data-s]").forEach(b => b.addEventListener("click", () => { this.signes.delete(b.dataset.s); this.rendreChoix(); this.rendre(); }));
+  },
+
+  // texte de traitement d'une fiche de syndrome (normalisé) : sert à repérer les formules qu'elle cite
+  texteTraitement(detail) { return SubstanceNature.cle(JSON.stringify([detail.traitement || "", detail.propositions_traitement || ""])); },
+
+  classer() {
+    const sds = this.diag.map(c => this.sd(c)).filter(Boolean);
+    if (!sds.length) return [];
+    const signesSynd = new Set(); this.diag.forEach(c => this.signesDe(c).forEach(i => signesSynd.add(i)));
+    const nomsJetons = this.jetons(this.diag.map(c => this.nomDiag(c)).join(" "));
+    const txtTrait = sds.map(sd => this.texteTraitement(sd.detail)).join("|");
+    const res = [];
+    (Formules.index || []).forEach(f => {
+      const m = this.mods[f.id] || { signes: [], modifications: [] };
+      const norm = (Comparateur._norm[f.categorie_id] || {})[f.id] || {};
+      const texteF = this.jetons([f.indications_syndrome, norm.syndrome_court, ...(norm.syndromes || []).map(s => s.nom)].join(" "));
+      const commun = [...nomsJetons].filter(t => texteF.has(t));
+      const cov = nomsJetons.size ? commun.length / nomsJetons.size : 0;
+      const B = new Set(m.signes);
+      const inter = [...signesSynd].filter(i => B.has(i));
+      const dice = signesSynd.size + B.size ? (2 * inter.length) / (signesSynd.size + B.size) : 0;
+      const cf = SubstanceNature.cle(f.pinyin);
+      const lien = cf.length >= 6 && txtTrait.includes(cf);
+      const score = (lien ? 60 : 0) + (cov >= 0.5 ? 40 * cov : 0) + 40 * dice;
+      if (score < 12) return;
+      res.push({ f, score, lien, cov, commun, inter, B });
+    });
+    res.sort((a, b) => b.score - a.score);
+    return res.slice(0, 8).map(r => ({ ...r, signesSynd }));
+  },
+
+  async rendre() {
+    const zone = document.getElementById("prop-res");
+    if (!this.diag.length) { zone.innerHTML = `<p class="muted">Choisis un diagnostic (un à ${this.MAX_DIAG} syndromes) pour obtenir des formules.</p>`; return; }
+    if (!this.mods) { zone.innerHTML = `<p class="muted">Chargement…</p>`; return; }
+    const classement = this.classer();
+    if (!classement.length) { zone.innerHTML = `<p class="muted">Aucune formule de ta base ne correspond clairement à ce diagnostic. Elle ne couvre pas encore ce syndrome : rien n'est inventé.</p>`; return; }
+    const meilleur = classement[0].score;
+    const fiches = await Promise.all(classement.map(r => Store.readJSON("formules/" + r.f.chemin).catch(() => null)));
+    zone.innerHTML = `<p class="muted prop-avert">Aide à la réflexion et à la révision, pas une prescription : les formules viennent de ta base de cours, classées d'après le lien avec la fiche du syndrome, l'indication et les signes en commun. Vérifie toujours dans la fiche.</p>` +
+      classement.map((r, i) => this.carte(r, fiches[i], meilleur)).join("");
+    zone.querySelectorAll("[data-fiche]").forEach(b => b.addEventListener("click", () => { const f = Formules.index.find(x => x.id === b.dataset.fiche); if (f) { document.querySelector('.tab-btn[data-tab="formules"]').click(); Formules.showDetail(f); } }));
+    zone.querySelectorAll("[data-cmp]").forEach(b => b.addEventListener("click", () => Comparateur.ajouterFormule(b.dataset.cmp)));
+    zone.querySelectorAll("input[data-mod]").forEach(c => c.addEventListener("change", () => {
+      const [fid, k] = c.dataset.mod.split("|");
+      const s = this.choix[fid] || (this.choix[fid] = new Set());
+      if (c.checked) s.add(+k); else s.delete(+k);
+      this.rendreCompo(fid);
+    }));
+    classement.forEach((r, i) => this.rendreCompo(r.f.id, fiches[i]));
+    this._fiches = Object.fromEntries(classement.map((r, i) => [r.f.id, fiches[i]]));
+  },
+
+  carte(r, fiche, meilleur) {
+    const f = r.f, m = this.mods[f.id] || { modifications: [] };
+    const label = i => (DiagSignes.courtsInfo.get(i) || {}).label || i;
+    const raisons = [];
+    if (r.lien) raisons.push(`<span class="prop-raison prop-lien">Citée dans la fiche du syndrome</span>`);
+    if (r.cov >= 0.5) raisons.push(`<span class="prop-raison">Indication proche : ${escapeHtml(r.commun.join(", "))}</span>`);
+    if (r.inter.length) raisons.push(`<span class="prop-raison">${r.inter.length} signe(s) en commun : ${escapeHtml(r.inter.slice(0, 6).map(label).join(", "))}${r.inter.length > 6 ? "…" : ""}</span>`);
+    // modifications : d'abord celles qui correspondent aux signes concomitants, puis aux signes du syndrome non couverts par la formule
+    const lignes = m.modifications.map((mod, k) => {
+      const concom = mod.signes.filter(s => this.signes.has(s));
+      const synd = mod.signes.filter(s => !concom.includes(s) && r.signesSynd.has(s) && !r.B.has(s));
+      return { mod, k, concom, synd, rang: concom.length ? 2 : synd.length ? 1 : 0 };
+    });
+    const pertinentes = lignes.filter(l => l.rang > 0).sort((a, b) => b.rang - a.rang || b.concom.length - a.concom.length);
+    const autres = lignes.filter(l => l.rang === 0);
+    const ligne = l => {
+      const mod = l.mod, cle = `${f.id}|${l.k}`;
+      const pourquoi = l.concom.length ? `Signe concomitant : ${l.concom.map(label).join(", ")}` : l.synd.length ? `Signe du syndrome non couvert par la formule : ${l.synd.map(label).join(", ")}` : "";
+      const ajouts = mod.ajouts.map(a => `<span class="prop-aj">+ ${escapeHtml(a)} ${SubstanceNature.pastille({ substance_pinyin: a.replace(/\s+\d.*$/, "") })}</span>`).join(" ");
+      const retraits = mod.retraits.map(a => `<span class="prop-ret">− ${escapeHtml(a)}</span>`).join(" ");
+      return `<label class="prop-mod${l.rang ? " pert" : ""}"><input type="checkbox" data-mod="${escapeHtml(cle)}"${(this.choix[f.id] || new Set()).has(l.k) ? " checked" : ""}>` +
+        `<span><strong>${escapeHtml(mod.condition || mod.texte.slice(0, 90))}</strong>${mod.principe && mod.condition ? ` <span class="muted">— ${escapeHtml(mod.principe)}</span>` : ""}` +
+        `<br>${ajouts} ${retraits}${pourquoi ? `<br><span class="prop-pourquoi">${escapeHtml(pourquoi)}</span>` : ""}` +
+        `<details class="prop-orig"><summary>texte d'origine</summary>${escapeHtml(mod.texte)}</details></span></label>`;
+    };
+    const ci = fiche && fiche.contre_indications_precautions ? `<details class="prop-ci"><summary>⚠ Contre-indications / précautions</summary><div class="tcm-text">${formatFormuleField(fiche.contre_indications_precautions)}</div></details>` : "";
+    return `<article class="prop-formule">
+      <div class="prop-tete"><div><strong class="prop-nom">${escapeHtml(f.pinyin)}</strong> ${fiche && fiche.hanzi ? `<span class="hanzi">${escapeHtml(fiche.hanzi)}</span>` : ""}<div class="muted">${escapeHtml(f.nom_fr || "")} · ${escapeHtml(Formules.court(f.categorie_nom))}</div></div>
+        <div class="prop-barre" title="Pertinence relative"><i style="width:${Math.round((r.score / meilleur) * 100)}%"></i></div></div>
+      <div class="prop-raisons">${raisons.join(" ")}</div>
+      <div class="prop-actions"><button type="button" class="edit-toggle-btn" data-fiche="${escapeHtml(f.id)}">Fiche</button> <button type="button" class="cmp-add" data-cmp="${escapeHtml(f.id)}">⇄ Comparer</button></div>
+      ${ci}
+      <h4 class="sec-sub">Modifications possibles ${pertinentes.length ? `(${pertinentes.length} correspondent à tes signes)` : ""}</h4>
+      ${pertinentes.length ? pertinentes.map(ligne).join("") : `<p class="muted">Aucune modification ne correspond aux signes indiqués${this.signes.size ? "" : " (ajoute des signes concomitants ci-dessus)"}.</p>`}
+      ${autres.length ? `<details class="prop-autres"><summary>Autres modifications courantes (${autres.length})</summary>${autres.map(ligne).join("")}</details>` : ""}
+      <div class="prop-compo" id="compo-${escapeHtml(f.id)}"></div>
+    </article>`;
+  },
+
+  // composition résultante : base - retraits + ajouts cochés
+  rendreCompo(fid, fiche) {
+    const el = document.getElementById("compo-" + fid);
+    if (!el) return;
+    fiche = fiche || (this._fiches && this._fiches[fid]);
+    const cochees = [...(this.choix[fid] || [])];
+    if (!cochees.length || !fiche) { el.innerHTML = ""; return; }
+    const mods = (this.mods[fid] || { modifications: [] }).modifications;
+    const retirees = new Set(), ajoutees = [];
+    cochees.forEach(k => { const m = mods[k]; if (!m) return; m.retraits.forEach(r => retirees.add(SubstanceNature.cle(r.replace(/\(.*?\)/g, "")))); m.ajouts.forEach(a => { if (!ajoutees.includes(a)) ajoutees.push(a); }); });
+    const base = (fiche.composition || []).map(c => {
+      const sorti = retirees.has(SubstanceNature.cle(String(c.substance_pinyin).replace(/\(.*?\)/g, "")));
+      return `<li class="${sorti ? "prop-sorti" : ""}">${escapeHtml(String(c.substance_pinyin))} <span class="muted">${escapeHtml(c.dose || "")}</span> ${SubstanceNature.pastille(c)}${sorti ? " <em>(retirée)</em>" : ""}</li>`;
+    }).join("");
+    const plus = ajoutees.map(a => `<li class="prop-ajoute">+ ${escapeHtml(a)} <span class="muted">dose à définir</span> ${SubstanceNature.pastille({ substance_pinyin: a.replace(/\s+\d.*$/, "") })}</li>`).join("");
+    el.innerHTML = `<h4 class="sec-sub">Formule modifiée (modifications cochées)</h4><ul class="prop-liste">${base}${plus}</ul><p class="muted">Les doses des ajouts ne sont pas données par la base : à définir selon ta source.</p>`;
+  }
+};
+Proposer.init();
+
 /* ===== Tableaux comparatifs de syndromes (comme les tableaux par famille de formules) =====
    Filtres combinables : type, organe / vaisseau / niveau, catégorie (vide, plénitude, plan…), zone touchée, signe. */
 Object.assign(Comparateur, {

@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=62">
+<link rel="stylesheet" href="style.css?v=63">
 <script src="theme.js?v=2"></script>
 </head>
 <body>
@@ -26,6 +26,7 @@
   <nav class="tabs">
     <button class="tab-btn active" data-tab="formules">Formules</button>
     <button class="tab-btn" data-tab="comparer">Comparer</button>
+    <button class="tab-btn" data-tab="proposer">Proposer une formule</button>
     <button class="tab-btn" data-tab="psy">Principes Taoïstes</button>
     <button class="tab-btn" data-tab="syndromes">Syndromes</button>
     <button class="tab-btn" data-tab="diag-signes">Diagnostic par signes</button>
@@ -83,6 +84,23 @@
         <p class="muted">Sélectionne une formule à gauche pour voir sa fiche complète.</p>
       </article>
     </div>
+  </section>
+
+  <!-- ===================== ONGLET PROPOSER UNE FORMULE (diagnostic -> formules -> modifications) ===================== -->
+  <section id="tab-proposer" class="tab-panel">
+    <h2>Proposer une formule</h2>
+    <p class="muted" data-aide>Indique le diagnostic (1 à 3 syndromes ; pour un canal, choisis la variante : canal principal, luo plénitude, luo vide, tendineux…). L'outil classe les formules de ta base d'après le lien avec la fiche du syndrome, l'indication et les signes en commun, puis propose pour chacune les modifications de ta base « modifications » qui correspondent à tes signes concomitants. Coche des modifications pour voir la composition résultante. C'est une aide à la réflexion, pas une prescription.</p>
+    <div class="prop-bloc"><strong>Diagnostic</strong>
+      <div id="prop-diag" class="prop-choisis"></div>
+      <input type="search" id="prop-search" placeholder="Ajouter un syndrome (nom, organe, canal luo vide…)" autocomplete="off">
+      <ul id="prop-sugg" class="prop-sugg"></ul>
+    </div>
+    <div class="prop-bloc"><strong>Signes concomitants</strong> <span class="muted">(facultatif : servent à choisir les modifications)</span>
+      <div id="prop-signes" class="prop-choisis"></div>
+      <input type="search" id="prop-signe" placeholder="Ajouter un signe (insomnie, constipation, vertiges…)" autocomplete="off">
+      <ul id="prop-signe-sugg" class="prop-sugg"></ul>
+    </div>
+    <div id="prop-res"></div>
   </section>
 
   <!-- ===================== ONGLET COMPARER (syndromes ou formules côte à côte) ===================== -->
@@ -390,6 +408,6 @@
 
 </main>
 
-<script src="app.js?v=86"></script>
+<script src="app.js?v=87"></script>
 </body>
 </html>

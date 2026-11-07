@@ -786,3 +786,34 @@ body:has(#tab-comparer.active) #cmp-pastille { display: none; }
 .cts-sous { font-weight: 400; font-size: 0.7rem; text-transform: none; opacity: 0.85; }
 table.tab-comp tr.cts-commun > td, table.tab-comp tr.cts-commun > th:first-child { background: var(--accent-soft); font-weight: 700; }
 #cts-print-titre { margin: 0.4rem 0 0; font-size: 0.95rem; }
+
+/* Proposer une formule */
+.prop-bloc { border: 1px solid var(--line); background: var(--panel); padding: 0.6rem 0.8rem; margin: 0.6rem 0; }
+.prop-bloc input[type="search"] { width: 100%; max-width: 32rem; margin-top: 0.4rem; padding: 0.4rem 0.6rem; font-family: inherit; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); }
+.prop-choisis { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.4rem 0; }
+.prop-choisis .chosen-item { display: inline-flex; align-items: center; gap: 0.35rem; background: var(--ink); color: var(--bg); padding: 0.2rem 0.55rem; font-size: 0.85rem; }
+.prop-choisis .chosen-item button { border: none; background: none; color: var(--bg); cursor: pointer; font-weight: 700; }
+.prop-sugg { list-style: none; margin: 0.2rem 0 0; padding: 0; max-width: 32rem; }
+.prop-sugg li { padding: 0.35rem 0.5rem; cursor: pointer; border: 1px solid var(--line); border-top: 0; background: var(--bg); }
+.prop-sugg li:hover { background: var(--accent-soft); }
+.prop-avert { font-size: 0.85rem; }
+.prop-formule { border: 1px solid var(--line); background: var(--panel); padding: 0.8rem 1rem; margin: 0.8rem 0; }
+.prop-tete { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.prop-nom { font-size: 1.1rem; }
+.prop-barre { flex: 0 0 7rem; height: 0.55rem; border: 1px solid var(--line); margin-top: 0.4rem; }
+.prop-barre i { display: block; height: 100%; background: var(--ink); }
+.prop-raisons { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.5rem 0; }
+.prop-raison { border: 1px solid var(--line); padding: 0.1rem 0.45rem; font-size: 0.8rem; }
+.prop-lien { background: var(--accent-soft); font-weight: 700; }
+.prop-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+.prop-mod { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.4rem 0.2rem; border-top: 1px dashed var(--line); cursor: pointer; }
+.prop-mod.pert { background: var(--accent-soft); }
+.prop-mod input { margin-top: 0.25rem; flex: none; }
+.prop-aj { color: #2a6b2a; font-weight: 600; }
+.prop-ret { color: #a02020; font-weight: 600; }
+.prop-pourquoi { font-size: 0.8rem; font-style: italic; }
+.prop-orig, .prop-autres, .prop-ci { margin-top: 0.3rem; font-size: 0.85rem; }
+.prop-compo { margin-top: 0.5rem; }
+.prop-liste { margin: 0.3rem 0; padding-left: 1.2rem; }
+.prop-sorti { text-decoration: line-through; opacity: 0.55; }
+.prop-ajoute { color: #2a6b2a; font-weight: 600; }
