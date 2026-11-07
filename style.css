@@ -903,3 +903,28 @@ section.sinolux { margin: 0.6rem 0; }
 .sx-tab { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
 .sx-tab th, .sx-tab td { border: 1px solid var(--line); padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
 .sx-note { font-size: 0.78rem; }
+
+/* Formules proches : mindmap */
+.pf-onglets { display: flex; gap: 0.4rem; margin: 0.4rem 0 0.6rem; }
+.pf-mm { position: relative; display: grid; grid-template-columns: minmax(12rem, 16rem) 1fr; gap: 1.2rem 3rem; align-items: start; padding: 0.3rem 0; color: var(--ink); }
+.pf-traits { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.pf-hub { position: relative; z-index: 1; border: 2px solid var(--ink); background: var(--panel); padding: 0.7rem 0.8rem; font-size: 0.85rem; }
+.pf-hub > strong { display: block; font-size: 0.95rem; margin-bottom: 0.3rem; }
+.pf-branches { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 0.7rem; }
+.pf-noeud { background: var(--bg); border: 1px dashed var(--ink); padding: 0.6rem 0.75rem; font-size: 0.82rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.pf-noeud.pf-moi { border: 2px solid var(--ink); }
+.pf-noeud header { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: baseline; }
+.pf-noeud header strong { font-size: 1rem; }
+.pf-etiq-moi { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; border: 1px solid var(--ink); padding: 0 0.3rem; }
+.pf-bloc { border-left: 3px solid var(--line); padding-left: 0.5rem; }
+.pf-b-syn { border-left-color: #7fb069; } .pf-b-pl { border-left-color: #2f9e44; } .pf-b-act { border-left-color: #3b82c4; } .pf-b-ci { border-left-color: #d9822b; }
+.pf-tit { display: block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; opacity: 0.75; }
+.pf-tit small { text-transform: none; font-weight: 400; letter-spacing: 0; }
+.pf-signes span { display: inline-block; border: 1px solid var(--line); padding: 0 0.35rem; margin: 0.1rem 0.2rem 0.1rem 0; font-size: 0.78rem; }
+.pf-plantes { display: flex; flex-wrap: wrap; gap: 0.15rem 0.5rem; }
+.pf-plante { font-size: 0.75rem; opacity: 0.85; }
+.pf-plante.pf-dist { font-weight: 700; opacity: 1; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 2px; }
+.pf-cours summary { cursor: pointer; font-size: 0.78rem; }
+.pf-cours div { font-size: 0.8rem; line-height: 1.45; margin-top: 0.2rem; }
+@media (max-width: 700px) { .pf-mm { grid-template-columns: 1fr; gap: 0.8rem; } .pf-traits { display: none; } }
+.pf-sans { font-size: 0.75rem; opacity: 0.8; margin-top: 0.15rem; }

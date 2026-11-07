@@ -665,8 +665,10 @@ const ProchesFormules = {
     const enBase = liste.filter(e => e.base), horsBase = liste.filter(e => !e.base);
     const fiches = [];
     for (const e of enBase) { try { fiches.push({ e, g: await Store.readJSON("formules/" + e.base.chemin) }); } catch (err) { horsBase.push(e); } }
+    if (!Comparateur._norm) { try { Comparateur._norm = await Store.readJSON("formules/tableaux/normalisation.json"); } catch (err) { Comparateur._norm = {}; } }
     let html = "";
-    if (fiches.length) html += this.matrice(f, fiches, texte);
+    if (fiches.length) html += `<div class="pf-vues"><div class="pf-onglets"><button type="button" class="cat-chip" data-vue="mm">Mindmap</button><button type="button" class="cat-chip" data-vue="mat">Matrice</button></div>` +
+      `<div class="pf-vue" data-vue="mm">${this.mindmap(f, fiches, texte)}</div><div class="pf-vue" data-vue="mat">${this.matrice(f, fiches, texte)}</div></div>`;
     if (horsBase.length) html += `<details class="proches-horsbase"><summary>Variantes citées dans le cours, absentes de ta base (${horsBase.length})</summary><div class="proches-grille">${horsBase.map(e => this.carteHorsBase(e, texte)).join("")}</div></details>`;
     html += `<details class="proches-texte"><summary>Texte intégral du cours</summary><div class="tcm-text">${formatFormuleField(texte)}</div></details>`;
     sec.querySelector(".proches-corps").innerHTML = html;
@@ -676,6 +678,70 @@ const ProchesFormules = {
     const cases = sec.querySelector("#pf-diff");
     if (cases) cases.addEventListener("change", () => sec.querySelector(".pf-matrice").classList.toggle("pf-sans-commun", cases.checked));
     Comparateur.brancherReplis(sec.querySelector(".pf-matrice") || sec);
+    let vue = "mm"; try { vue = localStorage.getItem("mtc_proches_vue") || "mm"; } catch (err) { /* vue par défaut */ }
+    const montrer = v => {
+      sec.querySelectorAll(".pf-vue").forEach(d => d.style.display = d.dataset.vue === v ? "" : "none");
+      sec.querySelectorAll(".pf-onglets button").forEach(b => b.classList.toggle("active", b.dataset.vue === v));
+      try { localStorage.setItem("mtc_proches_vue", v); } catch (err) { /* ignoré */ }
+      if (v === "mm") this.tracer(sec);
+    };
+    sec.querySelectorAll(".pf-onglets button").forEach(b => b.addEventListener("click", () => montrer(b.dataset.vue)));
+    sec.querySelectorAll(".pf-mm details").forEach(d => d.addEventListener("toggle", () => this.tracer(sec)));
+    window.addEventListener("resize", () => { if (sec.isConnected) this.tracer(sec); });
+    if (!fiches.length) return;
+    montrer(sec.querySelector('.pf-vue[data-vue="' + vue + '"]') ? vue : "mm");
+  },
+
+  // traits du mindmap : du centre vers chaque branche (courbes), recalculés à l'ouverture et au redimensionnement
+  tracer(sec) {
+    const mm = sec.querySelector(".pf-mm"), svg = mm && mm.querySelector("svg.pf-traits");
+    if (!svg || mm.offsetParent === null) return;
+    const r = mm.getBoundingClientRect(), hub = mm.querySelector(".pf-hub").getBoundingClientRect();
+    const x1 = hub.right - r.left, y1 = hub.top + hub.height / 2 - r.top;
+    svg.setAttribute("width", r.width); svg.setAttribute("height", r.height);
+    svg.innerHTML = [...mm.querySelectorAll(".pf-noeud")].map(n => {
+      const b = n.getBoundingClientRect(), x2 = b.left - r.left, y2 = b.top + 22 - r.top, mx = (x1 + x2) / 2;
+      return `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.55"/>`;
+    }).join("");
+  },
+
+  // mindmap : au centre ce que les formules partagent ; une branche par formule (quand la choisir, plantes, actions, précaution)
+  mindmap(f, fiches, texte) {
+    const norm = g => ((Comparateur._norm || {})[g.categorie_id] || {})[g.id] || {};
+    const cols = [{ g: f, moi: true }].concat(fiches.map(x => ({ g: x.g, id: x.e.base.id, nom: x.e.nom })));
+    cols.forEach(c => { c.n = norm(c.g); c.lig = this.lignes(c.g); c.sig = (c.n.signes || []); });
+    const cleSigne = t => dsNorm(String(t)).replace(/[^a-z0-9]/g, "");
+    const nomHerbe = c => String(c.substance_pinyin || "").replace(/\(.*?\)/g, "").trim();
+    // plantes et signes communs à toutes les formules affichées
+    const herbesCommunes = cols[0].lig.filter(a => cols.every(c => c.lig.some(b => this.memes(a, b))));
+    // plantes de cette formule qui reviennent dans d'autres formules du groupe, avec le nombre de formules qui les contiennent
+    const partagees = cols[0].lig.map(a => ({ a, n: cols.filter(c => c.lig.some(b => this.memes(a, b))).length })).filter(x => x.n >= 2).sort((x, y) => y.n - x.n);
+    const signesCommuns = cols[0].sig.filter(t => cols.every(c => c.sig.some(u => cleSigne(u) === cleSigne(t))));
+    const noeuds = cols.map((c, ci) => {
+      const autres = cols.filter((_, k) => k !== ci);
+      const propres = c.sig.filter(t => !autres.some(o => o.sig.some(u => cleSigne(u) === cleSigne(t))));
+      const choix = (propres.length ? propres : c.sig).slice(0, 4);
+      const herbes = c.lig.map(l => {
+        // gras (formules proches seulement) : plante que cette formule n'a pas
+        const distincte = !c.moi && !cols[0].lig.some(b => this.memes(l, b));
+        return `<span class="pf-plante${distincte ? " pf-dist" : ""}" title="${escapeHtml(l.c.dose || "")}">${escapeHtml(nomHerbe(l.c))}</span>`;
+      }).join(" ");
+      const sans = c.moi ? [] : cols[0].lig.filter(l => !c.lig.some(b => this.memes(l, b)));
+      const ex = c.moi ? "" : this.extraits(texte, c.nom || c.g.pinyin);
+      return `<article class="pf-noeud${c.moi ? " pf-moi" : ""}">` +
+        `<header><strong>${escapeHtml(c.g.pinyin)}</strong> <span class="hanzi">${escapeHtml(c.g.hanzi || "")}</span>${c.moi ? ' <span class="pf-etiq-moi">cette formule</span>' : ` <button type="button" class="edit-toggle-btn" data-pf-fiche="${escapeHtml(c.id)}">Fiche</button> <button type="button" class="cmp-add cmp-mini" data-pf-cmp="${escapeHtml(c.id)}" title="Ajouter au comparateur">⇄</button>`}</header>` +
+        `<div class="pf-bloc pf-b-syn"><span class="pf-tit">On la choisit si</span>${c.n.syndrome_court ? `<div>${escapeHtml(c.n.syndrome_court)}</div>` : ""}${choix.length ? `<div class="pf-signes">${choix.map(t => `<span>${escapeHtml(t)}</span>`).join("")}</div>` : ""}</div>` +
+        `<div class="pf-bloc pf-b-pl"><span class="pf-tit">Plantes${c.moi ? "" : " <small>(en gras : absentes de la formule de départ)</small>"}</span><div class="pf-plantes">${herbes}</div>${sans.length ? `<div class="pf-sans">Sans : ${sans.map(l => escapeHtml(nomHerbe(l.c))).join(", ")}</div>` : ""}</div>` +
+        ((c.n.actions || []).length ? `<div class="pf-bloc pf-b-act"><span class="pf-tit">Actions</span>${escapeHtml(c.n.actions.slice(0, 4).join(" · "))}</div>` : "") +
+        ((c.n.contre_indications || []).length ? `<div class="pf-bloc pf-b-ci"><span class="pf-tit">Attention</span>${escapeHtml(c.n.contre_indications.slice(0, 2).join(" ; "))}</div>` : "") +
+        (ex ? `<details class="pf-cours"><summary>Ce que dit le cours</summary><div>${escapeHtml(ex)}</div></details>` : "") +
+        `</article>`;
+    }).join("");
+    return `<div class="pf-mm"><svg class="pf-traits" aria-hidden="true"></svg>` +
+      `<div class="pf-hub"><strong>Choisir entre ces formules</strong>` +
+      `<div class="pf-bloc"><span class="pf-tit">${herbesCommunes.length ? "Plantes communes à toutes" : "Plantes qui reviennent"}</span>${herbesCommunes.length ? herbesCommunes.map(l => `<span class="pf-plante">${escapeHtml(nomHerbe(l.c))}</span>`).join(" ") : (partagees.length ? partagees.map(x => `<span class="pf-plante">${escapeHtml(nomHerbe(x.a.c))} ×${x.n}</span>`).join(" ") + `<div class="pf-sans">× = nombre de formules du groupe qui la contiennent (sur ${cols.length})</div>` : '<span class="muted">aucune</span>')}</div>` +
+      `<div class="pf-bloc"><span class="pf-tit">Signes communs</span>${signesCommuns.length ? signesCommuns.map(t => `<span class="pf-plante">${escapeHtml(t)}</span>`).join(" ") : '<span class="muted">aucun signe en commun dans les tableaux</span>'}</div></div>` +
+      `<div class="pf-branches">${noeuds}</div></div>`;
   },
 
   // maquette B : une ligne par substance, une colonne par formule, puis les textes du cours (actions, indications, contre-indications…)
