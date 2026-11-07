@@ -869,7 +869,7 @@ tr.repli.cmp-cat td::before { content: attr(data-n); color: var(--muted, #666); 
 /* Fiche de formule : comparaison avec formules proches (matrice) */
 .pf-barre { display: flex; flex-wrap: wrap; gap: 0.8rem 1.5rem; align-items: center; margin: 0.4rem 0; font-size: 0.85rem; }
 .pf-legende { display: inline-flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
-.pf-pt { display: inline-block; width: 0.85rem; height: 0.85rem; border-radius: 50%; vertical-align: -0.1rem; }
+.pf-pt { display: inline-block; width: 0.85rem; height: 0.85rem; border-radius: 50%; vertical-align: -0.1rem; background: var(--ink); }
 .pf-pt-moi { background: #3a9a40; }
 .pf-pt-commun { background: var(--muted, #888); }
 .pf-pt-autre { background: #d9822b; }
