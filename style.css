@@ -985,3 +985,15 @@ section.carte-mentale h3 { margin-top: 0; }
 .pm-cond .pm-principe { padding: 0 0.65rem 0.4rem 3.2rem; font-size: 0.82rem; }
 .pm-sub { background: transparent; border-color: var(--line); opacity: 0.92; font-size: 0.78rem; }
 .an-note { font-style: italic; }
+
+/* Modifications : ajouter / retirer */
+.pm-groupe { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 0.4rem 0 0; border-bottom: 2px solid var(--ink); padding-bottom: 0.1rem; }
+.pm-groupe:first-child { margin-top: 0; }
+.pm-sens { display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; padding: 0 0.3rem; margin-right: 0.2rem; }
+.pm-ajout { border-style: solid; border-color: var(--ink); opacity: 1; }
+.pm-ajout .pm-sens { background: var(--ink); color: var(--bg); }
+.pm-retrait { border-style: dashed; border-color: var(--ink); opacity: 1; }
+.pm-retrait .pm-sens { border: 1px solid var(--ink); }
+.pm-retrait strong { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.cm-aj, .cm-re { display: inline-block; border: 1px solid var(--ink); padding: 0 0.3rem; margin: 0.1rem 0.2rem 0.1rem 0; white-space: nowrap; }
+.cm-re { border-style: dashed; text-decoration: line-through; }

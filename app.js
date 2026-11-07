@@ -354,7 +354,7 @@ const CarteMentale = {
     const secs = Object.entries(c.sections).filter(([k, v]) => variation || c.couverture[k] == null || c.couverture[k] < 0.75);
     const nat = c.nat || c.sav ? `<p><span class="cm-etiq">Nature</span> ${this.decoder(c.nat, this.NAT) || "—"} · <span class="cm-etiq">Saveur</span> ${this.decoder(c.sav, this.SAV) || "—"} <span class="muted">(codes de ta carte)</span></p>` : "";
     const sections = secs.map(([k, v]) => `<div class="cm-sec"><span class="cm-etiq">${escapeHtml(this.TITRES[k] || k)}</span><div class="cm-texte">${escapeHtml(v)}</div></div>`).join("");
-    const mods = !variation && c.modifications.length ? `<div class="cm-sec"><span class="cm-etiq">Modifications (ta carte)</span><table class="cm-tab"><thead><tr><th>Si…</th><th>Action</th><th>Plantes</th></tr></thead><tbody>${c.modifications.map(m => `<tr><td>${escapeHtml(m.condition)}</td><td>${escapeHtml(m.action)}</td><td>${escapeHtml(m.plantes)}</td></tr>`).join("")}</tbody></table></div>` : "";
+    const mods = !variation && c.modifications.length ? `<div class="cm-sec"><span class="cm-etiq">Modifications (ta carte)</span><table class="cm-tab"><thead><tr><th>Si…</th><th>Action</th><th>Plantes</th></tr></thead><tbody>${c.modifications.map(m => `<tr><td>${escapeHtml(m.condition)}</td><td>${escapeHtml(m.action)}</td><td>${[...m.ajouts.map(a => `<span class="cm-aj">+ ${escapeHtml(a)}</span>`), ...m.retraits.map(a => `<span class="cm-re">− ${escapeHtml(a)}</span>`), m.plantes_sans_signe ? `<span class="muted">à renforcer : ${escapeHtml(m.plantes_sans_signe)}</span>` : "", m.donne ? `<span class="muted">= ${escapeHtml(m.donne)}</span>` : ""].filter(Boolean).join(" ") || escapeHtml(m.plantes)}</td></tr>`).join("")}</tbody></table></div>` : "";
     if (!nat && !sections && !mods) return "";
     return `<section class="carte-mentale"><h3>Ta carte mentale${variation ? "" : " — en plus de la fiche"}</h3>${nat}${sections}${mods}<p class="muted cm-note">Textes de ta carte « ${escapeHtml(c.fichier.split("\\").pop().replace(/\.pdf$/, ""))} », copiés tels quels.</p></section>`;
   },
@@ -399,19 +399,22 @@ const ModifArbre = {
     const liste = CarteMentale.fusion(f.id, (this.mods[f.id] || {}).modifications).filter(m => m.ajouts.length || m.retraits.length || m.condition);
     if (!liste.length) return;
     const k = a => CarteMentale.cleAjout(a);
+    // clé = plante + sens : une plante ajoutée dans une modification et retirée dans une autre donne deux nœuds
     const subs = new Map();
-    liste.forEach((m, i) => { m.ajouts.forEach(a => { const c = k(a); if (!subs.has(c)) subs.set(c, { nom: String(a).replace(/\(.*?\)/g, "").replace(/\s+\d.*$/, "").trim(), liens: [] }); subs.get(c).liens.push(i + ":+"); });
-      m.retraits.forEach(a => { const c = k(a); if (!subs.has(c)) subs.set(c, { nom: String(a).replace(/\(.*?\)/g, "").replace(/\s+\d.*$/, "").trim(), liens: [] }); subs.get(c).liens.push(i + ":-"); }); });
+    const noter = (a, sens, i) => { const c = k(a) + ":" + sens; if (!subs.has(c)) subs.set(c, { nom: String(a).replace(/\(.*?\)/g, "").replace(/\s+\d.*$/, "").trim(), sens, liens: [] }); subs.get(c).liens.push(i); };
+    liste.forEach((m, i) => { m.ajouts.forEach(a => noter(a, "+", i)); m.retraits.forEach(a => noter(a, "-", i)); });
     const gauche = liste.map((m, i) => `<div class="pm-cond" data-id="m${i}" data-liens="${[...m.ajouts.map(a => k(a) + ":+"), ...m.retraits.map(a => k(a) + ":-")].join(",")}">` +
       `<div class="pm-si"><span class="pm-si-t">Si</span><span class="pm-cond-t">${escapeHtml(m.condition || m.texte.slice(0, 120))}</span>${m.source === "carte" ? ' <span class="pm-src">carte mentale</span>' : ""}</div>` +
       ((m.signes || []).length ? `<div class="pm-sigs">${m.signes.map(i => `<span>${escapeHtml(this.signes.get(i) || i)}</span>`).join("")}</div>` : "") +
       (m.principe ? `<div class="pm-principe">→ ${escapeHtml(m.principe)}</div>` : "") +
       (m.donne ? `<div class="pm-principe">= ${escapeHtml(m.donne)}</div>` : "") +
       (m.renforcer ? `<div class="pm-principe">à renforcer : ${escapeHtml(m.renforcer)}</div>` : "") + `</div>`).join("");
-    const droite = [...subs.entries()].map(([c, x]) => {
-      const fake = { substance_pinyin: x.nom };
-      return `<div class="pm-sub" data-id="s${c}" data-cle="${c}"><strong>${escapeHtml(x.nom)}</strong> ${SubstanceNature.pastille(fake)} ${SubstanceNature.pastilleDose(fake)} ${Animaux.marque(x.nom)}</div>`;
-    }).join("");
+    const noeud = ([c, x]) => {
+      const fake = { substance_pinyin: x.nom }, ajout = x.sens === "+";
+      return `<div class="pm-sub ${ajout ? "pm-ajout" : "pm-retrait"}" data-id="s${c}" data-cle="${c}"><span class="pm-sens">${ajout ? "+ ajouter" : "− retirer"}</span> <strong>${escapeHtml(x.nom)}</strong> ${SubstanceNature.pastille(fake)} ${SubstanceNature.pastilleDose(fake)} ${Animaux.marque(x.nom)}</div>`;
+    };
+    const ajoutes = [...subs.entries()].filter(([c, x]) => x.sens === "+"), retires = [...subs.entries()].filter(([c, x]) => x.sens === "-");
+    const droite = (ajoutes.length ? `<div class="pm-groupe">On ajoute</div>${ajoutes.map(noeud).join("")}` : "") + (retires.length ? `<div class="pm-groupe">On retire</div>${retires.map(noeud).join("")}` : "");
     const texte = sec.querySelector(".modifs-texte") ? sec.querySelector(".modifs-texte").outerHTML : "";
     sec.querySelector(".modifs-corps").innerHTML =
       `<div class="pf-onglets"><button type="button" class="cat-chip active" data-v="arbre">Arbre</button><button type="button" class="cat-chip" data-v="texte">Texte du cours</button></div>` +
@@ -435,10 +438,10 @@ const ModifArbre = {
     mm.querySelectorAll(".pm-cond").forEach(c => {
       const b = c.getBoundingClientRect(), x1 = b.right - r.left, y1 = b.top + Math.min(20, b.height / 2) - r.top;
       (c.dataset.liens || "").split(",").filter(Boolean).forEach(l => {
-        const [cle, sens] = l.split(":"), n = noeuds[cle];
+        const sens = l.split(":")[1], n = noeuds[l];
         if (!n) return;
         const x2 = n.left - r.left, y2 = n.top + n.height / 2 - r.top, mx = (x1 + x2) / 2;
-        h += `<path class="pf-trait" data-cond="${c.dataset.id}" data-sub="${cle}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="currentColor" stroke-width="1.4" ${sens === "-" ? 'stroke-dasharray="5 4"' : ""} opacity="0.55"/>`;
+        h += `<path class="pf-trait" data-cond="${c.dataset.id}" data-sub="${l}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="currentColor" stroke-width="1.4" ${sens === "-" ? 'stroke-dasharray="5 4"' : ""} opacity="0.55"/>`;
       });
     });
     svg.innerHTML = h;
