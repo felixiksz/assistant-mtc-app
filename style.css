@@ -695,12 +695,4 @@ mark.surlignage { background: #f4ff00; color: #000; font-weight: inherit; paddin
 .nat-frais { background: #AED6F1; color: #000; }
 .nat-froid { background: #1F618D; color: #fff; }
 .nat-inconnue { background: transparent; color: var(--muted); border-style: dashed; font-weight: 400; }
-.nat-globale { margin: 0.8rem 0 0.3rem; max-width: 34rem; }
-.nat-titre { margin: 0 0 0.35rem; }
-.nat-barre { display: flex; height: 1.5rem; border: 1px solid rgba(0,0,0,0.35); overflow: hidden; }
-.nat-seg { display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; overflow: hidden; white-space: nowrap; min-width: 2px; }
-.nat-echelle { position: relative; height: 0.7rem; margin-top: 0.45rem; border: 1px solid rgba(0,0,0,0.35); background: linear-gradient(90deg, #1F618D, #AED6F1, #D5D8DC, #F0A04B, #C0392B); }
-.nat-marqueur { position: absolute; top: -0.45rem; width: 0; height: 0; margin-left: -0.45rem; border-left: 0.45rem solid transparent; border-right: 0.45rem solid transparent; border-top: 0.7rem solid #000; }
-.nat-graduations { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--muted); margin-top: 0.15rem; }
-.nat-note { margin: 0.35rem 0 0; font-size: 0.78rem; }
 @media print { .nat { border-color: #000; } }

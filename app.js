@@ -205,16 +205,6 @@ const SubstanceNature = {
 
   classe(id) { return (this.data.echelle.find(e => e.id === id) || {}); },
 
-  // dose en grammes (milieu d'une fourchette) ; null si la dose n'est pas en grammes (tranches, fruits, QS…)
-  grammes(dose) {
-    const t = String(dose || "").replace(/\(.*?\)/g, "");
-    const num = x => parseFloat(x.replace(",", "."));
-    let m = t.match(/(\d+(?:[.,]\d+)?)\s*(?:à|-|–)\s*(\d+(?:[.,]\d+)?)\s*g\b/i);
-    if (m) return (num(m[1]) + num(m[2])) / 2;
-    m = t.match(/(\d+(?:[.,]\d+)?)\s*g\b/i);
-    return m ? num(m[1]) : null;
-  },
-
   pastille(c) {
     const r = this.trouver(c);
     if (!r || !r.s.nature) return `<span class="nat nat-inconnue" title="Nature non renseignée dans ta pharmacopée">—</span>`;
@@ -222,38 +212,6 @@ const SubstanceNature = {
     const detail = [r.s.nature_brute && "Source : " + r.s.nature_brute, r.s.saveur && "Saveur : " + r.s.saveur, r.s.tropisme && "Tropisme : " + r.s.tropisme,
       r.alias && "(nature de « " + r.alias + " », substance de base)"].filter(Boolean).join(" · ");
     return `<span class="nat nat-${r.s.nature}" title="${escapeHtml(detail)}">${escapeHtml(e.label)}</span>`;
-  },
-
-  // petite échelle visuelle : proportions (en grammes) de chaque nature + position de la nature globale de la formule
-  echelle(composition) {
-    if (!this.data || !composition || !composition.length) return "";
-    const poids = {};
-    let somme = 0, pondere = 0, pris = 0;
-    const exclus = [];
-    composition.forEach(c => {
-      const r = this.trouver(c), g = this.grammes(c.dose);
-      if (r && r.s.nature && g != null && g > 0) {
-        poids[r.s.nature] = (poids[r.s.nature] || 0) + g;
-        somme += g; pondere += g * this.classe(r.s.nature).score; pris++;
-      } else exclus.push(String(c.substance_pinyin || "").replace(/\(.*?\)/g, "").trim() + (r && r.s.nature ? " (dose non chiffrée en g)" : " (nature inconnue)"));
-    });
-    if (!somme) return "";
-    const moy = pondere / somme;
-    const global = moy >= 1.5 ? "chaud" : moy >= 0.5 ? "tiede" : moy > -0.5 ? "neutre" : moy >= -1.5 ? "frais" : "froid";
-    const segments = [...this.data.echelle].reverse().filter(e => poids[e.id]).map(e => {
-      const part = Math.round((poids[e.id] / somme) * 100);
-      return `<span class="nat-seg nat-${e.id}" style="flex:${poids[e.id]}" title="${escapeHtml(e.label)} : ${part} % du poids">${part >= 12 ? escapeHtml(e.label) + " " + part + " %" : ""}</span>`;
-    }).join("");
-    const pos = Math.max(0, Math.min(100, ((moy + 2) / 4) * 100));
-    const note = `Calculée d'après les doses en grammes de ${pris} substance(s) sur ${composition.length}` +
-      (exclus.length ? ` ; non prises en compte : ${escapeHtml(exclus.join(", "))}` : "") + ".";
-    return `<div class="nat-globale">
-      <p class="nat-titre">Nature globale de la formule : <strong>${escapeHtml(this.classe(global).label)}</strong> <span class="muted">(${moy > 0 ? "+" : ""}${moy.toFixed(1).replace(".", ",")} sur une échelle de −2 à +2)</span></p>
-      <div class="nat-barre" role="img" aria-label="Répartition des natures de la formule, du froid au chaud">${segments}</div>
-      <div class="nat-echelle"><span class="nat-marqueur" style="left:${pos.toFixed(1)}%" title="Nature globale"></span></div>
-      <div class="nat-graduations"><span>froid</span><span>frais</span><span>neutre</span><span>tiède</span><span>chaud</span></div>
-      <p class="muted nat-note">${note}</p>
-    </div>`;
   }
 };
 
@@ -390,7 +348,7 @@ const Formules = {
       <h2>${escapeHtml(f.pinyin || f.id)} <span class="hanzi">${escapeHtml(f.hanzi || "")}</span></h2>
       <p class="muted">${escapeHtml(f.categorie_nom || "")}${f.sous_type ? " · " + escapeHtml(f.sous_type) : ""}</p>
       ${f.nom_fr ? `<p><em>${escapeHtml(f.nom_fr)}</em></p>` : ""}
-      ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th></tr></thead><tbody>${comp}</tbody></table>${SubstanceNature.echelle(f.composition)}</section>` : ""}
+      ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th></tr></thead><tbody>${comp}</tbody></table></section>` : ""}
       ${this.renderSchemaImage(f.schema_image, f.categorie_id)}
       ${section("Préparation / posologie", f.mode_de_preparation_posologie)}
       ${section("Actions thérapeutiques", f.actions_therapeutiques)}
