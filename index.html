@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=80">
+<link rel="stylesheet" href="style.css?v=81">
 <script src="theme.js?v=2"></script>
 </head>
 <body>
@@ -116,6 +116,7 @@
       <button type="button" id="cmp-mode-synd" class="cat-chip active">Syndromes</button>
       <button type="button" id="cmp-mode-form" class="cat-chip">Formules</button>
       <button type="button" id="cmp-mode-tabsyn" class="cat-chip">Tableaux de syndromes</button>
+      <button type="button" id="cmp-mode-arbre" class="cat-chip">Arbre par famille de formules</button>
       <button type="button" id="cmp-mode-fam" class="cat-chip">Tableaux par famille de formules</button>
     </div>
     <p class="muted" data-aide>Choisis 2 à 4 syndromes (ou formules) à comparer : tape un nom ci-dessous, ou utilise le bouton « ⇄ Comparer » présent sur les fiches, les résultats de la recherche par signes et les post-it. Le tableau montre, catégorie par catégorie, les signes de chacun : ce qui est commun à tous apparaît en pâle, ce qui distingue chaque élément est en couleur.</p>
@@ -127,6 +128,11 @@
     <div id="cmp-choisis" class="ds-chips"></div>
     <label class="cmp-option"><input type="checkbox" id="cmp-diff"> Montrer seulement ce qui diffère</label>
     <div id="cmp-resultat"></div>
+    <div id="cmp-arbre-panel" style="display:none;">
+      <p class="muted" data-aide>Choisis une famille de formules : chaque cadre de gauche est une situation (un syndrome) avec les signes qui la distinguent ; les traits mènent aux formules de la famille que l'on choisit dans cette situation. Un signe relié à plusieurs formules ne suffit pas à trancher : c'est alors un autre signe qui décide. Survole un signe, un syndrome ou une formule pour voir leurs liens.</p>
+      <div id="cmp-arbre-familles" class="cat-chip-row"></div>
+      <div id="cmp-arbre-corps"></div>
+    </div>
     <div id="cmp-tabsyn-panel" style="display:none;">
       <p class="muted" data-aide>Un tableau comme ceux des familles de formules, mais pour les syndromes : les colonnes sont les syndromes retenus, les lignes sont les signes courts (par catégorie : langue, pouls, soif…). Les filtres se combinent : plusieurs choix dans une même rubrique s'additionnent (ou), des rubriques différentes se croisent (et). La « zone touchée » est déduite des zones citées dans les signes de chaque syndrome. Clique sur le nom d'un syndrome pour ouvrir sa fiche.</p>
       <div id="cts-facettes"></div>
@@ -416,6 +422,6 @@
 
 </main>
 
-<script src="app.js?v=113"></script>
+<script src="app.js?v=114"></script>
 </body>
 </html>

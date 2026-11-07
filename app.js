@@ -1001,9 +1001,10 @@ const ProchesFormules = {
   },
 
   // arbre : syndromes -> signes qui les distinguent -> formules (reliées par des traits) ; les plantes en petit dans chaque formule
-  mindmap(f, fiches, texte) {
+  mindmap(f, fiches, texte) { return this.arbre([{ g: f, moi: true }].concat(fiches.map(x => ({ g: x.g, id: x.e.base.id, nom: x.e.nom }))), texte); },
+  // colonnes = [{ g (fiche), id, nom, moi? }] ; texte du cours facultatif (extraits « Ce que dit le cours »)
+  arbre(cols, texte) {
     const norm = g => ((Comparateur._norm || {})[g.categorie_id] || {})[g.id] || {};
-    const cols = [{ g: f, moi: true }].concat(fiches.map(x => ({ g: x.g, id: x.e.base.id, nom: x.e.nom })));
     cols.forEach(c => { c.n = norm(c.g); c.lig = this.lignes(c.g); c.sig = c.n.signes || []; });
     const cs = t => dsNorm(String(t)).replace(/[^a-z0-9]/g, "");
     const nomHerbe = c => String(c.substance_pinyin || "").replace(/\(.*?\)/g, "").trim();
@@ -1036,7 +1037,7 @@ const ProchesFormules = {
         return `<span class="pf-plante${distincte ? " pf-dist" : ""}" title="${escapeHtml(l.c.dose || "")}">${escapeHtml(nomHerbe(l.c))}</span>`;
       }).join(" ");
       const sans = c.moi ? [] : cols[0].lig.filter(l => !c.lig.some(b => this.memes(l, b)));
-      const ex = c.moi ? "" : this.extraits(texte, c.nom || c.g.pinyin);
+      const ex = c.moi || !texte ? "" : this.extraits(texte, c.nom || c.g.pinyin);
       return `<article class="pf-noeud${c.moi ? " pf-moi" : ""}" data-forme="${ci}">` +
         `<header><strong>${escapeHtml(c.g.pinyin)}</strong> <span class="hanzi">${escapeHtml(c.g.hanzi || "")}</span>${c.moi ? ' <span class="pf-etiq-moi">cette formule</span>' : ` <button type="button" class="edit-toggle-btn" data-pf-fiche="${escapeHtml(c.id)}">Fiche</button> <button type="button" class="cmp-add cmp-mini" data-pf-cmp="${escapeHtml(c.id)}" title="Ajouter au comparateur">⇄</button>`}</header>` +
         ((c.n.actions || []).length ? `<div class="pf-bloc pf-b-act"><span class="pf-tit">Actions</span>${escapeHtml(c.n.actions.slice(0, 4).join(" · "))}</div>` : "") +
@@ -4060,7 +4061,9 @@ const Comparateur = {
     document.getElementById("cmp-mode-form").classList.toggle("active", m === "form");
     document.getElementById("cmp-mode-fam").classList.toggle("active", m === "fam");
     // le mode « tableaux par famille » a ses propres commandes ; les autres partagent la zone de recherche et le tableau
-    const fam = m === "fam", tabsyn = m === "tabsyn", special = fam || tabsyn;
+    const fam = m === "fam", tabsyn = m === "tabsyn", arbre = m === "arbre", special = fam || tabsyn || arbre;
+    document.getElementById("cmp-mode-arbre").classList.toggle("active", arbre);
+    document.getElementById("cmp-arbre-panel").style.display = arbre ? "" : "none";
     document.getElementById("cmp-mode-tabsyn").classList.toggle("active", tabsyn);
     document.getElementById("cmp-tabsyn-panel").style.display = tabsyn ? "" : "none";
     document.querySelector("#tab-comparer .cmp-ajout").style.display = special ? "none" : "";
@@ -4068,6 +4071,7 @@ const Comparateur = {
     document.querySelector("#tab-comparer .cmp-option").style.display = special ? "none" : "";
     document.getElementById("cmp-resultat").style.display = special ? "none" : "";
     document.getElementById("formules-view-tableaux-panel").style.display = fam ? "" : "none";
+    if (arbre) { this.ouvrirArbre(); this.mode = "arbre"; return; }
     if (tabsyn) { this.ouvrirTabSyn(); this.mode = "tabsyn"; return; }
     if (fam) { FormuleTableaux.ensureLoaded(); this.memoriser(); return; }
     document.getElementById("cmp-search").placeholder = m === "synd" ? "Ajouter un syndrome à comparer (nom, organe, vaisseau…)" : "Ajouter une formule à comparer (pinyin, indication…)";
@@ -4095,7 +4099,7 @@ const Comparateur = {
     this.memoriser();
     this.pastille();
     this.toast(type, "ajouté");
-    if (document.getElementById("tab-comparer").classList.contains("active") && this.mode !== "fam" && this.mode !== "tabsyn") { this.rendre(); }
+    if (document.getElementById("tab-comparer").classList.contains("active") && this.mode !== "fam" && this.mode !== "tabsyn" && this.mode !== "arbre") { this.rendre(); }
   },
 
   retirer(cle) {
@@ -4713,9 +4717,37 @@ Object.assign(Comparateur, {
 
   initTabSyn() {
     document.getElementById("cmp-mode-tabsyn").addEventListener("click", () => this.setMode("tabsyn"));
+    document.getElementById("cmp-mode-arbre").addEventListener("click", () => this.setMode("arbre"));
     document.getElementById("cts-tri").addEventListener("change", e => { this.ts.tri = e.target.value; this.rendreTabSyn(); });
     document.getElementById("cts-reinit").addEventListener("click", () => { ["type", "sous", "cat", "zone", "signes"].forEach(k => this.ts[k].clear()); this.rendreTabSyn(); });
     document.getElementById("cts-print").addEventListener("click", () => window.print());
+  },
+
+  // ---- arbre par famille de formules : dans quelle situation choisir quelle formule de la classe
+  async ouvrirArbre() {
+    const zone = document.getElementById("cmp-arbre-familles"), cats = Formules.categories();
+    let cur = null; try { cur = localStorage.getItem("mtc_arbre_famille"); } catch (e) { /* aucune famille mémorisée */ }
+    if (!cats.some(c => c[0] === cur)) cur = cats[0] && cats[0][0];
+    zone.innerHTML = cats.map(([id, nom]) => `<button type="button" class="cat-chip${id === cur ? " active" : ""}" data-f="${escapeHtml(id)}">${escapeHtml(Formules.court(nom))} (${Formules.index.filter(f => f.categorie_id === id).length})</button>`).join("");
+    zone.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { try { localStorage.setItem("mtc_arbre_famille", b.dataset.f); } catch (e) { /* ignoré */ } this.ouvrirArbre(); }));
+    await this.rendreArbre(cur);
+  },
+
+  async rendreArbre(id) {
+    const corps = document.getElementById("cmp-arbre-corps");
+    if (!id) { corps.innerHTML = ""; return; }
+    corps.innerHTML = `<p class="muted">Chargement…</p>`;
+    if (!this._norm) { try { this._norm = await Store.readJSON("formules/tableaux/normalisation.json"); } catch (e) { this._norm = {}; } }
+    await SubstanceNature.ensureLoaded();
+    const cols = [];
+    for (const e of Formules.index.filter(f => f.categorie_id === id)) { try { cols.push({ g: await Store.readJSON("formules/" + e.chemin), id: e.id, nom: e.pinyin }); } catch (err) { /* formule illisible : ignorée */ } }
+    if (cols.length < 2) { corps.innerHTML = `<p class="muted">Cette famille n'a qu'une formule : rien à comparer.</p>`; return; }
+    corps.innerHTML = `<div class="pf-vue">${ProchesFormules.arbre(cols, null)}</div>`;
+    corps.querySelectorAll("[data-pf-fiche]").forEach(b => b.addEventListener("click", () => { const e = Formules.index.find(x => x.id === b.dataset.pfFiche); if (e) { document.querySelector('.tab-btn[data-tab="formules"]').click(); Formules.showDetail(e); } }));
+    corps.querySelectorAll("[data-pf-cmp]").forEach(b => b.addEventListener("click", () => this.ajouterFormule(b.dataset.pfCmp)));
+    ProchesFormules.survol(corps);
+    ProchesFormules.tracer(corps);
+    if (!this._resizeArbre) { this._resizeArbre = true; window.addEventListener("resize", () => { const c = document.getElementById("cmp-arbre-corps"); if (c && c.offsetParent) ProchesFormules.tracer(c); }); }
   },
 
   attributs(e) {
