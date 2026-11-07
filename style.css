@@ -727,3 +727,47 @@ mark.surlignage { background: #f4ff00; color: #000; font-weight: inherit; paddin
 #cmp-pastille.msg::after { content: " — " attr(data-msg); font-weight: 400; }
 @media print { #cmp-pastille, .cmp-add, .cmp-actions { display: none !important; } }
 body:has(#tab-comparer.active) #cmp-pastille { display: none; }
+
+/* Listes groupées et repliables (formules, syndromes) */
+#formule-categories, #syn-groups { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 0.35rem; scrollbar-width: thin; }
+#formule-categories .cat-chip, #syn-groups .cat-chip { white-space: nowrap; flex: 0 0 auto; }
+.gl-barre { display: flex; gap: 0.4rem; margin: 0 0 0.6rem; }
+.gl-barre .edit-toggle-btn { font-size: 0.72rem; padding: 0.15rem 0.5rem; }
+#formule-list li.gl-groupe, #syn-list li.gl-groupe { padding: 0; border-bottom: 0; cursor: default; background: transparent; }
+#formule-list li.gl-groupe:hover, #syn-list li.gl-groupe:hover { background: transparent; }
+.gl-groupe > details { border: 1px solid var(--line); border-left: 5px solid var(--gl-couleur, var(--accent)); margin: 0 0 0.45rem; background: var(--bg); }
+.gl-groupe summary { display: flex; align-items: center; gap: 0.55rem; padding: 0.55rem 0.7rem; cursor: pointer; list-style: none; font-weight: 700; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.02em; }
+.gl-groupe summary::-webkit-details-marker { display: none; }
+.gl-groupe summary::before { content: "▸"; color: var(--gl-couleur, var(--accent)); display: inline-block; transition: transform 0.12s; }
+.gl-groupe details[open] > summary::before { transform: rotate(90deg); }
+.gl-groupe summary:hover { background: var(--accent-soft); }
+.gl-nom { flex: 1; min-width: 0; }
+.gl-n { background: var(--gl-couleur, var(--accent)); color: #fff; border-radius: 999px; padding: 0 0.55rem; font-size: 0.72rem; font-weight: 700; line-height: 1.5; }
+.gl-items { list-style: none; margin: 0; padding: 0; }
+.gl-n1 > details { margin: 0.3rem 0.5rem 0.3rem 0.7rem; border-left-width: 3px; }
+.gl-n1 summary { font-size: 0.78rem; padding: 0.4rem 0.6rem; }
+.gl-item { padding: 0.5rem 0.8rem 0.5rem 0.9rem; border-top: 1px solid var(--line); cursor: pointer; }
+.gl-item:hover { background: var(--accent-soft); }
+.gl-item.selected { background: var(--accent); }
+.gl-item.selected .fl-pinyin, .gl-item.selected .fl-nomfr, .gl-item.selected .fl-syndrome, .gl-item.selected .fl-extrait { color: var(--on-accent); }
+.fl-nomfr { display: block; font-style: italic; font-size: 0.84rem; }
+.gl-item .fl-syndrome { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Comparer : tableau plus lisible */
+.cmp-option { display: inline-flex; align-items: center; gap: 0.4rem; margin: 0 0 0.6rem; cursor: pointer; font-size: 0.9rem; }
+.cmp-defile { max-height: 78vh; overflow: auto; }
+.cmp-table { font-size: 0.9rem; }
+.cmp-table th, .cmp-table td { padding: 0.6rem 0.7rem; }
+.cmp-table thead th { position: sticky; top: 0; z-index: 3; background: var(--panel); border-top: 4px solid var(--accent); }
+.cmp-table thead th:first-child { left: 0; z-index: 5; }
+.cmp-table tbody th { position: sticky; left: 0; z-index: 2; box-shadow: 2px 0 0 var(--line); }
+.cmp-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--accent-soft) 35%, transparent); }
+.cmp-nom { font-size: 1rem; }
+.cmp-bilan { margin-top: 0.25rem; font-size: 0.78rem; font-weight: 700; color: var(--accent); }
+.cmp-chip { font-size: 0.84rem; padding: 0.1rem 0.6rem; margin: 0.15rem 0.2rem 0.15rem 0; }
+.cmp-resume { padding: 0.6rem 0.8rem; margin: 0.4rem 0; border: 1px dashed var(--line); background: var(--panel); }
+.cmp-sans-commun .cmp-commun, .cmp-sans-commun .cmp-ligne-commune { display: none; }
+.cmp-sans-commun .cmp-commun-c { visibility: hidden; }
+#syn-groups { display: flex; gap: 0.4rem; margin-bottom: 0.8rem; }
+#cmp-search { width: 100%; padding: 0.6rem 0.8rem; font-family: inherit; font-size: 0.95rem; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); }
+#cmp-search:focus { outline: 1.5px solid var(--accent); outline-offset: -2px; }

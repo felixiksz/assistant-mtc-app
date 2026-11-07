@@ -202,7 +202,44 @@ const DataDir = {
 };
 
 /* ============================= Base de formules ============================= */
-/* ===== Nature des substances (chaud / tiède / neutre / frais / froid) : coloration + échelle de la nature de la formule =====
+/* ===== Liste groupée et repliable (recherche par catégories) : formules, syndromes… ===== */
+const COULEURS_GROUPES = ["#378ADD", "#BA7517", "#1D9E75", "#7F77DD", "#D4537E", "#D85A30", "#639922", "#185FA5", "#993C1D", "#5F5E5A"];
+
+// groupes : [{ id, nom, total, couleur?, items?: [...], sous?: [groupes] }]
+// o : { tout (bool : tout déplié), ouverts (Set des groupes ouverts, mémorisé), item(li, x) }
+function listeGroupee(ul, groupes, o) {
+  ul.innerHTML = "";
+  const rendre = (parent, g, niveau, couleur, cle) => {
+    const li = document.createElement("li");
+    li.className = "gl-groupe gl-n" + niveau;
+    const det = document.createElement("details");
+    det.open = !!o.tout || o.ouverts.has(cle);
+    det.style.setProperty("--gl-couleur", g.couleur || couleur);
+    det.innerHTML = `<summary><span class="gl-nom">${escapeHtml(g.nom)}</span><span class="gl-n">${g.total}</span></summary>`;
+    det.addEventListener("toggle", () => { if (det.open) o.ouverts.add(cle); else o.ouverts.delete(cle); });
+    const sub = document.createElement("ul");
+    sub.className = "gl-items";
+    (g.sous || []).forEach(sg => rendre(sub, sg, niveau + 1, g.couleur || couleur, cle + "/" + sg.id));
+    (g.items || []).forEach(x => { const it = document.createElement("li"); it.className = "gl-item"; o.item(it, x); sub.appendChild(it); });
+    det.appendChild(sub);
+    li.appendChild(det);
+    parent.appendChild(li);
+  };
+  groupes.forEach((g, i) => rendre(ul, g, 0, COULEURS_GROUPES[i % COULEURS_GROUPES.length], g.id));
+}
+
+// barre « Tout déplier / Tout replier » placée juste avant la liste
+function barreGroupes(ul, surChoix) {
+  let b = ul.previousElementSibling;
+  if (b && b.classList.contains("gl-barre")) return;
+  b = document.createElement("div");
+  b.className = "gl-barre";
+  b.innerHTML = `<button type="button" class="edit-toggle-btn" data-a="ouvrir">Tout déplier</button><button type="button" class="edit-toggle-btn" data-a="fermer">Tout replier</button>`;
+  b.querySelectorAll("button").forEach(x => x.addEventListener("click", () => surChoix(x.dataset.a === "ouvrir")));
+  ul.parentNode.insertBefore(b, ul);
+}
+
+/* ===== Nature des substances (chaud / tiède / neutre / frais / froid) : coloration de chaque substance dans la composition =====
    Données : reference/substances_nature/nature.json (généré par generer.py d'après la pharmacopée du jeu). */
 const SubstanceNature = {
   data: null,
@@ -250,6 +287,8 @@ const Formules = {
   index: [],
   byId: new Map(),
   activeCategory: null,
+  _ouverts: new Set(),
+  _tout: false,
 
   async load() {
     try {
@@ -282,10 +321,17 @@ const Formules = {
       const chip = document.createElement("button");
       chip.className = "cat-chip";
       const n = this.index.filter(f => f.categorie_id === id).length;
-      chip.textContent = nom + " (" + n + ")";
+      chip.textContent = this.court(nom) + " (" + n + ")";
+      chip.title = nom;
       chip.addEventListener("click", () => { this.activeCategory = id; this.applyFilters(); this.highlightCategory(chip); });
       el.appendChild(chip);
     });
+  },
+
+  // « Prescriptions qui tonifient le yīn » -> « Tonifient le yīn »
+  court(nom) {
+    const t = String(nom || "").replace(/^(?:pr[eé]scriptions|formules)\s+(?:qui\s+)?(?:les\s+)?/i, "");
+    return t.charAt(0).toUpperCase() + t.slice(1);
   },
 
   highlightCategory(chip) {
@@ -301,25 +347,26 @@ const Formules = {
   search(query) {
     let pool = this.index;
     if (this.activeCategory) pool = pool.filter(f => f.categorie_id === this.activeCategory);
-    const q = (query || "").trim().toLowerCase();
+    const q = dsNorm((query || "").trim());
     if (!q) return pool;
-    return pool.filter(f =>
-      (f.pinyin || "").toLowerCase().includes(q) ||
-      (f.nom_fr || "").toLowerCase().includes(q) ||
-      (f.indications_syndrome || "").toLowerCase().includes(q) ||
-      (f.categorie_nom || "").toLowerCase().includes(q)
-    );
+    return pool.filter(f => dsNorm([f.pinyin, f.nom_fr, f.indications_syndrome, f.categorie_nom].join(" ")).includes(q));
   },
 
   renderList(list) {
     const ul = document.getElementById("formule-list");
-    ul.innerHTML = "";
-    list.forEach(f => {
-      const li = document.createElement("li");
-      li.innerHTML = `<span class="fl-pinyin">${escapeHtml(f.pinyin || f.id)}</span>
-        <span class="fl-syndrome">${escapeHtml(f.indications_syndrome || "")}</span>`;
-      li.addEventListener("click", () => this.showDetail(f, li));
-      ul.appendChild(li);
+    const q = document.getElementById("formule-search").value.trim();
+    const m = new Map();
+    list.forEach(f => { if (!m.has(f.categorie_id)) m.set(f.categorie_id, { nom: f.categorie_nom, items: [] }); m.get(f.categorie_id).items.push(f); });
+    const groupes = [...m.entries()].map(([id, g]) => ({ id, nom: g.nom, total: g.items.length, items: g.items }));
+    barreGroupes(ul, ouvrir => { this._tout = ouvrir; if (!ouvrir) this._ouverts.clear(); this.applyFilters(); });
+    listeGroupee(ul, groupes, {
+      tout: !!q || !!this.activeCategory || groupes.length < 2 || this._tout, ouverts: this._ouverts,
+      item: (li, f) => {
+        li.innerHTML = `<span class="fl-pinyin">${dsMarque(f.pinyin || f.id, q)}</span>` +
+          (f.nom_fr ? `<span class="fl-nomfr">${dsMarque(f.nom_fr, q)}</span>` : "") +
+          `<span class="fl-syndrome">${dsMarque(f.indications_syndrome || "", q)}</span>`;
+        li.addEventListener("click", () => this.showDetail(f, li));
+      }
     });
     document.getElementById("formule-count").textContent = list.length + " formule(s)";
   },
@@ -1126,6 +1173,8 @@ document.querySelector('.tab-btn[data-tab="tuteur"]').addEventListener("click", 
 const Syndromes = {
   entries: [], // {id, domaine, nom, sousLabel, chemin}
   activeDomaine: null,
+  _ouverts: new Set(),
+  _tout: false,
   domaineLabels: { organes: "Organes", externes: "Externes", qi_sang_liquides: "Qi / Sang / Liquides", canaux: "Canaux", merveilleux_vaisseaux: "Merveilleux vaisseaux" },
   rawIndexByDomaine: {},
   _deepIndexed: false,
@@ -1245,15 +1294,26 @@ const Syndromes = {
 
   renderList(list, query) {
     const ul = document.getElementById("syn-list");
-    ul.innerHTML = "";
-    list.forEach(e => {
-      const li = document.createElement("li");
-      const ex = this.extrait(e, query);
-      li.innerHTML = `<span class="fl-pinyin">${escapeHtml(e.nom)}</span>
-        <span class="fl-syndrome">${escapeHtml(this.domaineLabels[e.domaine])}${e.sousLabel ? " · " + escapeHtml(e.sousLabel) : ""}</span>` +
-        (ex ? `<span class="fl-extrait">${ex}</span>` : "");
-      li.addEventListener("click", () => this.showDetail(e, li));
-      ul.appendChild(li);
+    const q = (query || "").trim();
+    const parDomaine = new Map();
+    list.forEach(e => { if (!parDomaine.has(e.domaine)) parDomaine.set(e.domaine, []); parDomaine.get(e.domaine).push(e); });
+    const groupes = [...parDomaine.entries()].map(([dom, items]) => {
+      const m = new Map();
+      items.forEach(e => { const k = e.sousLabel || "—"; if (!m.has(k)) m.set(k, []); m.get(k).push(e); });
+      const g = { id: dom, nom: this.domaineLabels[dom] || dom, total: items.length, couleur: DOM_COUL[dom] };
+      // un deuxième niveau (organe, vaisseau, niveau…) seulement s'il regroupe réellement plusieurs syndromes
+      if ([...m.values()].some(v => v.length > 1) && m.size > 1) g.sous = [...m.entries()].map(([k, v]) => ({ id: k, nom: k, total: v.length, items: v }));
+      else g.items = items;
+      return g;
+    });
+    barreGroupes(ul, ouvrir => { this._tout = ouvrir; if (!ouvrir) this._ouverts.clear(); this.applyFilters(); });
+    listeGroupee(ul, groupes, {
+      tout: !!q || !!this.activeDomaine || groupes.length < 2 || this._tout, ouverts: this._ouverts,
+      item: (li, e) => {
+        const ex = this.extrait(e, query);
+        li.innerHTML = `<span class="fl-pinyin">${dsMarque(e.nom, q)}</span>` + (ex ? `<span class="fl-extrait">${ex}</span>` : "");
+        li.addEventListener("click", () => this.showDetail(e, li));
+      }
     });
     document.getElementById("syn-count").textContent = list.length + " syndrome(s)";
   },
@@ -3339,6 +3399,7 @@ const Comparateur = {
     document.getElementById("cmp-mode-synd").addEventListener("click", () => this.setMode("synd"));
     document.getElementById("cmp-mode-form").addEventListener("click", () => this.setMode("form"));
     document.getElementById("cmp-search").addEventListener("input", e => this.suggerer(e.target.value));
+    document.getElementById("cmp-diff").addEventListener("change", e => document.getElementById("cmp-resultat").classList.toggle("cmp-sans-commun", e.target.checked));
     document.querySelector('.tab-btn[data-tab="comparer"]').addEventListener("click", () => this.ouvert());
     this.pastille();
   },
@@ -3480,8 +3541,10 @@ const Comparateur = {
     const infos = DiagSignes.courtsInfo;
     const cats = [];
     (DiagSignes.courtsData ? DiagSignes.courtsData.signes : []).forEach(s => { if (!cats.includes(s.categorie)) cats.push(s.categorie); });
-    const entete = sds.map((sd, i) => `<th scope="col"><div class="cmp-nom">${escapeHtml(sd.entry ? sd.entry.nom : sd.cle)}</div>` +
+    const communs = [...infos.values()].filter(s => courts.every(x => x.has(s.id)));
+    const entete = sds.map((sd, i) => `<th scope="col" class="cmp-col" style="border-top-color:${(sd.entry && DOM_COUL[sd.entry.domaine]) || "var(--accent)"}"><div class="cmp-nom">${escapeHtml(sd.entry ? sd.entry.nom : sd.cle)}</div>` +
       `<div class="muted">${escapeHtml(sd.entry ? (Syndromes.domaineLabels[sd.entry.domaine] || "") + (sd.entry.sousLabel ? " · " + sd.entry.sousLabel : "") : "")}</div>` +
+      `<div class="cmp-bilan">${[...courts[i]].filter(id => !courts.every(x => x.has(id))).length} signe(s) propre(s)</div>` +
       `<div class="cmp-actions"><button type="button" class="edit-toggle-btn" data-fiche="${escapeHtml(cles[i])}">Fiche</button> <button type="button" class="edit-toggle-btn" data-r="${escapeHtml(cles[i])}" aria-label="Retirer">✕</button></div></th>`).join("");
     let lignes = "", nCommuns = 0;
     cats.forEach(cat => {
@@ -3489,13 +3552,15 @@ const Comparateur = {
       if (!ids.some(id => courts.some(set => set.has(id)))) return;
       const cells = courts.map(set => ids.filter(id => set.has(id)).map(id => this.puce(infos.get(id).label, courts.every(x => x.has(id)))).join(" "));
       ids.forEach(id => { if (courts.every(x => x.has(id))) nCommuns++; });
-      lignes += `<tr><th scope="row">${escapeHtml(cat)}</th>${cells.map(c => `<td>${c || '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
+      const toutCommun = ids.filter(id => courts.some(set => set.has(id))).every(id => courts.every(x => x.has(id)));
+      lignes += `<tr${toutCommun ? ' class="cmp-ligne-commune"' : ""}><th scope="row">${escapeHtml(cat)}</th>${cells.map(c => `<td>${c || '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
     });
     // lignes sans signe court : phrases entières, repliées
     const sans = sds.map(sd => { const vus = new Set(); (sd.courtsParCle || new Map()).forEach((ids, k) => { if (ids.size) vus.add(k); }); return (sd.rows || []).filter(r => !vus.has(r.key)); });
     const phrases = `<tr><th scope="row">Autres lignes <span class="muted">(phrases entières)</span></th>${sans.map(l => `<td>${l.length ? `<details><summary>${l.length} ligne(s)</summary><ul class="cmp-phrases">${l.map(r => `<li>${escapeHtml(r.text)}</li>`).join("")}</ul></details>` : '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
     const nb = `<tr><th scope="row">Lignes du tableau</th>${sds.map((sd, i) => `<td class="muted">${(sd.rows || []).length} ligne(s), ${courts[i].size} signe(s) court(s)</td>`).join("")}</tr>`;
-    return `<p class="muted cmp-legende"><span class="cmp-chip cmp-commun">pâle</span> commun à tous · <span class="cmp-chip cmp-propre">couleur</span> propre à certains ${nCommuns ? `· ${nCommuns} signe(s) commun(s) à tous` : "· aucun signe court commun à tous"}</p>` +
+    return `<div class="cmp-resume"><strong>En commun à tous (${communs.length})</strong> ${communs.length ? communs.map(s => this.puce(s.label, true)).join(" ") : '<span class="muted">aucun signe court commun</span>'}</div>` +
+      `<p class="muted cmp-legende"><span class="cmp-chip cmp-commun">pâle</span> commun à tous · <span class="cmp-chip cmp-propre">couleur</span> propre à certains</p>` +
       `<div class="cmp-defile"><table class="cmp-table"><thead><tr><th></th>${entete}</tr></thead><tbody>${nb}${lignes || `<tr><td colspan="${sds.length + 1}" class="muted">Aucun signe court reconnu dans ces syndromes.</td></tr>`}${phrases}</tbody></table></div>`;
   },
 
@@ -3511,7 +3576,8 @@ const Comparateur = {
       fiches.push({ id, f, n });
     }
     const cle = t => dsNorm(String(t || "").replace(/\(.*?\)/g, "")).replace(/[^a-z0-9]/g, "");
-    const entete = fiches.map(({ id, f }) => `<th scope="col"><div class="cmp-nom">${escapeHtml(f.pinyin || id)} <span class="hanzi">${escapeHtml(f.hanzi || "")}</span></div>` +
+    const famCle = [...new Set((Formules.index || []).map(x => x.categorie_id))];
+    const entete = fiches.map(({ id, f }) => `<th scope="col" class="cmp-col" style="border-top-color:${COULEURS_GROUPES[Math.max(0, famCle.indexOf(f.categorie_id)) % COULEURS_GROUPES.length]}"><div class="cmp-nom">${escapeHtml(f.pinyin || id)} <span class="hanzi">${escapeHtml(f.hanzi || "")}</span></div>` +
       `<div class="muted">${escapeHtml(f.nom_fr || "")}</div><div class="muted">${escapeHtml(f.categorie_nom || "")}</div>` +
       `<div class="cmp-actions"><button type="button" class="edit-toggle-btn" data-fiche="${escapeHtml(id)}">Fiche</button> <button type="button" class="edit-toggle-btn" data-r="${escapeHtml(id)}" aria-label="Retirer">✕</button></div></th>`).join("");
     const listeAtomique = (champ, titre) => {
@@ -3519,7 +3585,8 @@ const Comparateur = {
       if (!sets.some(s => s.length)) return "";
       const k = sets.map(s => new Set(s.map(cle)));
       const cells = sets.map(s => s.map(t => this.puce(t, k.every(set => set.has(cle(t))))).join(" "));
-      return `<tr><th scope="row">${titre}</th>${cells.map(c => `<td>${c || '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
+      const tousCommuns = sets.every(s => s.every(t => k.every(set => set.has(cle(t)))));
+      return `<tr${tousCommuns ? ' class="cmp-ligne-commune"' : ""}><th scope="row">${titre}</th>${cells.map(c => `<td>${c || '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
     };
     // composition : une ligne par substance (communes en premier)
     const subs = new Map();
@@ -3530,7 +3597,7 @@ const Comparateur = {
     }));
     const lignesSubs = [...subs.values()].sort((a, b) => b.cells.filter(Boolean).length - a.cells.filter(Boolean).length || a.nom.localeCompare(b.nom, "fr")).map(s => {
       const commun = s.cells.every(Boolean);
-      return `<tr><th scope="row">${escapeHtml(s.nom)}</th>${s.cells.map(c => `<td class="${c ? (commun ? "cmp-commun-c" : "cmp-propre-c") : ""}">${c ? `${escapeHtml(c.dose || "")} <span class="muted">${escapeHtml((c.role_hierarchique || "").split(" ")[0])}</span> ${SubstanceNature.pastille(c)}` : '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
+      return `<tr${commun ? ' class="cmp-ligne-commune"' : ""}><th scope="row">${escapeHtml(s.nom)}</th>${s.cells.map(c => `<td class="${c ? (commun ? "cmp-commun-c" : "cmp-propre-c") : ""}">${c ? `${escapeHtml(c.dose || "")} <span class="muted">${escapeHtml((c.role_hierarchique || "").split(" ")[0])}</span> ${SubstanceNature.pastille(c)}` : '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
     }).join("");
     const textes = (titre, fn) => `<tr><th scope="row">${titre}</th>${fiches.map(x => `<td>${escapeHtml(fn(x) || "") || '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
     return `<p class="muted cmp-legende"><span class="cmp-chip cmp-commun">pâle</span> commun à toutes · <span class="cmp-chip cmp-propre">couleur</span> propre à certaines</p>` +
