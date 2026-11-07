@@ -1015,3 +1015,15 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .cm-famille { margin: 0.8rem 0; border: 1px dashed var(--ink); padding: 0.5rem 0.8rem; }
 .cm-famille summary { cursor: pointer; font-weight: 700; }
 .cm-famille-corps p { margin: 0.35rem 0; font-size: 0.88rem; line-height: 1.5; }
+
+/* Cartes : une typographie par type d'information (titre, nature de la carte, rubrique, valeurs, citation du cours) */
+.pf-carte header strong, .pf-noeud header strong, .prop-nom { font-family: var(--font-title); font-weight: 400; font-size: 1.12rem; line-height: 1.25; }
+.pf-meta, .pf-carte header > .muted { font-family: var(--font-body); font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.72; margin-top: 0.2rem; }
+.pf-ligne { padding-left: 0.55rem; border-left: 3px solid var(--line); }
+.pf-etiq { font-family: var(--font-body); font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.75; font-style: normal; }
+.pf-chip { font-size: 0.8rem; font-weight: 600; }
+.pf-chip.pf-retire { border-style: dashed; text-decoration: line-through; }
+.pf-valeur { font-size: 0.82rem; }
+.formule-detail blockquote.pf-extrait, #cmp-arbre-corps blockquote.pf-extrait { font-family: var(--font-body); font-style: normal; font-size: 0.8rem; line-height: 1.55; background: var(--panel); border-left: 3px solid var(--ink); padding: 0.45rem 0.7rem; margin: 0; }
+.formule-detail blockquote.pf-extrait .pf-etiq { margin-bottom: 0.15rem; }
+.pf-var { border-top-style: solid; }

@@ -984,11 +984,12 @@ const ProchesFormules = {
     let html = "";
     if (fiches.length) html += `<div class="pf-vues"><div class="pf-onglets"><button type="button" class="cat-chip" data-vue="mm">Arbre signes → formules</button><button type="button" class="cat-chip" data-vue="mat">Matrice</button></div>` +
       `<div class="pf-vue" data-vue="mm">${this.mindmap(f, fiches, texte)}</div><div class="pf-vue" data-vue="mat">${this.matrice(f, fiches, texte)}</div></div>`;
-    if (horsBase.length) html += `<details class="proches-horsbase"><summary>Variantes citées dans le cours, absentes de ta base (${horsBase.length})</summary><div class="proches-grille">${horsBase.map(e => this.carteHorsBase(e, texte)).join("")}</div></details>`;
+    if (horsBase.length) html += `<details class="proches-horsbase"><summary>Variantes citées dans le cours (${horsBase.length})</summary><div class="proches-grille">${horsBase.map(e => this.carteHorsBase(e, texte)).join("")}</div></details>`;
     html += `<details class="proches-texte"><summary>Texte intégral du cours</summary><div class="tcm-text">${formatFormuleField(texte)}</div></details>`;
     sec.querySelector(".proches-corps").innerHTML = html;
     sec.querySelectorAll("[data-pf-fiche]").forEach(b => b.addEventListener("click", () => { const e = Formules.index.find(x => x.id === b.dataset.pfFiche); if (e) Formules.showDetail(e); }));
     sec.querySelectorAll("[data-pf-cmp]").forEach(b => b.addEventListener("click", () => Comparateur.ajouterFormule(b.dataset.pfCmp)));
+    sec.querySelectorAll("[data-pf-var]").forEach(b => b.addEventListener("click", () => { const v = Formules.varParId.get(b.dataset.pfVar); if (v) Formules.showVariation(v); }));
     sec.querySelectorAll(".pf-clamp").forEach(d => d.addEventListener("click", () => d.classList.toggle("ouvert")));
     const cases = sec.querySelector("#pf-diff");
     if (cases) cases.addEventListener("change", () => sec.querySelector(".pf-matrice").classList.toggle("pf-sans-commun", cases.checked));
@@ -1138,9 +1139,22 @@ const ProchesFormules = {
 
   carteHorsBase(e, texte) {
     const ex = this.extraits(texte, e.nom);
+    const k = this.idCle(e.nom);
+    const v = (Formules.variations || []).find(x => this.idCle(x.nom) === k || (x.alias || []).some(a => this.idCle(a) === k));
+    if (v) {
+      const parent = Formules.byId.get(v.parent);
+      const chips = [...v.ajouts.map(a => `<span class="pf-chip pf-autre">+ ${escapeHtml(a)}</span>`), ...v.retraits.map(a => `<span class="pf-chip pf-retire">− ${escapeHtml(a)}</span>`)].join(" ");
+      return `<article class="pf-carte pf-var">
+      <header><strong>${escapeHtml(v.nom)}</strong>${v.hanzi ? ` <span class="hanzi">${escapeHtml(v.hanzi)}</span>` : ""}<div class="pf-meta">${v.type === "variation" ? "Variation" : escapeHtml(v.type)} de ${escapeHtml(parent ? parent.pinyin : v.parent)} · sa fiche est dans la liste des formules</div></header>
+      ${chips ? `<div class="pf-ligne"><span class="pf-etiq">Ce qui change</span>${chips}</div>` : ""}
+      ${v.doses_citees ? `<div class="pf-ligne"><span class="pf-etiq">Doses citées</span><span class="pf-valeur">${escapeHtml(v.doses_citees)}</span></div>` : ""}
+      ${ex ? `<blockquote class="pf-extrait"><span class="pf-etiq">Selon le cours</span>${escapeHtml(ex)}</blockquote>` : ""}
+      <footer><button type="button" class="edit-toggle-btn" data-pf-var="${escapeHtml(v.id)}">Fiche de la variation</button></footer>
+    </article>`;
+    }
     const plus = [...ex.matchAll(/\+\s*([^,+;()]+?)(?=\s*(?:,|\+|;|\)|\.|$))/g)].map(m => m[1].trim()).filter(Boolean);
     return `<article class="pf-carte pf-hors">
-      <header><strong>${escapeHtml(e.nom)}</strong><div class="muted">variante citée dans le cours — pas dans ta base</div></header>
+      <header><strong>${escapeHtml(e.nom)}</strong><div class="pf-meta">variante citée dans le cours · pas dans ta base</div></header>
       ${plus.length ? `<div class="pf-ligne"><span class="pf-etiq">Ajouts cités</span>${plus.map(p => `<span class="pf-chip pf-autre">+ ${escapeHtml(p)}</span>`).join(" ")}</div>` : ""}
       ${ex ? `<blockquote class="pf-extrait"><span class="pf-etiq">Selon le cours</span>${escapeHtml(ex)}</blockquote>` : ""}
     </article>`;
