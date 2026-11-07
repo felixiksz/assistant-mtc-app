@@ -19,7 +19,7 @@
   --c-stase: #6a1b9a;
   --c-humidite: #8a6a00;
   --font-body: "Archivo", system-ui, sans-serif;
-  --font-title: "Young Serif", Georgia, serif;
+  --font-title: "Young Serif", "Archivo", Georgia, serif;
   font-family: var(--font-body);
 }
 @media (prefers-color-scheme: dark) {
@@ -865,3 +865,27 @@ tr.repli.cmp-cat td::before { content: attr(data-n); color: var(--muted, #666); 
 .proches-legende { font-size: 0.8rem; }
 .proches-texte { margin-top: 0.4rem; }
 .proches-texte summary { cursor: pointer; font-size: 0.85rem; }
+
+/* Fiche de formule : comparaison avec formules proches (matrice) */
+.pf-barre { display: flex; flex-wrap: wrap; gap: 0.8rem 1.5rem; align-items: center; margin: 0.4rem 0; font-size: 0.85rem; }
+.pf-legende { display: inline-flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+.pf-pt { display: inline-block; width: 0.85rem; height: 0.85rem; border-radius: 50%; vertical-align: -0.1rem; }
+.pf-pt-moi { background: #3a9a40; }
+.pf-pt-commun { background: var(--muted, #888); }
+.pf-pt-autre { background: #d9822b; }
+.pf-sans-commun .cmp-ligne-commune { display: none; }
+.pf-table td { text-align: center; }
+.pf-table td[data-n] { text-align: left; }
+.pf-table .pf-moi-col { border-top-color: #3a9a40; }
+.pf-bilan { font-size: 0.8rem; font-weight: 700; }
+.pf-clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; font-size: 0.82rem; line-height: 1.45; cursor: pointer; }
+.pf-clamp.ouvert { display: block; }
+.proches-horsbase { margin-top: 0.6rem; }
+.proches-horsbase summary { cursor: pointer; font-size: 0.85rem; margin-bottom: 0.4rem; }
+.pf-table th, .pf-table td { padding: 0.3rem 0.5rem; }
+.pf-table th, .pf-table .cmp-section, .pf-table tbody th { color: var(--ink); }
+.pf-table tbody th, .pf-table thead th:first-child { width: 13rem; min-width: 13rem; white-space: normal; }
+.pf-table thead th { white-space: normal; }
+.pf-table .hanzi { font-size: 1rem; display: block; }
+.pf-table .cmp-nom { font-size: 0.95rem; }
+.pf-table td[data-n] { min-width: 12rem; }

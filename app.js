@@ -553,45 +553,68 @@ const ProchesFormules = {
     const sec = racine.querySelector("section.proches");
     if (!sec || !f.comparaison_formules_proches) return;
     const texte = String(f.comparaison_formules_proches);
-    const moi = this.lignes(f);
     const liste = this.noms(texte).filter(e => this.idCle(e.nom) !== this.idCle(f.pinyin));
     if (!liste.length) return;                                   // rien à représenter : le texte reste tel quel
-    const cartes = await Promise.all(liste.map(async e => {
-      if (!e.base) return this.carteHorsBase(e, texte);
-      try { return this.carteBase(e, await Store.readJSON("formules/" + e.base.chemin), moi, texte); }
-      catch (err) { return this.carteHorsBase(e, texte); }
-    }));
-    sec.querySelector(".proches-corps").innerHTML =
-      `<p class="muted proches-legende"><span class="pf-chip pf-moi">seulement dans cette formule</span> <span class="pf-chip pf-autre">seulement dans la formule proche</span> <span class="pf-chip pf-commun">en commun</span> — la composition est comparée sur les fiches ; l'extrait vient du cours.</p>` +
-      `<div class="proches-grille">${cartes.join("")}</div>` +
-      `<details class="proches-texte"><summary>Texte intégral du cours</summary><div class="tcm-text">${formatFormuleField(texte)}</div></details>`;
+    const enBase = liste.filter(e => e.base), horsBase = liste.filter(e => !e.base);
+    const fiches = [];
+    for (const e of enBase) { try { fiches.push({ e, g: await Store.readJSON("formules/" + e.base.chemin) }); } catch (err) { horsBase.push(e); } }
+    let html = "";
+    if (fiches.length) html += this.matrice(f, fiches, texte);
+    if (horsBase.length) html += `<details class="proches-horsbase"><summary>Variantes citées dans le cours, absentes de ta base (${horsBase.length})</summary><div class="proches-grille">${horsBase.map(e => this.carteHorsBase(e, texte)).join("")}</div></details>`;
+    html += `<details class="proches-texte"><summary>Texte intégral du cours</summary><div class="tcm-text">${formatFormuleField(texte)}</div></details>`;
+    sec.querySelector(".proches-corps").innerHTML = html;
     sec.querySelectorAll("[data-pf-fiche]").forEach(b => b.addEventListener("click", () => { const e = Formules.index.find(x => x.id === b.dataset.pfFiche); if (e) Formules.showDetail(e); }));
     sec.querySelectorAll("[data-pf-cmp]").forEach(b => b.addEventListener("click", () => Comparateur.ajouterFormule(b.dataset.pfCmp)));
+    sec.querySelectorAll(".pf-clamp").forEach(d => d.addEventListener("click", () => d.classList.toggle("ouvert")));
+    const cases = sec.querySelector("#pf-diff");
+    if (cases) cases.addEventListener("change", () => sec.querySelector(".pf-matrice").classList.toggle("pf-sans-commun", cases.checked));
+    Comparateur.brancherReplis(sec.querySelector(".pf-matrice") || sec);
   },
 
-  carteBase(e, g, moi, texte) {
-    const eux = this.lignes(g);
-    const communs = moi.filter(a => eux.some(b => this.memes(a, b)));
-    const seulMoi = moi.filter(a => !eux.some(b => this.memes(a, b))), seulEux = eux.filter(b => !moi.some(a => this.memes(a, b)));
-    const union = communs.length + seulMoi.length + seulEux.length;
-    const pct = union ? Math.round((communs.length / union) * 100) : 0;
+  // maquette B : une ligne par substance, une colonne par formule, puis les textes du cours (actions, indications, contre-indications…)
+  matrice(f, fiches, texte) {
+    const cols = [{ g: f, moi: true, ex: this.extraits(texte, f.pinyin) }].concat(fiches.map(x => ({ g: x.g, ex: this.extraits(texte, x.e.nom), id: x.e.base.id })));
     const nom = c => String(c.substance_pinyin || "").replace(/\(.*?\)/g, "").trim();
-    const chipsCommuns = communs.map(a => {
-      const b = eux.find(x => this.memes(a, x)).c, na = this.premierNombre(a.c.dose), nb = this.premierNombre(b.dose);
-      const diff = na != null && nb != null && na !== nb;
-      return `<span class="pf-chip pf-commun" title="${escapeHtml(diff ? `Dose ici : ${a.c.dose} — dans ${g.pinyin} : ${b.dose}` : "même dose")}">${escapeHtml(nom(a.c))}${diff ? ` <small>${escapeHtml(String(a.c.dose).split("(")[0].trim())} ↔ ${escapeHtml(String(b.dose).split("(")[0].trim())}</small>` : ""}</span>`;
-    }).join(" ");
-    const ex = this.extraits(texte, e.nom);
-    return `<article class="pf-carte">
-      <header><strong>${escapeHtml(g.pinyin)}</strong> <span class="hanzi">${escapeHtml(g.hanzi || "")}</span><div class="muted">${escapeHtml(g.nom_fr || "")} · ${escapeHtml(Formules.court(g.categorie_nom || ""))}</div></header>
-      <div class="pf-prox" title="${communs.length} substance(s) en commun sur ${union}"><i style="width:${pct}%"></i><span>${communs.length}/${union} substances en commun</span></div>
-      <div class="pf-ligne"><span class="pf-etiq">Seulement ici (${seulMoi.length})</span>${seulMoi.length ? seulMoi.map(a => this.chip(a.c, "pf-moi")).join(" ") : '<span class="muted">—</span>'}</div>
-      <div class="pf-ligne"><span class="pf-etiq">Seulement dans ${escapeHtml(g.pinyin)} (${seulEux.length})</span>${seulEux.length ? seulEux.map(b => this.chip(b.c, "pf-autre")).join(" ") : '<span class="muted">—</span>'}</div>
-      ${communs.length ? `<details class="pf-communs"><summary>En commun (${communs.length})</summary>${chipsCommuns}</details>` : ""}
-      ${g.indications_syndrome ? `<p class="pf-indic"><span class="pf-etiq">Indication de ${escapeHtml(g.pinyin)}</span>${escapeHtml(g.indications_syndrome.length > 220 ? g.indications_syndrome.slice(0, 220).replace(/\s+\S*$/, "") + " …" : g.indications_syndrome)}</p>` : ""}
-      ${ex ? `<blockquote class="pf-extrait"><span class="pf-etiq">Selon le cours</span>${escapeHtml(ex)}</blockquote>` : ""}
-      <footer><button type="button" class="edit-toggle-btn" data-pf-fiche="${escapeHtml(e.base.id)}">Fiche</button> <button type="button" class="cmp-add" data-pf-cmp="${escapeHtml(e.base.id)}">⇄ Comparer</button></footer>
-    </article>`;
+    // lignes de substances : d'abord celles de cette formule, puis celles qui n'existent que dans les formules proches
+    const subs = [];
+    cols.forEach((col, ci) => this.lignes(col.g).forEach(l => {
+      let s = subs.find(x => this.memes(x, l));
+      if (!s) { s = { cles: l.cles.slice(), c: l.c, cells: new Array(cols.length).fill(null) }; subs.push(s); }
+      s.cells[ci] = l.c;
+    }));
+    const nb = s => s.cells.filter(Boolean).length;
+    subs.sort((a, b) => (b.cells[0] ? 1 : 0) - (a.cells[0] ? 1 : 0) || nb(b) - nb(a));
+    const communs = cols.map((col, ci) => subs.filter(s => s.cells[0] && s.cells[ci]).length);
+    const total = ci => subs.filter(s => s.cells[0] || s.cells[ci]).length;
+    const entete = cols.map((col, ci) => `<th scope="col" class="cmp-col${col.moi ? " pf-moi-col" : ""}"><div class="cmp-nom">${escapeHtml(col.g.pinyin)}</div><div class="hanzi">${escapeHtml(col.g.hanzi || "")}</div>` +
+      (col.moi ? `<div class="muted">cette formule</div>` : `<div class="cmp-bilan">${communs[ci]} en commun sur ${total(ci)}</div><div class="cmp-actions"><button type="button" class="edit-toggle-btn" data-pf-fiche="${escapeHtml(col.id)}">Fiche</button> <button type="button" class="cmp-add cmp-mini" data-pf-cmp="${escapeHtml(col.id)}" title="Ajouter au comparateur">⇄</button></div>`) + `</th>`).join("");
+    const lignesSubs = subs.map(s => {
+      const tous = s.cells.every(Boolean);
+      return `<tr class="cmp-sub-compo${tous ? " cmp-ligne-commune" : ""}"><th scope="row">${escapeHtml(nom(s.c))} ${SubstanceNature.pastille(s.c)}</th>` + s.cells.map((c, ci) => {
+        if (!c) return "<td></td>";
+        const classe = ci === 0 ? "pf-pt-moi" : (s.cells[0] ? "pf-pt-commun" : "pf-pt-autre");
+        return `<td><span class="pf-pt ${classe}" title="${escapeHtml("Dose : " + (c.dose || "?"))}"></span></td>`;
+      }).join("") + `</tr>`;
+    }).join("");
+    const bilan = `<tr><th scope="row" class="muted">En commun avec cette formule</th>${cols.map((col, ci) => `<td class="pf-bilan">${col.moi ? "" : communs[ci] + " / " + total(ci)}</td>`).join("")}</tr>`;
+    // lignes de texte (repliables) : l'information vient des fiches et du cours
+    const coupe = (t, n) => { t = String(t || "").replace(/\s+/g, " ").trim(); return t; };
+    const ligneTexte = (titre, fn) => {
+      const vals = cols.map(col => coupe(fn(col)));
+      if (!vals.some(Boolean)) return "";
+      return `<tr class="cmp-cat"><th scope="row">${titre}</th>` + vals.map(v => `<td data-n="${v ? "texte" : "—"}"><div class="cmp-cell">${v ? `<div class="pf-clamp" title="Clique pour lire tout le texte">${escapeHtml(v)}</div>` : '<span class="muted">—</span>'}</div></td>`).join("") + `</tr>`;
+    };
+    if (!Comparateur._tcInit) { Comparateur.replies.add("Tableau clinique"); Comparateur._tcInit = true; }   // le plus long : replié au départ, un clic l'ouvre
+    return `<div class="pf-barre"><label><input type="checkbox" id="pf-diff"> Seulement ce qui diffère</label>` +
+      `<span class="muted pf-legende"><span class="pf-pt pf-pt-moi"></span> cette formule · <span class="pf-pt pf-pt-commun"></span> aussi dans l'autre · <span class="pf-pt pf-pt-autre"></span> seulement dans l'autre formule</span></div>` +
+      `<div class="pf-matrice"><div class="cmp-defile"><table class="cmp-table pf-table"><thead><tr><th></th>${entete}</tr></thead><tbody>` +
+      `<tr><th scope="row" colspan="${cols.length + 1}" class="cmp-section">Composition</th></tr>${lignesSubs}${bilan}` +
+      ligneTexte("Actions", c => c.g.actions_therapeutiques) +
+      ligneTexte("Indication", c => c.g.indications_syndrome) +
+      ligneTexte("Contre-indications", c => c.g.contre_indications_precautions) +
+      ligneTexte("Ce que dit le cours", c => c.ex) +
+      ligneTexte("Tableau clinique", c => c.g.tableau_clinique) +
+      `</tbody></table></div></div>`;
   },
 
   carteHorsBase(e, texte) {
