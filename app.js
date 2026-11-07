@@ -533,13 +533,13 @@ const Formules = {
     el.innerHTML = "";
     const all = document.createElement("button");
     all.className = "cat-chip active";
-    all.textContent = "Toutes (" + this.index.length + ")";
+    all.textContent = "Toutes (" + this.index.reduce((n, f) => n + 1 + this.nbVariations(f.id), 0) + ")";
     all.addEventListener("click", () => { this.activeCategory = null; this.applyFilters(); this.highlightCategory(all); });
     el.appendChild(all);
     this.categories().forEach(([id, nom]) => {
       const chip = document.createElement("button");
       chip.className = "cat-chip";
-      const n = this.index.filter(f => f.categorie_id === id).length;
+      const n = this.nbDansCategorie(id);
       chip.textContent = this.court(nom) + " (" + n + ")";
       chip.title = nom;
       chip.addEventListener("click", () => { this.activeCategory = id; this.applyFilters(); this.highlightCategory(chip); });
@@ -584,7 +584,7 @@ const Formules = {
       // variations de la formule, listées juste dessous comme sous-formules
       this.variations.filter(v => v.parent === f.id).forEach(v => g.items.push({ ...v, estVariation: true, categorie_id: f.categorie_id, parentPinyin: f.pinyin }));
     });
-    const groupes = [...m.entries()].map(([id, g]) => ({ id, nom: g.nom, total: g.items.filter(x => !x.estVariation).length, items: g.items }));
+    const groupes = [...m.entries()].map(([id, g]) => ({ id, nom: g.nom, total: g.items.length, items: g.items }));
     barreGroupes(ul, ouvrir => { this._tout = ouvrir; if (!ouvrir) this._ouverts.clear(); this.applyFilters(); });
     listeGroupee(ul, groupes, {
       tout: !!q || !!this.activeCategory || groupes.length < 2 || this._tout, ouverts: this._ouverts,
@@ -602,7 +602,17 @@ const Formules = {
         li.addEventListener("click", () => this.showDetail(f, li));
       }
     });
-    document.getElementById("formule-count").textContent = list.length + " formule(s)";
+    const nVar = list.reduce((n, f) => n + this.nbVariations(f.id), 0);
+    document.getElementById("formule-count").textContent = (list.length + nVar) + " formule(s)" + (nVar ? " dont " + nVar + " variation(s)" : "");
+  },
+
+  // nombre de variations (sous-formules) rattachées à une formule
+  nbVariations(id) { return this.variations.filter(v => v.parent === id).length; },
+
+  // formules d'une famille, sous-formules comprises
+  nbDansCategorie(id) {
+    const fs = this.index.filter(f => f.categorie_id === id);
+    return fs.length + fs.reduce((n, f) => n + this.nbVariations(f.id), 0);
   },
 
   async showDetail(entry, liEl) {
