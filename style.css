@@ -889,3 +889,17 @@ tr.repli.cmp-cat td::before { content: attr(data-n); color: var(--muted, #666); 
 .pf-table .hanzi { font-size: 1rem; display: block; }
 .pf-table .cmp-nom { font-size: 0.95rem; }
 .pf-table td[data-n] { min-width: 12rem; }
+/* SINOLUX : codes, formats, budget */
+.sx-code { display: inline-block; font-family: var(--font-mono, monospace); font-weight: 700; border: 1.5px solid var(--ink); padding: 0 0.35rem; font-size: 0.85rem; }
+.sx-signe { cursor: help; font-weight: 700; }
+.sx-ligne { margin: 0.25rem 0; }
+.sx-alerte { font-size: 0.82rem; font-weight: 700; margin: 0.2rem 0; }
+section.sinolux { margin: 0.6rem 0; }
+.prop-champs { display: flex; flex-wrap: wrap; gap: 0.6rem 1.4rem; margin-top: 0.4rem; }
+.prop-champs input { width: 6rem; padding: 0.3rem 0.5rem; font-family: inherit; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); }
+.sx-budget { margin-top: 0.4rem; }
+.sx-budget summary { cursor: pointer; font-weight: 700; }
+.sx-defile { overflow-x: auto; }
+.sx-tab { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+.sx-tab th, .sx-tab td { border: 1px solid var(--line); padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+.sx-note { font-size: 0.78rem; }

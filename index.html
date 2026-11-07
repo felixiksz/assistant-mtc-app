@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=71">
+<link rel="stylesheet" href="style.css?v=72">
 <script src="theme.js?v=2"></script>
 </head>
 <body>
@@ -99,6 +99,13 @@
       <div id="prop-signes" class="prop-choisis"></div>
       <input type="search" id="prop-signe" placeholder="Ajouter un signe (insomnie, constipation, vertiges…)" autocomplete="off">
       <ul id="prop-signe-sugg" class="prop-sugg"></ul>
+    </div>
+    <div class="prop-bloc prop-budget"><strong>Format et budget</strong> <span class="muted">(SINOLUX, tarifs 2026)</span>
+      <div class="prop-champs">
+        <label>Poids du patient <input type="number" id="prop-poids" min="5" max="250" value="70"> kg</label>
+        <label>Durée du traitement <input type="number" id="prop-jours" min="1" max="365" value="30"> jours</label>
+        <label>Budget du patient <input type="number" id="prop-budget" min="0" step="5" placeholder="facultatif"> €</label>
+      </div>
     </div>
     <div id="prop-res"></div>
   </section>
@@ -409,6 +416,6 @@
 
 </main>
 
-<script src="app.js?v=97"></script>
+<script src="app.js?v=99"></script>
 </body>
 </html>

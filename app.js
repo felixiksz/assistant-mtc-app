@@ -424,6 +424,7 @@ const Formules = {
     try {
       const f = await Store.readJSON("formules/" + entry.chemin);
       await SubstanceNature.ensureLoaded();
+      await Sinolux.ensureLoaded();
       detail.innerHTML = this.renderFormule(f);
       Store.hydrateImages(detail);
       ProchesFormules.remplir(detail, f);
@@ -466,7 +467,7 @@ const Formules = {
 
   renderFormule(f) {
     const comp = (f.composition || []).map(c =>
-      `<tr><td>${escapeHtml(c.substance_pinyin || "")}</td><td>${escapeHtml(c.hanzi || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td><td>${SubstanceNature.pastille(c)}</td><td>${SubstanceNature.celluleDose(c)}</td></tr>`
+      `<tr><td>${escapeHtml(c.substance_pinyin || "")}</td><td>${escapeHtml(c.hanzi || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td><td>${SubstanceNature.pastille(c)}</td><td>${SubstanceNature.celluleDose(c)}</td><td>${Sinolux.cellule(c)}</td></tr>`
     ).join("");
     const verif = (f.a_verifier && f.a_verifier.length)
       ? `<section><h3>À vérifier contre la source</h3>${f.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("")}</section>`
@@ -476,7 +477,8 @@ const Formules = {
       <h2>${escapeHtml(f.pinyin || f.id)} <span class="hanzi">${escapeHtml(f.hanzi || "")}</span></h2>
       <p class="muted">${escapeHtml(f.categorie_nom || "")}${f.sous_type ? " · " + escapeHtml(f.sous_type) : ""}</p>
       ${f.nom_fr ? `<p><em>${escapeHtml(f.nom_fr)}</em></p>` : ""}
-      ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th><th>Dose de référence</th></tr></thead><tbody>${comp}</tbody></table><p class="muted poso-legende">Dose de référence : jeu Connections MTC. ▲ ▼ ≈ = la dose de la fiche sort (ou déborde) de cette fourchette : pas forcément une erreur (dose classique, pilules, valeur propre à la formule). * = précisions dans l'info-bulle.</p></section>` : ""}
+      ${Sinolux.blocFormule(f.id)}
+      ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th><th>Dose de référence</th><th>Code SINOLUX</th></tr></thead><tbody>${comp}</tbody></table><p class="muted poso-legende">⚠ à côté d'un code = l'équivalence avec le catalogue SINOLUX n'est pas stricte (survole le signe). Dose de référence : jeu Connections MTC. ▲ ▼ ≈ = la dose de la fiche sort (ou déborde) de cette fourchette : pas forcément une erreur (dose classique, pilules, valeur propre à la formule). * = précisions dans l'info-bulle.</p></section>` : ""}
       ${this.renderSchemaImage(f.schema_image, f.categorie_id)}
       ${section("Préparation / posologie", f.mode_de_preparation_posologie)}
       ${section("Actions thérapeutiques", f.actions_therapeutiques)}
@@ -493,6 +495,111 @@ const Formules = {
 
 document.getElementById("formule-search").addEventListener("input", () => Formules.applyFilters());
 Formules.load().then(() => Ajout.populateCategories());
+
+/* ============ SINOLUX : codes de commande, formats et budget ============
+   Données : reference/sinolux/{correspondances,formules,tarifs,posologie_age_poids}.json (extraites des documents du fournisseur,
+   voir reference/sinolux/generer.py et rapport_ecarts.txt). Tout cas d'équivalence qui n'est pas strict est signalé. */
+const Sinolux = {
+  corr: null, formules: null, tarifs: null, poso: null, _p: null,
+  LIBELLE_CAT: { incontournable: "formule « toute prête » (incontournable)", femmes: "soins des femmes (sur mesure)", peau: "soins de la peau (sur mesure, usage externe)" },
+
+  async ensureLoaded() {
+    if (!this._p) {
+      this._p = Promise.all([
+        Store.readJSON("reference/sinolux/correspondances.json"), Store.readJSON("reference/sinolux/formules.json"),
+        Store.readJSON("reference/sinolux/tarifs.json"), Store.readJSON("reference/sinolux/posologie_age_poids.json")
+      ]).then(([c, f, t, p]) => { this.corr = c; this.formules = new Map(f.formules.map(x => [x.code, x])); this.tarifs = t; this.poso = p; })
+        .catch(() => { /* données absentes : les fiches s'affichent sans codes */ });
+    }
+    await this._p;
+  },
+  pret() { return !!this.corr; },
+
+  // ---- formule : un ou plusieurs codes, formats disponibles, avertissements
+  infoFormule(id) {
+    const c = this.corr && this.corr.formules[id];
+    if (!c) return null;
+    const codes = (c.codes || []).map(x => ({ ...x, ...(this.formules.get(x.code) || {}) }));
+    return { ...c, codes };
+  },
+  formatsTexte(x) { return [x.cp_caps && "CP / gélules", x.wan && "WAN (pilules)", x.pian && "PIAN (comprimés)", x.onguent && "onguent"].filter(Boolean); },
+  blocFormule(id) {
+    const i = this.infoFormule(id);
+    if (!i) return "";
+    let h = `<section class="sinolux"><h3>Commande SINOLUX</h3>`;
+    if (i.codes.length) {
+      h += i.codes.map(x => `<div class="sx-ligne"><span class="sx-code" title="Code à indiquer sur le bon de commande">${escapeHtml(x.code)}</span> ` +
+        `<span>${escapeHtml(x.nom || i.pinyin)}</span> <span class="muted">· ${escapeHtml(this.LIBELLE_CAT[x.categorie] || x.categorie)} · ${this.formatsTexte(x).map(escapeHtml).join(", ") || "format non précisé"}</span>` +
+        `${x.incoherence_catalogue ? `<div class="sx-alerte">Le catalogue se contredit : ${escapeHtml(x.incoherence_catalogue)}</div>` : ""}</div>`).join("");
+      if (i.statut === "plusieurs_codes") h += `<p class="sx-alerte">Plusieurs codes portent ce nom (catégories différentes) : choisis selon l'usage voulu.</p>`;
+      if (i.avertissement) h += `<p class="sx-alerte">${escapeHtml(i.avertissement)}</p>`;
+    } else {
+      h += `<p class="muted">Aucun code de même nom dans le catalogue SINOLUX : ${escapeHtml(i.note || "")}</p>`;
+      if ((i.proches_a_confirmer || []).length) h += `<p>Voisins à confirmer : ${i.proches_a_confirmer.map(x => `<span class="sx-code">${escapeHtml(x.code)}</span> ${escapeHtml(x.nom)}`).join(" · ")}</p>`;
+      h += `<p class="muted">Une composition sur mesure reste possible (tarif « composition de votre choix »).</p>`;
+    }
+    return h + `</section>`;
+  },
+
+  // ---- substance : code(s) et statut de l'équivalence
+  infoSubstance(c) {
+    const r = SubstanceNature.trouver(c);
+    return r && this.corr ? this.corr.substances[r.s.id] || null : null;
+  },
+  cellule(c) {
+    const i = this.infoSubstance(c);
+    if (!this.pret()) return "";
+    if (!i) return '<span class="muted">—</span>';
+    const alerte = i.statut === "exact" ? "" : i.statut;
+    const note = [i.note, (i.variantes_preparees || []).length ? "Variante préparée : " + i.variantes_preparees.map(v => v.code + (v.qualificatifs && v.qualificatifs.length ? " (" + v.qualificatifs.join(", ") + ")" : "")).join(", ") + "." : ""].filter(Boolean).join(" ");
+    const codes = i.codes.length ? i.codes.slice(0, 3).map(x => `<span class="sx-code">${escapeHtml(x)}</span>`).join(" ") + (i.codes.length > 3 ? " …" : "") : '<span class="muted">absent</span>';
+    const signe = alerte ? ` <span class="sx-signe" title="${escapeHtml(`${{ equivalent: "Équivalent sous un autre nom", ambigu: "Plusieurs possibilités", plusieurs_formes: "Plusieurs formes au catalogue", exact_avec_qualificatif: "Forme précisée par le catalogue", variante_seulement: "Seule une variante préparée existe", absent: "Absent du catalogue" }[alerte] || alerte} — ${note}`)}">⚠</span>` : "";
+    return codes + signe;
+  },
+
+  // ---- budget : coût d'un traitement selon le format
+  ligneDose(poids) {
+    const lignes = this.poso.lignes.map(l => { const m = l.poids.match(/(\d+)\D+(\d+)/); return { min: +m[1], max: +m[2], v: l.valeurs.map(x => parseInt(String(x).replace("*", ""), 10)) }; });
+    return lignes.find(l => poids >= l.min && poids < l.max + 1) || (poids < lignes[0].min ? lignes[0] : lignes[lignes.length - 1]);
+  },
+  // prix patient = prix thérapeute + 15 %, arrondi au centime (comme dans les tarifs SINOLUX)
+  patient(p) { return Math.round(p * 115 + 1e-6) / 100; },
+  // meilleure combinaison de boîtes de comprimés pour couvrir n comprimés
+  pian(n) {
+    const tailles = [[28, "PIAN_28"], [100, "PIAN_100"], [200, "PIAN_200"]].map(([t, id]) => ({ t, f: this.tarifs.formats.find(x => x.id === id) }));
+    let meilleur = null;
+    for (let a = 0; a <= Math.ceil(n / 28) + 1; a++) for (let b = 0; b <= Math.ceil(n / 100) + 1; b++) for (let c = 0; c <= Math.ceil(n / 200) + 1; c++) {
+      if (a * 28 + b * 100 + c * 200 < n) continue;
+      const p = a * tailles[0].f.prix_therapeute + b * tailles[1].f.prix_therapeute + c * tailles[2].f.prix_therapeute;
+      if (!meilleur || p < meilleur.p - 1e-9) meilleur = { a, b, c, p };
+    }
+    const pat = meilleur.a * tailles[0].f.prix_patient + meilleur.b * tailles[1].f.prix_patient + meilleur.c * tailles[2].f.prix_patient;
+    const txt = [meilleur.a && `${meilleur.a} × 28`, meilleur.b && `${meilleur.b} × 100`, meilleur.c && `${meilleur.c} × 200`].filter(Boolean).join(" + ");
+    return { txt, p: meilleur.p, pat };
+  },
+  // formats possibles pour une formule (surMesure : composition modifiée ou formule sans code « toute prête »)
+  calcul(id, poids, jours, surMesure) {
+    const t = this.tarifs, f = id => t.formats.find(x => x.id === id), d = this.ligneDose(poids).v, info = this.infoFormule(id);
+    const code = info && info.codes.find(x => x.categorie === "incontournable") || (info && info.codes[0]) || null;
+    const pret = !!code && !surMesure;
+    const prix = (fm, n) => ({ p: n * fm.prix_therapeute, pat: this.patient(n * fm.prix_therapeute) });
+    const L = [];
+    const grammes = (fm, g, lib, dose) => { const n = Math.ceil(g * jours / 100); L.push({ format: fm.format, lib, dose, qte: `${n} × 100 g (${n * 100} g)`, ...prix(fm, n), couvre: Math.floor(n * 100 / g) }); };
+    grammes(f("DH_100g"), d[0], "Herbes séchées (DH)", `${d[0]} g`);
+    if (d[0] === 30) { const fm = f("DH_sachet"); L.push({ format: "DH", lib: "Herbes séchées, sachets journaliers", dose: "1 sachet (30 g)", qte: `${jours} sachets`, ...prix(fm, jours), couvre: jours }); }
+    grammes(f("RP_100g"), d[1], "Poudre fine non concentrée (RP)", `${d[1]} g`);
+    grammes(f(pret ? "CP_standard_100g" : "CP_surmesure_100g"), d[2], pret ? "Poudre concentrée (CP), formule standard" : "Poudre concentrée (CP), sur mesure", `${d[2]} g`);
+    if (pret ? code.cp_caps : true) {
+      [["CAPS_250", 3, "Gélules 250 mg", 100], ["CAPS_500", 4, "Gélules 500 mg", 100], ["CAPS_840", 5, "Gélules 840 mg", 120]].forEach(([fid, k, lib, boite]) => {
+        const fm = f(fid), n = Math.ceil(d[k] * jours / boite);
+        L.push({ format: "CAPS", lib, dose: `${d[k]} gélules`, qte: `${n} boîte(s) de ${boite}`, ...prix(fm, n), couvre: Math.floor(n * boite / d[k]) });
+      });
+    }
+    if (pret && code.wan) { const fm = f("WAN_200"), n = Math.ceil(d[6] * jours / 200); L.push({ format: "WAN", lib: "Pilules (WAN)", dose: `${d[6]} pilules`, qte: `${n} boîte(s) de 200`, ...prix(fm, n), couvre: Math.floor(n * 200 / d[6]) }); }
+    if (pret && code.pian) { const r = this.pian(d[7] * jours); L.push({ format: "PIAN", lib: "Comprimés (PIAN)", dose: `${d[7]} comprimés`, qte: `boîtes ${r.txt}`, p: r.p, pat: this.patient(r.p), couvre: jours }); }
+    return { lignes: L.sort((a, b) => a.p - b.p), code, pret, surMesure: !pret };
+  }
+};
 
 /* ============ Fiche de formule : « Comparaison avec formules proches » en cartes ============
    Le texte du cours (champ comparaison_formules_proches) est lu pour repérer les formules citées :
@@ -3922,6 +4029,11 @@ const Proposer = {
   init() {
     document.getElementById("prop-search").addEventListener("input", e => this.suggererDiag(e.target.value));
     document.getElementById("prop-signe").addEventListener("input", e => this.suggererSigne(e.target.value));
+    try { const b = JSON.parse(localStorage.getItem("mtc_proposer_budget") || "null"); if (b) { ["poids", "jours", "budget"].forEach(k => { if (b[k] != null) document.getElementById("prop-" + k).value = b[k]; }); } } catch (e) { /* valeurs par défaut */ }
+    ["poids", "jours", "budget"].forEach(k => document.getElementById("prop-" + k).addEventListener("input", () => {
+      try { localStorage.setItem("mtc_proposer_budget", JSON.stringify({ poids: document.getElementById("prop-poids").value, jours: document.getElementById("prop-jours").value, budget: document.getElementById("prop-budget").value })); } catch (e) { /* ignoré */ }
+      this.rendreTousBudgets();
+    }));
     document.querySelector('.tab-btn[data-tab="proposer"]').addEventListener("click", () => this.ouvert());
   },
 
@@ -3937,6 +4049,7 @@ const Proposer = {
     if (!this.mods) this.mods = (await Store.readJSON("formules/modifications/modifications.json")).formules;
     if (!Comparateur._norm) { try { Comparateur._norm = await Store.readJSON("formules/tableaux/normalisation.json"); } catch (e) { Comparateur._norm = {}; } }
     await SubstanceNature.ensureLoaded();
+    await Sinolux.ensureLoaded();
   },
 
   jetons(t) { return new Set(dsNorm(String(t || "")).split(/[^a-z]+/).filter(w => w.length > 1 && !this.STOP.has(w))); },
@@ -4057,6 +4170,7 @@ const Proposer = {
     if (!this.mods) { zone.innerHTML = `<p class="muted">Chargement…</p>`; return; }
     const classement = this.classer();
     if (!classement.length) { zone.innerHTML = `<p class="muted">Aucune formule de ta base ne correspond clairement à ce diagnostic. Elle ne couvre pas encore ce syndrome : rien n'est inventé.</p>`; return; }
+    this._ids = classement.map(r => r.f.id);
     const meilleur = classement[0].score;
     const fiches = await Promise.all(classement.map(r => Store.readJSON("formules/" + r.f.chemin).catch(() => null)));
     zone.innerHTML = `<p class="muted prop-avert">Aide à la réflexion et à la révision, pas une prescription : les formules viennent de ta base de cours, classées d'après le lien avec la fiche du syndrome, l'indication et les signes en commun. Vérifie toujours dans la fiche.</p>` +
@@ -4070,6 +4184,7 @@ const Proposer = {
       this.rendreCompo(fid);
     }));
     classement.forEach((r, i) => this.rendreCompo(r.f.id, fiches[i]));
+    this.rendreTousBudgets();
     this._fiches = Object.fromEntries(classement.map((r, i) => [r.f.id, fiches[i]]));
   },
 
@@ -4104,6 +4219,7 @@ const Proposer = {
         <div class="prop-barre" title="Pertinence relative"><i style="width:${Math.round((r.score / meilleur) * 100)}%"></i></div></div>
       <div class="prop-raisons">${raisons.join(" ")}</div>
       <div class="prop-actions"><button type="button" class="edit-toggle-btn" data-fiche="${escapeHtml(f.id)}">Fiche</button> <button type="button" class="cmp-add" data-cmp="${escapeHtml(f.id)}">⇄ Comparer</button></div>
+      <div class="prop-budget-zone" id="budget-${escapeHtml(f.id)}"></div>
       ${ci}
       <h4 class="sec-sub">Modifications possibles ${pertinentes.length ? `(${pertinentes.length} correspondent à tes signes)` : ""}</h4>
       ${pertinentes.length ? pertinentes.map(ligne).join("") : `<p class="muted">Aucune modification ne correspond aux signes indiqués${this.signes.size ? "" : " (ajoute des signes concomitants ci-dessus)"}.</p>`}
@@ -4112,8 +4228,32 @@ const Proposer = {
     </article>`;
   },
 
+  // format et budget (SINOLUX) : coût du traitement selon le format, d'après le poids et la durée
+  rendreTousBudgets() { (this._ids || []).forEach(id => this.rendreBudget(id)); },
+  rendreBudget(fid) {
+    const el = document.getElementById("budget-" + fid);
+    if (!el || !Sinolux.pret()) return;
+    const poids = Math.max(5, Math.min(250, parseFloat(document.getElementById("prop-poids").value) || 70));
+    const jours = Math.max(1, Math.min(365, parseInt(document.getElementById("prop-jours").value, 10) || 30));
+    const budget = parseFloat(document.getElementById("prop-budget").value) || 0;
+    const modif = (this.choix[fid] || new Set()).size > 0;
+    const r = Sinolux.calcul(fid, poids, jours, modif);
+    const e2 = x => x.toFixed(2).replace(".", ",");
+    const code = r.code ? `Code SINOLUX <span class="sx-code">${escapeHtml(r.code.code)}</span> · ${Sinolux.formatsTexte(r.code).map(escapeHtml).join(", ")}` : "Pas de code « toute prête » : composition sur mesure";
+    const lignes = r.lignes.map(l => {
+      const mois = jours === 30 ? "" : `<div class="muted">≈ ${e2(l.pat * 30 / jours)} € / 30 j</div>`;
+      const b = budget > 0 ? (l.pat <= budget ? "dans le budget" : `+ ${e2(l.pat - budget)} €`) : "";
+      return `<tr><td><strong>${escapeHtml(l.format)}</strong> <span class="muted">${escapeHtml(l.lib)}</span></td><td>${escapeHtml(l.dose)}</td><td>${escapeHtml(l.qte)}</td><td>${e2(l.p)} €</td><td><strong>${e2(l.pat)} €</strong>${mois}</td>${budget > 0 ? `<td>${b}</td>` : ""}</tr>`;
+    }).join("");
+    el.innerHTML = `<details class="sx-budget" open><summary>Format et budget — ${jours} jours, ${poids} kg${modif ? " (composition modifiée : sur mesure)" : ""}</summary>` +
+      `<p class="muted">${code}</p>` +
+      `<div class="sx-defile"><table class="sx-tab"><thead><tr><th>Format</th><th>Dose / jour</th><th>À commander</th><th>Prix thérapeute</th><th>Prix patient</th>${budget > 0 ? "<th>Budget</th>" : ""}</tr></thead><tbody>${lignes}</tbody></table></div>` +
+      `<p class="muted sx-note">Tarifs SINOLUX 2026_2 TTC ; prix patient = prix thérapeute + 15 %, hors frais de port (offerts dès 150 €, ou pour 200 g de CP d'une même formule). Dose : posologie du laboratoire pour ce poids, à adapter selon la constitution, la Rate et la phase de la maladie. Les comprimés offerts (+20, +40) ne sont pas comptés. WAN et PIAN n'existent que pour certaines formules « toutes prêtes ».</p></details>`;
+  },
+
   // composition résultante : base - retraits + ajouts cochés
   rendreCompo(fid, fiche) {
+    this.rendreBudget(fid);
     const el = document.getElementById("compo-" + fid);
     if (!el) return;
     fiche = fiche || (this._fiches && this._fiches[fid]);
