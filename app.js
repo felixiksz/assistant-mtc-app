@@ -3751,7 +3751,6 @@ Object.assign(Comparateur, {
         return `<tr${tous && n > 1 ? ' class="cts-commun"' : ""}><th>${escapeHtml(s.label)}</th>${aff.map(x => `<td class="tab-comp-x">${x.courts.has(s.id) ? "X" : ""}</td>`).join("")}</tr>`;
       }).join("");
     });
-    corps += `<tr><th>Signes courts reconnus</th>${aff.map(x => `<td class="tab-comp-x">${x.courts.size}</td>`).join("")}</tr>`;
     return `<table class="tab-comp"><thead><tr><th class="tab-comp-corner">SYN</th>${tete}</tr></thead><tbody>${corps}</tbody></table>`;
   }
 });
