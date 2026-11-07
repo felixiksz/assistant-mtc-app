@@ -424,7 +424,7 @@ const Formules = {
       item: (li, f) => {
         if (f.estVariation) {
           li.classList.add("fl-sous");
-          li.innerHTML = `<span class="fl-pinyin">↳ ${dsMarque(f.nom, q)}</span><span class="fl-nomfr">${f.type === "variation" ? "variation" : escapeHtml(f.type)} de ${escapeHtml(f.parentPinyin)}</span>`;
+          li.innerHTML = `<span class="fl-pinyin">${dsMarque(f.nom, q)}</span><span class="fl-nomfr">${f.type === "variation" ? "variation" : escapeHtml(f.type)} de ${escapeHtml(f.parentPinyin)}</span>`;
           li.addEventListener("click", () => this.showVariation(f, li));
           return;
         }
