@@ -19,7 +19,7 @@
   --c-stase: #6a1b9a;
   --c-humidite: #8a6a00;
   --font-body: "Archivo", system-ui, sans-serif;
-  --font-title: "Young Serif", "Archivo", Georgia, serif;
+  --font-title: "Young Serif", "Noto Serif", "Archivo", Georgia, serif;
   font-family: var(--font-body);
 }
 @media (prefers-color-scheme: dark) {
