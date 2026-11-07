@@ -727,6 +727,7 @@ const Formules = {
       ${v.non_detaillee && !carteVar ? `<p class="sx-alerte">Variation seulement citée par le cours : sa composition n'y est pas détaillée.</p>` : ""}
       ${v.non_detaillee && carteVar ? `<p class="muted">Le cours ne détaille pas cette variation ; sa composition vient de ta carte mentale.</p>` : ""}
       ${v.note ? `<p class="muted">${escapeHtml(v.note)}</p>` : ""}
+      ${Sinolux.entete(v.sinolux)}
       ${Sinolux.blocCodes(v.sinolux, v.nom, v.sinolux_proches)}
       ${Animaux.bloc(an)}
       ${chips ? `<section><h3>Ce qui change par rapport à ${escapeHtml(base ? base.nom : parent.pinyin)}</h3><div>${chips}</div>${v.doses_citees ? `<p class="muted">Doses citées : ${escapeHtml(v.doses_citees)}</p>` : ""}</section>` : (v.doses_citees ? `<section><h3>Doses citées</h3><p>${escapeHtml(v.doses_citees)}</p></section>` : "")}
@@ -750,6 +751,7 @@ const Formules = {
       <p class="muted">${escapeHtml(f.categorie_nom || "")}${f.sous_type ? " · " + escapeHtml(f.sous_type) : ""}</p>
       ${f.nom_fr ? `<p><em>${escapeHtml(f.nom_fr)}</em></p>` : ""}
       ${CarteMentale.natSav(f)}
+      ${(i => Sinolux.entete(i && i.codes, i && i.statut === "plusieurs_codes"))(Sinolux.infoFormule(f.id))}
       ${Sinolux.blocFormule(f.id)}
       ${Animaux.bloc(Animaux.depuisFiche(f))}
       ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th><th>Dose de référence</th><th>Code SINOLUX</th><th>Fonction dans la formule</th></tr></thead><tbody>${comp}</tbody></table><p class="muted poso-legende">⚠ à côté d'un code = l'équivalence avec le catalogue SINOLUX n'est pas stricte (survole le signe). Dose de référence : jeu Connections MTC. ▲ ▼ ≈ = la dose de la fiche sort (ou déborde) de cette fourchette : pas forcément une erreur (dose classique, pilules, valeur propre à la formule). * = précisions dans l'info-bulle.</p></section>` : ""}
@@ -857,6 +859,12 @@ const Sinolux = {
     return { ...c, codes };
   },
   formatsTexte(x) { return [x.cp_caps && "CP / gélules", x.wan && "WAN (pilules)", x.pian && "PIAN (comprimés)", x.onguent && "onguent"].filter(Boolean); },
+  // ligne d'en-tête de la fiche : le ou les codes de commande (à retenir par cœur), ou l'absence de code
+  entete(codes, plusieurs) {
+    if (!this.pret()) return "";
+    if (!codes || !codes.length) return `<p class="sx-entete"><span class="cm-etiq">Code SINOLUX</span> <span class="muted">aucun code de ce nom : composition sur mesure</span></p>`;
+    return `<p class="sx-entete"><span class="cm-etiq">Code SINOLUX</span> ${codes.map(x => `<span class="sx-code" title="${escapeHtml(x.nom || "")}">${escapeHtml(x.code)}</span>`).join(" ")}${plusieurs ? ` <span class="muted">(plusieurs codes pour ce nom : voir « Commande SINOLUX »)</span>` : ""}</p>`;
+  },
   blocFormule(id) {
     const i = this.infoFormule(id);
     if (!i) return "";

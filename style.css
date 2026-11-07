@@ -1038,3 +1038,4 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .cm-plus-texte { white-space: pre-line; font-size: 0.85rem; line-height: 1.5; }
 .an-subs { margin: 0.2rem 0 0.2rem 1rem; padding-left: 0.8rem; list-style: disc; }
 .an-subs li { margin: 0.15rem 0; }
+.sx-entete { margin: 0.2rem 0 0.6rem; font-size: 0.9rem; }
