@@ -1,3 +1,5 @@
+/* Secours pour les voyelles à caron (ǎ ǐ ǒ ǔ ǖ ǘ ǚ ǜ ě) quand les polices du web ne sont pas chargées : une police installée sur l'ordinateur qui les contient */
+@font-face { font-family: "PinyinLocal"; font-weight: 100 900; src: local("Noto Serif Bold"), local("Cambria Bold"), local("Times New Roman Bold"), local("TimesNewRomanPS-BoldMT"), local("DejaVu Serif Bold"), local("Liberation Serif Bold"); unicode-range: U+011A-011B, U+01CD-01DC; }
 :root {
   --bg: #ffffff;
   --panel: #ffffff;
@@ -19,7 +21,7 @@
   --c-stase: #6a1b9a;
   --c-humidite: #8a6a00;
   --font-body: "Archivo", system-ui, sans-serif;
-  --font-title: "Young Serif", "Noto Serif", "Archivo", Georgia, serif;
+  --font-title: "Young Serif", "Noto Serif", "PinyinLocal", "Archivo", Georgia, serif;
   font-family: var(--font-body);
 }
 @media (prefers-color-scheme: dark) {
