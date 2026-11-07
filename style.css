@@ -1007,3 +1007,8 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .an-li .an-tortue { width: 1.5em; height: 1.5em; margin: 0.1em 0 0; }
 .an-li-sans { padding-left: 2rem; }
 .prop-aj .an-tortue, .pm-sub .an-tortue { margin-right: 0.3em; }
+/* Liste des formules : le nom français et le syndrome ne se ressemblent plus */
+#formule-list .fl-nomfr { font-family: var(--font-title); font-style: normal; font-size: 0.98rem; line-height: 1.25; margin: 0.15rem 0 0.3rem; }
+#formule-list .fl-syndrome { font-family: var(--font-body); font-size: 0.78rem; line-height: 1.35; border-left: 2px solid currentColor; padding-left: 0.55rem; opacity: 0.85; }
+#formule-list .fl-syndrome::before { content: "SYNDROME"; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; margin-right: 0.45em; opacity: 0.8; }
+#formule-list .fl-sous .fl-nomfr { font-family: var(--font-body); font-style: italic; font-size: 0.82rem; }
