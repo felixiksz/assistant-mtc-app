@@ -739,7 +739,7 @@ const Formules = {
 
   renderFormule(f) {
     const comp = (f.composition || []).map(c =>
-      `<tr${Animaux.trouver(c.substance_pinyin) ? ' class="an-ligne"' : ""}><td>${Animaux.marque(c.substance_pinyin)}${escapeHtml(c.substance_pinyin || "")}</td><td>${escapeHtml(c.hanzi || "")}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td><td>${SubstanceNature.pastille(c)}</td><td>${SubstanceNature.celluleDose(c)}</td><td>${Sinolux.cellule(c)}</td><td>${CarteMentale.celluleFonction(f.id, c)}</td></tr>`
+      `<tr${Animaux.trouver(c.substance_pinyin) ? ' class="an-ligne"' : ""}><td>${Animaux.marque(c.substance_pinyin)}${escapeHtml(c.substance_pinyin || "")}</td><td>${escapeHtml(c.hanzi || "")}${c.hanzi_alt ? ` / ${escapeHtml(c.hanzi_alt)}` : ""}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td><td>${SubstanceNature.pastille(c)}</td><td>${SubstanceNature.celluleDose(c)}</td><td>${Sinolux.cellule(c)}</td><td>${CarteMentale.celluleFonction(f.id, c)}</td></tr>`
     ).join("");
     const verif = (f.a_verifier && f.a_verifier.length)
       ? `<section><h3>À vérifier contre la source</h3>${f.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("")}</section>`
@@ -817,14 +817,14 @@ const Animaux = {
   depuisFiche(f) { return this.depuisLignes(f.composition, [], f.mode_de_preparation_posologie); },
   substitution(a) {
     if (!a || !a.substitutions_cours.length) return null;
-    return a.substitutions_cours.map(u => u.texte.replace(/^\w+ \([^)]*\) — /, "").replace(/^Substitution : /, ""));
+    return a.substitutions_cours.map(u => ({ t: u.texte.replace(/^\w+ \([^)]*\) — /, "").replace(/^Substitution : /, ""), s: u.source || "" }));
   },
   bloc(an) {
     if (!an || (!an.lignes.length && !an.miel && !(an.prepMiel && an.prepMiel.length))) return "";
     const li = an.lignes.map(x => {
       const sub = x.a ? this.substitution(x.a) : null;
       return `<li class="an-li">${this.icone(x.a ? x.a.origine : x.c.remarque)}<div><strong>${escapeHtml(x.nom)}</strong> <span class="muted">${escapeHtml(x.a ? x.a.origine : x.c.remarque)}</span>` +
-        (x.c ? "" : sub ? `<div class="an-sub">Substitution selon le cours : ${sub.map(t => escapeHtml(t)).join(" ; ")}</div>` : `<div class="an-sub an-aucune">Aucune substitution indiquée dans les cours.</div>`) +
+        (x.c ? "" : sub ? `<div class="an-sub">Substitutions indiquées dans tes cours et tes cartes :<ul class="an-subs">${sub.map(u => `<li>${escapeHtml(u.t)}${u.s ? ` <span class="muted">(${escapeHtml(u.s)})</span>` : ""}</li>`).join("")}</ul></div>` : `<div class="an-sub an-aucune">Aucune substitution indiquée dans les cours.</div>`) +
         (x.a && x.a.remarque ? `<div class="an-sub an-note">À noter : ${escapeHtml(x.a.remarque)}</div>` : "") + `</div></li>`;
     }).join("");
     const miel = an.miel ? `<li class="an-li">${this.icone("Miel (produit de la ruche)")}<div><strong>Miel</strong> <span class="muted">(produit de la ruche) cité dans la préparation du cours : « ${escapeHtml(an.miel)} »</span><div class="an-sub an-aucune">Aucune substitution indiquée dans les cours.</div></div></li>` : "";

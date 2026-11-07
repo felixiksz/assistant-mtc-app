@@ -1036,3 +1036,5 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .cm-plus { margin: 0.5rem 0 0.2rem; padding: 0.35rem 0.7rem; border-left: 3px solid var(--ink); background: var(--panel); }
 .cm-tag { display: inline-block; font-family: var(--font-body); font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; border: 1px solid var(--ink); padding: 0 0.35rem; margin-bottom: 0.2rem; }
 .cm-plus-texte { white-space: pre-line; font-size: 0.85rem; line-height: 1.5; }
+.an-subs { margin: 0.2rem 0 0.2rem 1rem; padding-left: 0.8rem; list-style: disc; }
+.an-subs li { margin: 0.15rem 0; }
