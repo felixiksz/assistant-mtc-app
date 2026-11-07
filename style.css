@@ -1027,3 +1027,12 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .formule-detail blockquote.pf-extrait, #cmp-arbre-corps blockquote.pf-extrait { font-family: var(--font-body); font-style: normal; font-size: 0.8rem; line-height: 1.55; background: var(--panel); border-left: 3px solid var(--ink); padding: 0.45rem 0.7rem; margin: 0; }
 .formule-detail blockquote.pf-extrait .pf-etiq { margin-bottom: 0.15rem; }
 .pf-var { border-top-style: solid; }
+
+/* Infos de la carte mentale rangées dans les rubriques de la fiche */
+.cm-natsav { font-size: 0.85rem; margin: 0.2rem 0 0.6rem; }
+.tcm-lignes { list-style: none; padding-left: 0; }
+.tcm-lignes li { margin: 0.2rem 0; padding-left: 0.9rem; position: relative; }
+.tcm-lignes li::before { content: "•"; position: absolute; left: 0; }
+.cm-plus { margin: 0.5rem 0 0.2rem; padding: 0.35rem 0.7rem; border-left: 3px solid var(--ink); background: var(--panel); }
+.cm-tag { display: inline-block; font-family: var(--font-body); font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; border: 1px solid var(--ink); padding: 0 0.35rem; margin-bottom: 0.2rem; }
+.cm-plus-texte { white-space: pre-line; font-size: 0.85rem; line-height: 1.5; }

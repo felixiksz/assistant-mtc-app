@@ -340,6 +340,7 @@ const CarteMentale = {
   // fonction d'une plante dans la formule : d'abord celle de ta carte mentale (« Tonifie le Qi », « Piquante fraiche »…),
   // sinon les actions de la pharmacopée du jeu (marquées comme telles)
   fonction(id, c, variation) {
+    if (c.fonction) return { texte: c.fonction, source: "carte" };
     const carte = this.carte(id, variation);
     const k = this.cle(c.substance_pinyin), hz = String(c.hanzi || "").replace(/[^\u4e00-\u9fff]/g, "");
     if (carte) {
@@ -364,8 +365,27 @@ const CarteMentale = {
     if (!codes) return "";
     return codes.split(",").filter(Boolean).map(t => table[t] ? `${escapeHtml(t)} (${table[t]})` : escapeHtml(t)).join(", ");
   },
+  // nature et saveur (codes de ta carte, ou de la fiche) : une ligne dans l'en-tête de la fiche
+  natSav(f) {
+    const c = this.carte(f.id, false);
+    const nat = f.nature_codes || (c && c.nat), sav = f.saveur_codes || (c && c.sav);
+    if (!nat && !sav) return "";
+    return `<p class="cm-natsav"><span class="cm-etiq">Nature</span> ${this.decoder(nat, this.NAT) || "—"} · <span class="cm-etiq">Saveur</span> ${this.decoder(sav, this.SAV) || "—"}</p>`;
+  },
+  // ce que ta carte ajoute à une rubrique de la fiche (sections dont moins de 75 % des mots sont déjà dans la fiche), rangé dans la rubrique elle-même
+  plus(id, cles) {
+    const c = this.carte(id, false);
+    const sf = Formules.cartes && Formules.cartes.syndromes_famille ? Formules.cartes.syndromes_famille.formules[id] : null;
+    const out = [];
+    cles.forEach(k => {
+      if (c && c.sections[k] && (c.couverture[k] == null || c.couverture[k] < 0.75)) out.push(c.sections[k]);
+      if (k === "syndromes" && sf && (sf.couverture == null || sf.couverture < 0.75)) out.push(sf.texte);
+    });
+    return out.map(t => `<div class="cm-plus"><span class="cm-tag">carte</span><div class="cm-plus-texte">${escapeHtml(t)}</div></div>`).join("");
+  },
   // sections de la carte absentes de la fiche (part des mots déjà dans la fiche < 75 %) ; pour une variation : toutes
   bloc(id, variation) {
+    if (!variation) return "";
     const c0 = this.carte(id, variation);
     const sf = Formules.cartes && Formules.cartes.syndromes_famille ? Formules.cartes.syndromes_famille[variation ? "variations" : "formules"][id] : null;
     const sfMontre = sf && (variation || sf.couverture == null || sf.couverture < 0.75);
@@ -725,23 +745,26 @@ const Formules = {
     const verif = (f.a_verifier && f.a_verifier.length)
       ? `<section><h3>À vérifier contre la source</h3>${f.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("")}</section>`
       : "";
-    const section = (title, content) => content ? `<section><h3>${title}</h3><div class="tcm-text">${formatFormuleField(content)}</div></section>` : "";
+    const section = (title, content, extra) => content || extra ? `<section><h3>${title}</h3>${content ? `<div class="tcm-text">${formatFormuleField(content)}</div>` : ""}${extra || ""}</section>` : "";
     return `
       <h2>${escapeHtml(f.pinyin || f.id)} <span class="hanzi">${escapeHtml(f.hanzi || "")}</span></h2>
       <p class="muted">${escapeHtml(f.categorie_nom || "")}${f.sous_type ? " · " + escapeHtml(f.sous_type) : ""}</p>
       ${f.nom_fr ? `<p><em>${escapeHtml(f.nom_fr)}</em></p>` : ""}
+      ${CarteMentale.natSav(f)}
       ${Sinolux.blocFormule(f.id)}
       ${Animaux.bloc(Animaux.depuisFiche(f))}
       ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th><th>Dose de référence</th><th>Code SINOLUX</th><th>Fonction dans la formule</th></tr></thead><tbody>${comp}</tbody></table><p class="muted poso-legende">⚠ à côté d'un code = l'équivalence avec le catalogue SINOLUX n'est pas stricte (survole le signe). Dose de référence : jeu Connections MTC. ▲ ▼ ≈ = la dose de la fiche sort (ou déborde) de cette fourchette : pas forcément une erreur (dose classique, pilules, valeur propre à la formule). * = précisions dans l'info-bulle.</p></section>` : ""}
       ${this.renderSchemaImage(f.schema_image, f.categorie_id)}
-      ${section("Préparation / posologie", f.mode_de_preparation_posologie)}
-      ${section("Actions thérapeutiques", f.actions_therapeutiques)}
-      ${section("Indications / syndrome", f.indications_syndrome)}
-      ${section("Tableau clinique", f.tableau_clinique)}
-      ${f.contre_indications_precautions ? `<section><h3>Contre-indications / précautions</h3><div class="tdah-contre-ind">${formatFormuleField(f.contre_indications_precautions)}</div></section>` : ""}
+      ${section("Préparation / posologie", f.mode_de_preparation_posologie, CarteMentale.plus(f.id, ["preparation"]))}
+      ${section("Actions thérapeutiques", f.actions_therapeutiques, CarteMentale.plus(f.id, ["action"]))}
+      ${section("Description", f.description, CarteMentale.plus(f.id, ["description"]))}
+      ${section("Indications / syndrome", f.indications_syndrome, CarteMentale.plus(f.id, ["syndromes"]))}
+      ${section("Tableau clinique", f.tableau_clinique, CarteMentale.plus(f.id, ["indications"]))}
+      ${f.contre_indications_precautions || CarteMentale.plus(f.id, ["contre_indications"]) ? `<section><h3>Contre-indications / précautions</h3>${f.contre_indications_precautions ? `<div class="tdah-contre-ind">${formatFormuleField(f.contre_indications_precautions)}</div>` : ""}${CarteMentale.plus(f.id, ["contre_indications"])}</section>` : ""}
+      ${section("Variation", f.variation, CarteMentale.plus(f.id, ["variation"]))}
       ${f.modifications_courantes || (Formules.cartes && CarteMentale.modifications(f.id).length) ? `<section class="modifs"><h3>Modifications courantes</h3><div class="modifs-corps"><div class="tcm-text modifs-texte">${f.modifications_courantes ? formatFormuleField(f.modifications_courantes) : '<p class="muted">Le cours ne donne pas de modifications pour cette formule : celles de ta carte mentale sont dans l\'arbre.</p>'}</div></div></section>` : ""}
       ${f.comparaison_formules_proches ? `<section class="proches"><h3>Comparaison avec formules proches</h3><div class="proches-corps"><div class="tcm-text">${formatFormuleField(f.comparaison_formules_proches)}</div></div></section>` : ""}
-      ${CarteMentale.bloc(f.id, false)}
+      ${f.remarques ? section("Remarques", f.remarques) : ""}
       ${verif}
       <p class="muted">Source : ${escapeHtml(f.source && f.source.fichier || "?")}</p>
     `;
@@ -5096,6 +5119,11 @@ function tcmSplitSentences(s) {
 function formatFormuleField(str) {
   if (str === null || str === undefined) return "";
   const raw = escapeHtml(String(str));
+  if (/(^|\n)- /.test(raw)) {
+    // texte écrit ligne par ligne (« - » = une puce) : une ligne = un élément
+    const lignes = raw.split("\n").map(l => l.trim()).filter(Boolean);
+    return `<ul class="tcm-list tcm-lignes">${lignes.map(l => `<li>${tcmHighlightInline(l.replace(/^-\s*/, ""))}</li>`).join("")}</ul>`;
+  }
   const segments = tcmSplitSentences(raw);
   if (segments.length <= 1) {
     return `<p>${tcmHighlightInline(raw)}</p>`;
