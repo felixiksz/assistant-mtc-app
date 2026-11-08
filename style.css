@@ -1041,3 +1041,37 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .an-subs { margin: 0.2rem 0 0.2rem 1rem; padding-left: 0.8rem; list-style: disc; }
 .an-subs li { margin: 0.15rem 0; }
 .sx-entete { margin: 0.2rem 0 0.6rem; font-size: 0.9rem; }
+
+/* Circuits thérapeutiques */
+#tab-proposer[data-vue="circuits"] .prop-budget { display: none; }
+.prop-vues { margin: 0.4rem 0 0.8rem; }
+#circuit-list { list-style: none; margin: 0; padding: 0; }
+.circ-item { display: flex; align-items: center; gap: 0.7rem; padding: 0.4rem 0.6rem; cursor: pointer; border-bottom: 1px solid var(--line); }
+.circ-titre { display: flex; flex-direction: column; font-size: 0.9rem; line-height: 1.25; }
+.circ-mini { flex: none; line-height: 0; }
+.circ-svg { display: block; max-width: 100%; height: auto; }
+.circ-barre { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+.circ-haut { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start; margin: 0.6rem 0 1rem; }
+.circ-grand { flex: none; text-align: center; }
+.circ-legende { font-size: 0.78rem; margin-top: 0.2rem; }
+.circ-canaux { flex: 1 1 360px; min-width: 0; }
+.circ-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.circ-table th, .circ-table td { border: 1px solid var(--line); padding: 0.25rem 0.45rem; text-align: left; vertical-align: top; }
+.circ-schema { margin-top: 0.5rem; }
+.circ-couche { margin: 0.3rem 0; }
+.circ-synd { margin: 0.2rem 0; }
+.circ-synd-liste { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.3rem 0; }
+.circ-form label { display: block; margin: 0.5rem 0; font-weight: 600; }
+.circ-form input[type=text], .circ-form textarea, .circ-form select { display: block; width: 100%; box-sizing: border-box; font: inherit; font-weight: 400; margin-top: 0.15rem; }
+.circ-selects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.circ-figs { display: flex; flex-wrap: wrap; gap: 0.8rem; }
+.circ-fig { display: flex; align-items: center; gap: 0.4rem; font-weight: 400; margin: 0; }
+.circ-fig-img { line-height: 0; }
+.circ-apercu { margin: 0.6rem 0; }
+.circ-prop { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+.circ-prop-dessin { flex: none; line-height: 0; }
+.circ-prop-corps { flex: 1 1 280px; min-width: 0; }
+.circ-prop-ind, .circ-prop-ast { font-size: 0.85rem; margin: 0.3rem 0; }
+.circ-puces .cat-chip { min-width: 2.4rem; text-align: center; }
+.circ-puces .cat-chip, #circuit-canaux .cat-chip { text-transform: none; }
+.circ-table tbody th { background: var(--panel); color: var(--ink); text-transform: none; font-size: 0.78rem; }

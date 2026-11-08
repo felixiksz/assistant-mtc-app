@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&family=Noto+Serif:wght@700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=94">
+<link rel="stylesheet" href="style.css?v=96">
 <script src="theme.js?v=2"></script>
 </head>
 <body>
@@ -33,6 +33,7 @@
     <button class="tab-btn" data-tab="cas-pratique">Exemples de cas cliniques</button>
     <button class="tab-btn" data-tab="tableaux-psy">Tableaux Psy</button>
     <button class="tab-btn" data-tab="points">Points</button>
+    <button class="tab-btn" data-tab="circuits">Circuits</button>
   </nav>
 </header>
 
@@ -89,6 +90,10 @@
   <!-- ===================== ONGLET PROPOSER UNE FORMULE (diagnostic -> formules -> modifications) ===================== -->
   <section id="tab-proposer" class="tab-panel">
     <h2>Proposer une formule</h2>
+    <div class="prop-vues cat-chip-row" role="group" aria-label="Que proposer ?">
+      <button type="button" class="cat-chip active" data-vue="formules">Formules</button>
+      <button type="button" class="cat-chip" data-vue="circuits">Circuits thérapeutiques</button>
+    </div>
     <p class="muted" data-aide>Indique le diagnostic (1 à 3 syndromes ; pour un canal, choisis la variante : canal principal, luo plénitude, luo vide, tendineux…). L'outil classe les formules de ta base d'après le lien avec la fiche du syndrome, l'indication et les signes en commun, puis propose pour chacune les modifications de ta base « modifications » qui correspondent à tes signes concomitants. Coche des modifications pour voir la composition résultante. C'est une aide à la réflexion, pas une prescription.</p>
     <div class="prop-bloc"><strong>Diagnostic</strong>
       <div id="prop-diag" class="prop-choisis"></div>
@@ -346,6 +351,24 @@
   </section>
 
   <!-- ===================== ONGLET AJOUTER UNE FORMULE ===================== -->
+  <!-- ===================== ONGLET CIRCUITS THÉRAPEUTIQUES ===================== -->
+  <section id="tab-circuits" class="tab-panel">
+    <div class="formules-layout">
+      <aside class="formules-sidebar">
+        <div class="sidebar-header-row">
+          <input type="search" id="circuit-search" placeholder="Rechercher : canal, indication, syndrome...">
+          <button type="button" id="circuit-nouveau" class="edit-toggle-btn" title="Créer une fiche de circuit">+ Nouveau</button>
+        </div>
+        <div id="circuit-canaux" class="cat-chip-row" aria-label="Filtrer par canal"></div>
+        <ul id="circuit-list"></ul>
+        <p id="circuit-count" class="muted"></p>
+      </aside>
+      <article id="circuit-detail" class="formule-detail circ-fiche">
+        <p class="muted">Sélectionne un circuit à gauche pour voir sa fiche, ou crée le tien avec « + Nouveau ».</p>
+      </article>
+    </div>
+  </section>
+
   <section id="tab-ajouter" class="tab-panel">
     <div class="apropos" style="max-width:900px;">
       <button type="button" class="tab-btn" data-tab="formules">← Retour aux formules</button>
@@ -423,5 +446,6 @@
 </main>
 
 <script src="app.js?v=130"></script>
+<script src="circuits.js?v=4"></script>
 </body>
 </html>
