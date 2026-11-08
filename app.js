@@ -611,13 +611,13 @@ const Formules = {
       item: (li, f) => {
         if (f.estVariation) {
           li.classList.add("fl-sous");
-          li.innerHTML = `<span class="fl-pinyin">${dsMarque(f.nom, q)}</span><span class="fl-syndrome">${dsMarque(this.indicationVariation(f), q)}</span>`;
+          li.innerHTML = `<span class="fl-pinyin">${dsMarque(f.nom, q)}</span><span class="fl-syndrome">${dsMarque(sansChinois(this.indicationVariation(f)), q)}</span>`;
           li.addEventListener("click", () => this.showVariation(f, li));
           return;
         }
         li.innerHTML = `<span class="fl-pinyin">${dsMarque(f.pinyin || f.id, q)}</span>` +
           (f.nom_fr ? `<span class="fl-nomfr">${dsMarque(f.nom_fr, q)}</span>` : "") +
-          `<span class="fl-syndrome">${dsMarque(f.indications_syndrome || "", q)}</span>`;
+          `<span class="fl-syndrome">${dsMarque(sansChinois(f.indications_syndrome), q)}</span>`;
         li.addEventListener("click", () => this.showDetail(f, li));
       }
     });
@@ -2356,6 +2356,11 @@ function dsNorm(t) {
 }
 
 // Texte échappé, avec le mot recherché surligné (<mark>), sans tenir compte des accents ni de la casse
+// retire les passages chinois entre parenthèses (« (fēng hán biǎo zhèng 风寒表证) ») pour que les lignes des listes restent lisibles
+function sansChinois(t) {
+  return String(t || "").replace(/\s*[(（][^()（）]*[一-鿿][^()（）]*[)）]\s*/g, " ").replace(/\s+([,;.:])/g, "$1").replace(/\s{2,}/g, " ").trim();
+}
+
 function dsMarque(texte, q) {
   const nq = dsNorm((q || "").trim());
   if (!nq) return escapeHtml(texte);
