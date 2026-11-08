@@ -611,7 +611,7 @@ const Formules = {
       item: (li, f) => {
         if (f.estVariation) {
           li.classList.add("fl-sous");
-          li.innerHTML = `<span class="fl-pinyin">${dsMarque(f.nom, q)}</span><span class="fl-nomfr">${f.type === "variation" ? "variation" : escapeHtml(f.type)} de ${escapeHtml(f.parentPinyin)}</span>`;
+          li.innerHTML = `<span class="fl-pinyin">${dsMarque(f.nom, q)}</span><span class="fl-syndrome">${dsMarque(this.indicationVariation(f), q)}</span>`;
           li.addEventListener("click", () => this.showVariation(f, li));
           return;
         }
@@ -623,6 +623,21 @@ const Formules = {
     });
     const nVar = list.reduce((n, f) => n + this.nbVariations(f.id), 0);
     document.getElementById("formule-count").textContent = (list.length + nVar) + " formule(s)" + (nVar ? " dont " + nVar + " variation(s)" : "");
+  },
+
+  // indication d'une variation, pour la liste : phrase du cours, sinon syndrome de ta carte mentale (avant les deux-points), sinon carte de la famille, sinon celui de la formule d'origine
+  indicationVariation(v) {
+    if (v.indication) return v.indication;
+    const c = this.cartes || {};
+    const cv = c.variations && c.variations[v.id];
+    if (cv && cv.sections && cv.sections.syndromes) {
+      const t = cv.sections.syndromes.replace(/^(?:[A-Za-z]{1,5},)+[A-Za-z]{1,5}\s+/, "").replace(/\s+/g, " ").split(/\s*:\s+/)[0].trim();
+      if (t) return t;
+    }
+    const sf = c.syndromes_famille && c.syndromes_famille.variations && c.syndromes_famille.variations[v.id];
+    if (sf && sf.texte) return sf.texte;
+    const p = (this.index || []).find(x => x.id === v.parent);
+    return (p && p.indications_syndrome) || "";
   },
 
   // nombre de variations (sous-formules) rattachées à une formule
