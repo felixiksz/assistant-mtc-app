@@ -1171,7 +1171,6 @@ const ProchesFormules = {
         return `<td><span class="pf-pt" title="${escapeHtml("Dose : " + (c.dose || "?"))}"></span></td>`;
       }).join("") + `</tr>`;
     }).join("");
-    const bilan = `<tr><th scope="row" class="muted">En commun avec cette formule</th>${cols.map((col, ci) => `<td class="pf-bilan">${col.moi ? "" : communs[ci] + " / " + total(ci)}</td>`).join("")}</tr>`;
     // lignes de texte (repliables) : l'information vient des fiches et du cours
     const coupe = (t, n) => { t = String(t || "").replace(/\s+/g, " ").trim(); return t; };
     const ligneTexte = (titre, fn) => {
@@ -1183,7 +1182,7 @@ const ProchesFormules = {
     return `<div class="pf-barre"><label><input type="checkbox" id="pf-diff"> Seulement ce qui diffère</label>` +
       `<span class="muted pf-legende">● = la substance est dans la formule (survole le point pour la dose)</span></div>` +
       `<div class="pf-matrice"><div class="cmp-defile"><table class="cmp-table pf-table"><thead><tr><th></th>${entete}</tr></thead><tbody>` +
-      `<tr><th scope="row" colspan="${cols.length + 1}" class="cmp-section">Composition</th></tr>${lignesSubs}${bilan}` +
+      `<tr><th scope="row" colspan="${cols.length + 1}" class="cmp-section">Composition</th></tr>${lignesSubs}` +
       ligneTexte("Actions", c => c.g.actions_therapeutiques) +
       ligneTexte("Indication", c => c.g.indications_syndrome) +
       ligneTexte("Contre-indications", c => c.g.contre_indications_precautions) +
