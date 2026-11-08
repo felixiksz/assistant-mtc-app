@@ -1058,7 +1058,7 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .circ-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 .circ-table th, .circ-table td { border: 1px solid var(--line); padding: 0.25rem 0.45rem; text-align: left; vertical-align: top; }
 .circ-schema { margin-top: 0.5rem; }
-.circ-couche { margin: 0.3rem 0; }
+.circ-niveau { margin: 0.3rem 0; }
 .circ-synd { margin: 0.2rem 0; }
 .circ-synd-liste { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.3rem 0; }
 .circ-form label { display: block; margin: 0.5rem 0; font-weight: 600; }

@@ -27,7 +27,7 @@ const Circuits = {
   // nom d'organe ou de canal (sans accent, en minuscules) -> code du canal
   NOM_CODE: { poumon: "P", "gros intestin": "GI", estomac: "E", rate: "Rt", coeur: "C", "intestin grele": "IG", vessie: "V", rein: "Rn", reins: "Rn",
               "enveloppe du coeur": "EC", "trois foyers": "TF", "vesicule biliaire": "VB", foie: "F" },
-  COUCHE_CODES: { "tai yang": ["IG", "V"], "yang ming": ["GI", "E"], "shao yang": ["TF", "VB"], "tai yin": ["P", "Rt"], "shao yin": ["C", "Rn"], "jue yin": ["EC", "F"] },
+  NIVEAU_CODES: { "tai yang": ["IG", "V"], "yang ming": ["GI", "E"], "shao yang": ["TF", "VB"], "tai yin": ["P", "Rt"], "shao yin": ["C", "Rn"], "jue yin": ["EC", "F"] },
 
   // ---------- données
   async ensureLoaded() {
@@ -47,7 +47,7 @@ const Circuits = {
 
   recomposer() {
     const surch = this.perso.surcharges || {};
-    const vide = { ajouts: [], actions: [], indications: [], syndromes: [], alias: [], notes: [], syndromes_lies: [], couches: [] };
+    const vide = { ajouts: [], actions: [], indications: [], syndromes: [], alias: [], notes: [], syndromes_lies: [], niveaux: [] };
     const b = this.base.circuits.map(c => ({ ...vide, ...c, ...(surch[c.id] || {}), origine: "cours", modifie: !!surch[c.id], de_base: c }));
     const p = (this.perso.circuits || []).map(c => ({ ...vide, figure: 1, ...c, origine: "perso", modifie: false }));
     this.liste = [...b, ...p];
@@ -75,14 +75,14 @@ const Circuits = {
     return `<svg class="circ-svg" viewBox="${o.legende ? "-8 0 128 120" : "0 0 120 120"}" width="${taille}" height="${taille}" role="img" aria-label="Circuit ${escapeHtml(g.join(", "))}">${traits}${ronds}${cote}</svg>`;
   },
 
-  // ---------- canaux d'un syndrome de la base (organes, canaux, couches des six niveaux)
+  // ---------- canaux d'un syndrome de la base (organes, canaux, six niveaux)
   canauxDeSyndrome(e) {
     const out = new Set();
     const lib = dsNorm(String(e.sousLabel || ""));
     if (e.domaine === "organes" || e.domaine === "canaux") {
       String(e.sousLabel || "").split(/\s[-–]\s/).forEach(n => { const k = this.NOM_CODE[dsNorm(n).trim()]; if (k) out.add(k); });
     } else if (e.domaine === "externes") {
-      Object.keys(this.COUCHE_CODES).forEach(c => { if (lib.includes(c)) this.COUCHE_CODES[c].forEach(k => out.add(k)); });
+      Object.keys(this.NIVEAU_CODES).forEach(c => { if (lib.includes(c)) this.NIVEAU_CODES[c].forEach(k => out.add(k)); });
     }
     return out;
   },
@@ -135,14 +135,10 @@ const Circuits = {
     if (!c) { zone.innerHTML = `<p class="muted">Sélectionne un circuit à gauche pour voir sa fiche.</p>`; return; }
     if (this.edition) { this.rendreEdition(c); return; }
     const sch = (this.base.schemas || []).find(s => s.n === c.figure);
-    const lignes = c.grille.map((code, i) => {
-      const k = this.canaux.get(code) || {};
-      return `<tr><th scope="row">${this.PLACES[i]}</th><td><span class="sx-code">${escapeHtml(code)}</span></td><td>${escapeHtml(k.nom || "")} <span class="muted">(${escapeHtml(k.pinyin || "")} <span class="hanzi">${escapeHtml(k.hanzi || "")}</span>) · ${escapeHtml(k.canal || "")} <span class="hanzi">${escapeHtml(k.canal_hanzi || "")}</span></span></td><td>${k.polarite === "yin" ? "yīn (rond noir)" : "yáng (rond blanc)"}</td><td>${escapeHtml(k.couche || "")}</td><td>${escapeHtml(k.element || "")}</td></tr>`;
-    }).join("");
-    const couches = (c.couches || []).map(x => {
+    const niveaux = (c.niveaux || []).map(x => {
       const n = dsNorm(sansChinois(x));
-      const co = (this.base.couches || []).find(y => n.includes(dsNorm(y.nom)));
-      return co ? `<details class="circ-couche"><summary>Fonctions de ${escapeHtml(co.nom)} <span class="muted">(cours p. ${co.page})</span></summary>${this.ul(co.fonctions)}</details>` : "";
+      const co = (this.base.niveaux || []).find(y => n.includes(dsNorm(y.nom)));
+      return co ? `<details class="circ-niveau"><summary>Fonctions de ${escapeHtml(co.nom)} <span class="muted">(cours p. ${co.page})</span></summary>${this.ul(co.fonctions)}</details>` : "";
     }).join("");
     const astuces = (this.base.astuces || []).filter(a => a.paires.some(p => p.every(k => c.grille.includes(k)))).map(a => `<li>${escapeHtml(a.texte)}</li>`).join("");
     const ajouts = (c.ajouts || []).map(a => `<li>${a.action ? escapeHtml(a.action) + " : " : ""}${escapeHtml(a.texte || "")} ${(a.canaux || []).map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")}${a.source && /correction/.test(a.source) ? ` <span class="muted">(selon ta correction)</span>` : ""}</li>`).join("");
@@ -163,7 +159,7 @@ const Circuits = {
       <div class="circ-haut">
         <div class="circ-grand">${this.dessin(c, { taille: 230, etiquettes: true, legende: true })}
           <p class="muted circ-legende">● canal yīn · ○ canal yáng<br>ligne du haut : canaux de main ; ligne du bas : canaux de pied</p></div>
-        <div class="circ-canaux"><table class="circ-table"><thead><tr><th></th><th>Code</th><th>Canal</th><th>Polarité</th><th>Couche</th><th>Élément</th></tr></thead><tbody>${lignes}</tbody></table>
+        <div class="circ-canaux">
           ${sch ? `<p class="muted circ-schema"><strong>Schéma ${sch.n}</strong> : ${escapeHtml(sch.texte)}</p>` : `<p class="muted circ-schema">Boucle : liaisons horizontales et verticales (pas de schéma précisé).</p>`}</div>
       </div>
       ${this.section("Syndromes du circuit", this.ul((c.syndromes || []).map(s => s.replace(/^syndromes? du /i, "du ").replace(/^du /, "Syndromes du "))))}
@@ -171,10 +167,10 @@ const Circuits = {
       ${this.section("Indications", this.ul(c.indications))}
       ${this.section("Ajouts possibles", ajouts ? `<ul class="tcm-list">${ajouts}</ul>` : "")}
       ${(c.notes || []).length ? this.section("Notes", this.ul(c.notes)) : ""}
-      ${couches ? this.section("Couches", couches) : ""}
+      ${niveaux ? this.section("Niveaux", niveaux) : ""}
       ${astuces ? this.section("Astuces du Dr Tán Té Fū (cours, p. 41)", `<ul class="tcm-list">${astuces}</ul>`) : ""}
       ${this.section("Syndromes de ta base rattachés à ce circuit", lies ? `<div class="circ-synd-liste">${lies}</div>` : `<p class="muted">Aucun pour l'instant : « Modifier cette fiche » permet d'en rattacher.</p>`)}
-      <section><h3>Syndromes de ta base portant sur ces canaux</h3><p class="muted">Syndromes des organes, des canaux et des six niveaux dont l'organe ou la couche est un des quatre canaux.</p>${parCanal || `<p class="muted">Aucun.</p>`}</section>
+      <section><h3>Syndromes de ta base portant sur ces canaux</h3><p class="muted">Syndromes des organes, des canaux et des six niveaux dont l'organe ou le niveau est un des quatre canaux.</p>${parCanal || `<p class="muted">Aucun.</p>`}</section>
       <p class="muted">Méthode de l'équilibre global : chaque canal du circuit doit avoir au moins deux connexions (une entrée, une sortie). ${escapeHtml(this.base.regles.changer || "")}</p>`;
     zone.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const e = this.entreeSynd(b.dataset.synd); if (e) this.ouvrirSyndrome(e); }));
     document.getElementById("circ-edit").addEventListener("click", () => this.modifier(c));
@@ -199,7 +195,7 @@ const Circuits = {
   nouveau() {
     this.ensureLoaded().then(() => {
       this.actif = "(nouveau)";
-      this.edition = { nouveau: true, nom: "", alias: "", grille: ["", "", "", ""], figure: 1, syndromes: "", actions: "", indications: "", ajouts: "", notes: "", syndromes_lies: [], couches: "" };
+      this.edition = { nouveau: true, nom: "", alias: "", grille: ["", "", "", ""], figure: 1, syndromes: "", actions: "", indications: "", ajouts: "", notes: "", syndromes_lies: [], niveaux: "" };
       this.rendreListe();
       document.getElementById("circuit-detail").innerHTML = "";
       this.rendreEdition({ id: "(nouveau)", origine: "perso" });
@@ -210,7 +206,7 @@ const Circuits = {
     this.actif = c.id;
     this.edition = { nouveau: false, nom: c.nom, alias: (c.alias || []).join("\n"), grille: [...c.grille], figure: c.figure, syndromes: (c.syndromes || []).join("\n"),
                      actions: (c.actions || []).join("\n"), indications: (c.indications || []).join("\n"), ajouts: this.ajoutsEnTexte(c.ajouts),
-                     notes: (c.notes || []).join("\n"), syndromes_lies: [...(c.syndromes_lies || [])], couches: (c.couches || []).join("\n") };
+                     notes: (c.notes || []).join("\n"), syndromes_lies: [...(c.syndromes_lies || [])], niveaux: (c.niveaux || []).join("\n") };
     this.rendreFiche();
   },
 
@@ -286,7 +282,7 @@ const Circuits = {
     if (!d.nom.trim()) { statut.textContent = "Le nom du circuit est obligatoire."; return; }
     if (!g.every(Boolean) || new Set(g).size !== 4) { statut.textContent = "Choisis 4 canaux différents."; return; }
     const champs = { nom: d.nom.trim(), alias: this.lignes(d.alias), grille: [...g], figure: +d.figure, syndromes: this.lignes(d.syndromes), actions: this.lignes(d.actions),
-                     indications: this.lignes(d.indications), ajouts: this.texteEnAjouts(d.ajouts, c.ajouts), notes: this.lignes(d.notes), syndromes_lies: [...d.syndromes_lies], couches: this.lignes(d.couches) };
+                     indications: this.lignes(d.indications), ajouts: this.texteEnAjouts(d.ajouts, c.ajouts), notes: this.lignes(d.notes), syndromes_lies: [...d.syndromes_lies], niveaux: this.lignes(d.niveaux) };
     let id = c.id;
     if (d.nouveau) {
       id = "perso_" + dsNorm(champs.nom).replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40) + "_" + Date.now().toString(36);
@@ -295,7 +291,7 @@ const Circuits = {
       const i = this.perso.circuits.findIndex(x => x.id === c.id);
       this.perso.circuits[i] = { id: c.id, ...champs };
     } else {
-      const defaut = { alias: [], syndromes: [], actions: [], indications: [], ajouts: [], notes: [], syndromes_lies: [], couches: [] };
+      const defaut = { alias: [], syndromes: [], actions: [], indications: [], ajouts: [], notes: [], syndromes_lies: [], niveaux: [] };
       const diff = {};
       Object.keys(champs).forEach(k => { const ref = c.de_base[k] !== undefined ? c.de_base[k] : defaut[k]; if (JSON.stringify(champs[k]) !== JSON.stringify(ref)) diff[k] = champs[k]; });
       if (Object.keys(diff).length) this.perso.surcharges[c.id] = diff; else delete this.perso.surcharges[c.id];
@@ -369,9 +365,9 @@ const CircuitsProposition = {
       const actif = choix.has(k.code), deduit = prov.has(k.code);
       return `<button type="button" class="cat-chip${actif ? " active" : ""}" data-k="${k.code}" title="${escapeHtml(k.nom + " — " + k.canal + (deduit ? " · déduit du diagnostic : " + [...new Set(prov.get(k.code))].join(", ") : ""))}">${k.code}</button>`;
     }).join("");
-    let html = `<div class="prop-bloc"><strong>Canaux impliqués à rééquilibrer</strong> <span class="muted">${prov.size ? "déduits des syndromes du diagnostic" : "aucun syndrome d'organe, de canal ou de couche dans le diagnostic"} ; clique pour ajouter ou retirer un canal</span><div class="cat-chip-row circ-puces">${puces}</div></div>`;
+    let html = `<div class="prop-bloc"><strong>Canaux impliqués à rééquilibrer</strong> <span class="muted">${prov.size ? "déduits des syndromes du diagnostic" : "aucun syndrome d'organe, de canal ou de niveau dans le diagnostic"} ; clique pour ajouter ou retirer un canal</span><div class="cat-chip-row circ-puces">${puces}</div></div>`;
     if (!choix.size) {
-      zone.innerHTML = html + `<p class="muted">Choisis un diagnostic (un syndrome d'organe, de canal ou de couche) ou des canaux ci-dessus pour obtenir des circuits.</p>`;
+      zone.innerHTML = html + `<p class="muted">Choisis un diagnostic (un syndrome d'organe, de canal ou de niveau) ou des canaux ci-dessus pour obtenir des circuits.</p>`;
       this.brancher(zone);
       return;
     }
