@@ -1163,7 +1163,7 @@ const ProchesFormules = {
     const communs = cols.map((col, ci) => subs.filter(s => s.cells[0] && s.cells[ci]).length);
     const total = ci => subs.filter(s => s.cells[0] || s.cells[ci]).length;
     const entete = cols.map((col, ci) => `<th scope="col" class="cmp-col${col.moi ? " pf-moi-col" : ""}"><div class="cmp-nom">${escapeHtml(col.g.pinyin)}</div><div class="hanzi">${escapeHtml(col.g.hanzi || "")}</div>` +
-      (col.moi ? `<div class="muted">cette formule</div>` : `<div class="cmp-bilan">${communs[ci]} en commun sur ${total(ci)}</div><div class="cmp-actions"><button type="button" class="edit-toggle-btn" data-pf-fiche="${escapeHtml(col.id)}">Fiche</button> <button type="button" class="cmp-add cmp-mini" data-pf-cmp="${escapeHtml(col.id)}" title="Ajouter au comparateur">⇄</button></div>`) + `</th>`).join("");
+      (col.moi ? `<div class="muted">cette formule</div>` : `<div class="cmp-actions"><button type="button" class="edit-toggle-btn" data-pf-fiche="${escapeHtml(col.id)}">Fiche</button> <button type="button" class="cmp-add cmp-mini" data-pf-cmp="${escapeHtml(col.id)}" title="Ajouter au comparateur">⇄</button></div>`) + `</th>`).join("");
     const lignesSubs = subs.map(s => {
       const tous = s.cells.every(Boolean);
       return `<tr class="cmp-sub-compo${tous ? " cmp-ligne-commune" : ""}"><th scope="row">${Animaux.marque(s.c.substance_pinyin)}${escapeHtml(nom(s.c))} ${SubstanceNature.pastille(s.c)}</th>` + s.cells.map((c, ci) => {
