@@ -47,7 +47,7 @@ const Circuits = {
 
   recomposer() {
     const surch = this.perso.surcharges || {};
-    const vide = { ajouts: [], actions: [], indications: [], syndromes: [], alias: [], notes: [], syndromes_lies: [], niveaux: [] };
+    const vide = { ajouts: [], actions: [], indications: [], syndromes: [], alias: [], notes: [], syndromes_lies: [], niveaux: [], associations: [] };
     const b = this.base.circuits.map(c => ({ ...vide, ...c, ...(surch[c.id] || {}), origine: "cours", modifie: !!surch[c.id], de_base: c }));
     const p = (this.perso.circuits || []).map(c => ({ ...vide, figure: 1, ...c, origine: "perso", modifie: false }));
     this.liste = [...b, ...p];
@@ -57,22 +57,55 @@ const Circuits = {
   nomCourt(c) { return sansChinois(c.nom).replace(/\s+/g, " ").trim() || c.nom; },
   polarite(code) { const k = this.canaux.get(code); return k ? k.polarite : "yin"; },
   texteRecherche(c) {
-    return dsNorm([c.nom, ...(c.alias || []), ...c.grille, ...c.grille.map(k => (this.canaux.get(k) || {}).nom), ...c.actions, ...c.indications, ...(c.notes || [])].join(" "));
+    return dsNorm([c.nom, ...(c.alias || []), ...c.grille, ...c.grille.map(k => (this.canaux.get(k) || {}).nom), ...c.actions, ...c.indications, ...(c.notes || []), ...(c.associations || []).map(a => a.tableau + " " + Object.values(a.points || {}).flat().join(" "))].join(" "));
   },
 
-  // ---------- dessin : 4 ronds (noir = yīn, blanc = yáng), traits selon le schéma ; o = { taille, etiquettes, surligne (Set de codes), legende }
+  // ---------- dessin : 4 ronds (noir = yīn, blanc = yáng), traits selon le schéma ;
+  // o = { taille, etiquettes, surligne (Set de codes), legende, ajouts (canaux ajoutables, en pointillé sous la figure), points ({ code: [points] } d'une association, écrits près de chaque rond) }
+  lignesPoints(v) {
+    const mots = (Array.isArray(v) ? v : String(v || "").split(/[,;]\s*/)).map(x => String(x).trim()).filter(Boolean);
+    const lignes = [];
+    mots.forEach(m => { const l = lignes[lignes.length - 1]; if (l && (l + " " + m).length <= 14) lignes[lignes.length - 1] = l + " " + m; else lignes.push(m); });
+    return lignes;
+  },
+
   dessin(c, o = {}) {
     const taille = o.taille || 120, fig = this.LIENS[c.figure] ? c.figure : 0;
-    const pos = this.POSITIONS, g = c.grille || [];
+    const pos = this.POSITIONS, g = c.grille || [], pts = o.points || null, marge = pts ? 27 : 0;
+    const police = `font-family="var(--font-body, sans-serif)"`;
     const traits = this.LIENS[fig].flatMap(t => this.PAIRES[t]).map(([a, b]) => `<line x1="${pos[a][0]}" y1="${pos[a][1]}" x2="${pos[b][0]}" y2="${pos[b][1]}" stroke="var(--ink)" stroke-width="3.2" stroke-linecap="round"/>`).join("");
+    const rond = (x, y, r, code, o2 = {}) => {
+      const yin = this.polarite(code) === "yin";
+      const lib = o2.etiquette && code ? `<text x="${x}" y="${y + (r > 12 ? 4.5 : 3)}" text-anchor="middle" font-size="${r > 12 ? (code.length > 1 ? 12 : 14) : 8}" font-weight="700" ${police} fill="${yin ? "var(--bg)" : "var(--ink)"}">${escapeHtml(code)}</text>` : "";
+      return `<circle cx="${x}" cy="${y}" r="${r}" fill="${yin ? "var(--ink)" : "var(--bg)"}" stroke="var(--ink)" stroke-width="${o2.pointille ? 2.5 : 3}"${o2.pointille ? ` stroke-dasharray="3.5 2.5"` : ""}><title>${escapeHtml((this.canaux.get(code) || {}).nom || code)}</title></circle>${lib}`;
+    };
     const ronds = pos.map(([x, y], i) => {
-      const code = g[i] || "", yin = this.polarite(code) === "yin";
+      const code = g[i] || "";
       const anneau = o.surligne && o.surligne.has(code) ? `<circle cx="${x}" cy="${y}" r="21.5" fill="none" stroke="var(--accent)" stroke-width="4"/>` : "";
-      const lib = o.etiquettes && code ? `<text x="${x}" y="${y + 4.5}" text-anchor="middle" font-size="${code.length > 1 ? 12 : 14}" font-weight="700" font-family="var(--font-body, sans-serif)" fill="${yin ? "var(--bg)" : "var(--ink)"}">${escapeHtml(code)}</text>` : "";
-      return `${anneau}<circle cx="${x}" cy="${y}" r="16" fill="${yin ? "var(--ink)" : "var(--bg)"}" stroke="var(--ink)" stroke-width="3"><title>${escapeHtml((this.canaux.get(code) || {}).nom || code)}</title></circle>${lib}`;
+      return anneau + rond(x, y, 16, code, { etiquette: o.etiquettes });
     }).join("");
-    const cote = o.legende ? `<text x="2" y="33" font-size="7" fill="var(--ink)" opacity="0.7" transform="rotate(-90 6 33)">main</text><text x="2" y="93" font-size="7" fill="var(--ink)" opacity="0.7" transform="rotate(-90 6 93)">pied</text>` : "";
-    return `<svg class="circ-svg" viewBox="${o.legende ? "-8 0 128 120" : "0 0 120 120"}" width="${taille}" height="${taille}" role="img" aria-label="Circuit ${escapeHtml(g.join(", "))}">${traits}${ronds}${cote}</svg>`;
+    // points d'acupuncture : au-dessus des ronds du haut, au-dessous de ceux du bas
+    const etiq = pts ? pos.map(([x, y], i) => {
+      const l = this.lignesPoints(pts[g[i]]);
+      if (!l.length) return "";
+      const y0 = i < 2 ? y - 22 - (l.length - 1) * 8.5 : y + 29;
+      return l.map((t, k) => `<text x="${x}" y="${y0 + k * 8.5}" text-anchor="middle" font-size="7.8" font-weight="700" ${police} fill="var(--ink)">${escapeHtml(t)}</text>`).join("");
+    }).join("") : "";
+    // ajouts possibles : canaux en pointillé sous la figure, « + » devant, trait entre eux quand ils vont ensemble
+    const groupes = o.ajouts ? (c.ajouts || []).filter(a => (a.canaux || []).length) : [];
+    const aj = groupes.map((a, k) => {
+      const n = a.canaux.length, cy = 120 + marge + 24 + k * 46, x0 = 60 - n * 15 + 15;
+      const lien = n > 1 ? a.canaux.slice(1).map((_, j) => a.ensemble
+        ? `<line x1="${x0 + j * 30}" y1="${cy}" x2="${x0 + (j + 1) * 30}" y2="${cy}" stroke="var(--ink)" stroke-width="2"/>`
+        : `<text x="${x0 + j * 30 + 15}" y="${cy + 3}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)">ou</text>`).join("") : "";
+      const noeuds = a.canaux.map((code, j) => rond(x0 + j * 30, cy, 11, code, { etiquette: true, pointille: true })).join("");
+      const legende = sansChinois(a.action || "").slice(0, 34);
+      return `${lien}${noeuds}<text x="${x0 - 22}" y="${cy + 5}" text-anchor="middle" font-size="15" font-weight="700" ${police} fill="var(--ink)">+</text>` +
+        (legende ? `<text x="60" y="${cy + 25}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)" opacity="0.8">${escapeHtml(legende)}</text>` : "");
+    }).join("");
+    const cote = "";                                   // pas de mention « main » / « pied » : ça va de soi
+    const L = 120, H = 120 + marge * 2 + (groupes.length ? groupes.length * 46 + 4 : 0);
+    return `<svg class="circ-svg" viewBox="0 ${-marge} ${L} ${H}" width="${taille}" height="${Math.round(taille * H / L)}" role="img" aria-label="Circuit ${escapeHtml(g.join(", "))}">${traits}${ronds}${etiq}${cote}${aj}</svg>`;
   },
 
   // ---------- canaux d'un syndrome de la base (organes, canaux, six niveaux)
@@ -157,15 +190,17 @@ const Circuits = {
       ${(c.alias || []).length ? `<p class="muted">Aussi écrit : ${c.alias.map(a => escapeHtml(a)).join(" ; ")}</p>` : ""}
       <p class="muted">${c.origine === "perso" ? "Circuit créé dans l'application" : "Cours « Les circuits thérapeutiques » (Zhōng Lì), page " + c.page}${c.modifie ? " · fiche modifiée par toi" : ""}</p>
       <div class="circ-haut">
-        <div class="circ-grand">${this.dessin(c, { taille: 230, etiquettes: true, legende: true })}
-          <p class="muted circ-legende">● canal yīn · ○ canal yáng<br>ligne du haut : canaux de main ; ligne du bas : canaux de pied</p></div>
+        <div class="circ-grand" id="circ-dessin">${this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true })}</div>
         <div class="circ-canaux">
           ${sch ? `<p class="muted circ-schema"><strong>Schéma ${sch.n}</strong> : ${escapeHtml(sch.texte)}</p>` : `<p class="muted circ-schema">Boucle : liaisons horizontales et verticales (pas de schéma précisé).</p>`}</div>
       </div>
       ${this.section("Syndromes du circuit", this.ul((c.syndromes || []).map(s => s.replace(/^syndromes? du /i, "du ").replace(/^du /, "Syndromes du "))))}
       ${this.section("Actions / fonctions du circuit", `${c.actions_exemples ? `<p class="muted">Exemples non exclusifs des fonctions du circuit.</p>` : ""}${this.ul(c.actions)}`)}
       ${this.section("Indications", this.ul(c.indications))}
-      ${this.section("Ajouts possibles", ajouts ? `<ul class="tcm-list">${ajouts}</ul>` : "")}
+      ${this.section("Ajouts possibles", ajouts ? `<ul class="tcm-list">${ajouts}</ul><p class="muted">Dessinés en pointillé sous le circuit.</p>` : "")}
+      ${this.section("Associations de points", (c.associations || []).length
+        ? `<div class="cat-chip-row circ-assoc-puces">${c.associations.map((a, i) => `<button type="button" class="cat-chip" data-a="${i}">${escapeHtml(a.tableau)}</button>`).join("")}</div><div id="circ-assoc-detail" class="circ-assoc-detail"></div>`
+        : `<p class="muted">Aucune pour l'instant : « Modifier cette fiche » permet d'ajouter un tableau avec les points de chaque canal.</p>`)}
       ${(c.notes || []).length ? this.section("Notes", this.ul(c.notes)) : ""}
       ${niveaux ? this.section("Niveaux", niveaux) : ""}
       ${astuces ? this.section("Astuces du Dr Tán Té Fū (cours, p. 41)", `<ul class="tcm-list">${astuces}</ul>`) : ""}
@@ -173,9 +208,26 @@ const Circuits = {
       <section><h3>Syndromes de ta base portant sur ces canaux</h3><p class="muted">Syndromes des organes, des canaux et des six niveaux dont l'organe ou le niveau est un des quatre canaux.</p>${parCanal || `<p class="muted">Aucun.</p>`}</section>
       <p class="muted">Méthode de l'équilibre global : chaque canal du circuit doit avoir au moins deux connexions (une entrée, une sortie). ${escapeHtml(this.base.regles.changer || "")}</p>`;
     zone.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const e = this.entreeSynd(b.dataset.synd); if (e) this.ouvrirSyndrome(e); }));
+    this.assocActive = null;
+    zone.querySelectorAll(".circ-assoc-puces [data-a]").forEach(b => b.addEventListener("click", () => { this.assocActive = this.assocActive === +b.dataset.a ? null : +b.dataset.a; this.majAssoc(c); }));
+    this.majAssoc(c);
     document.getElementById("circ-edit").addEventListener("click", () => this.modifier(c));
     const s = document.getElementById("circ-suppr"); if (s) s.addEventListener("click", () => this.supprimer(c));
     const r = document.getElementById("circ-retablir"); if (r) r.addEventListener("click", () => this.retablir(c));
+  },
+
+  // une association = un tableau (syndrome) et les points de chaque canal du circuit ; un seul tableau est affiché à la fois, sur le dessin
+  majAssoc(c) {
+    const a = this.assocActive != null ? (c.associations || [])[this.assocActive] : null;
+    document.getElementById("circ-dessin").innerHTML = this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true, points: a ? a.points : null });
+    document.querySelectorAll(".circ-assoc-puces [data-a]").forEach(b => b.classList.toggle("active", a && +b.dataset.a === this.assocActive));
+    const det = document.getElementById("circ-assoc-detail");
+    if (!det) return;
+    if (!a) { det.innerHTML = `<p class="muted">Choisis un tableau : ses points s'écrivent sur le dessin.</p>`; return; }
+    const e = a.synd ? this.entreeSynd(a.synd) : null;
+    det.innerHTML = `<p>${e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(a.synd)}">${escapeHtml(a.tableau)}</button>` : `<strong>${escapeHtml(a.tableau)}</strong>`}</p>` +
+      `<p>${Object.entries(a.points || {}).map(([k, v]) => `<span class="sx-code">${escapeHtml(k)}</span> ${escapeHtml(v.join(", "))}`).join(" · ")}</p>` + (a.note ? `<p class="muted">${escapeHtml(a.note)}</p>` : "");
+    det.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const en = this.entreeSynd(b.dataset.synd); if (en) this.ouvrirSyndrome(en); }));
   },
 
   // ---------- création / modification
@@ -195,7 +247,7 @@ const Circuits = {
   nouveau() {
     this.ensureLoaded().then(() => {
       this.actif = "(nouveau)";
-      this.edition = { nouveau: true, nom: "", alias: "", grille: ["", "", "", ""], figure: 1, syndromes: "", actions: "", indications: "", ajouts: "", notes: "", syndromes_lies: [], niveaux: "" };
+      this.edition = { nouveau: true, nom: "", alias: "", grille: ["", "", "", ""], figure: 1, syndromes: "", actions: "", indications: "", ajouts: "", notes: "", syndromes_lies: [], niveaux: "", associations: [] };
       this.rendreListe();
       document.getElementById("circuit-detail").innerHTML = "";
       this.rendreEdition({ id: "(nouveau)", origine: "perso" });
@@ -206,7 +258,8 @@ const Circuits = {
     this.actif = c.id;
     this.edition = { nouveau: false, nom: c.nom, alias: (c.alias || []).join("\n"), grille: [...c.grille], figure: c.figure, syndromes: (c.syndromes || []).join("\n"),
                      actions: (c.actions || []).join("\n"), indications: (c.indications || []).join("\n"), ajouts: this.ajoutsEnTexte(c.ajouts),
-                     notes: (c.notes || []).join("\n"), syndromes_lies: [...(c.syndromes_lies || [])], niveaux: (c.niveaux || []).join("\n") };
+                     notes: (c.notes || []).join("\n"), syndromes_lies: [...(c.syndromes_lies || [])], niveaux: (c.niveaux || []).join("\n"),
+                     associations: (c.associations || []).map(a => ({ tableau: a.tableau, synd: a.synd, note: a.note || "", points: Object.fromEntries(Object.entries(a.points || {}).map(([k, v]) => [k, (v || []).join(", ")])) })) };
     this.rendreFiche();
   },
 
@@ -230,6 +283,11 @@ const Circuits = {
         <label>Indications (une par ligne)<textarea id="ce-indications" rows="4">${escapeHtml(d.indications)}</textarea></label>
         <label>Ajouts possibles (un par ligne, « action : texte »)<textarea id="ce-ajouts" rows="2">${escapeHtml(d.ajouts)}</textarea></label>
         <label>Notes (une par ligne)<textarea id="ce-notes" rows="2">${escapeHtml(d.notes)}</textarea></label>
+        <fieldset class="circ-assoc-form"><legend>Associations de points (un tableau = une association, à l'intérieur de ce circuit)</legend>
+          <div id="ce-assoc"></div>
+          <button type="button" class="edit-toggle-btn" id="ce-assoc-add">+ Ajouter une association</button>
+          <datalist id="ce-synd-noms">${(Syndromes.entries || []).map(e => `<option value="${escapeHtml(e.nom)}">`).join("")}</datalist>
+        </fieldset>
         <fieldset><legend>Syndromes de ta base rattachés à ce circuit</legend>
           <div id="ce-lies" class="prop-choisis"></div>
           <input type="search" id="ce-synd-search" placeholder="Ajouter un syndrome (nom, organe, canal…)" autocomplete="off">
@@ -255,7 +313,25 @@ const Circuits = {
       [0, 1].forEach(i => { if (g[i] && this.canaux.get(g[i]) && this.canaux.get(g[i]).membre !== "main") al.push(this.PLACES[i] + " : " + g[i] + " est un canal de pied."); });
       [2, 3].forEach(i => { if (g[i] && this.canaux.get(g[i]) && this.canaux.get(g[i]).membre !== "pied") al.push(this.PLACES[i] + " : " + g[i] + " est un canal de main."); });
       document.getElementById("ce-alerte").textContent = al.join(" ");
+      assoc();
     };
+    // associations de points : un champ par canal du circuit (et par canal ajouté)
+    const assoc = () => {
+      const cont = document.getElementById("ce-assoc");
+      const codes = [...new Set([...d.grille.filter(Boolean), ...this.texteEnAjouts(d.ajouts).flatMap(a => a.canaux), ...d.associations.flatMap(a => Object.keys(a.points))])];
+      cont.innerHTML = d.associations.map((a, i) => `<div class="circ-assoc-ligne" data-i="${i}">
+        <label>Tableau<input type="text" list="ce-synd-noms" data-champ="tableau" value="${escapeHtml(a.tableau)}" placeholder="nom d'un syndrome de ta base, ou ton intitulé"></label>
+        <div class="circ-assoc-pts">${codes.map(k => `<label>${escapeHtml(k)}<input type="text" data-pt="${escapeHtml(k)}" value="${escapeHtml(a.points[k] || "")}" placeholder="P7, P9"></label>`).join("")}</div>
+        <label>Note<input type="text" data-champ="note" value="${escapeHtml(a.note || "")}"></label>
+        <button type="button" class="edit-toggle-btn" data-suppr="${i}">Retirer cette association</button></div>`).join("") || `<p class="muted">Aucune association.</p>`;
+      cont.querySelectorAll(".circ-assoc-ligne").forEach(l => {
+        const a = d.associations[+l.dataset.i];
+        l.querySelectorAll("input").forEach(inp => inp.addEventListener("input", () => { if (inp.dataset.pt) a.points[inp.dataset.pt] = inp.value; else a[inp.dataset.champ] = inp.value; }));
+        l.querySelector("[data-suppr]").addEventListener("click", () => { d.associations.splice(+l.dataset.i, 1); assoc(); });
+      });
+    };
+    document.getElementById("ce-assoc-add").addEventListener("click", () => { d.associations.push({ tableau: "", note: "", points: {} }); assoc(); });
+    document.getElementById("ce-ajouts").addEventListener("change", () => { lire(); assoc(); });
     zone.querySelectorAll("select, input[name=circ-fig]").forEach(el => el.addEventListener("change", apercu));
     document.getElementById("ce-nom").addEventListener("input", lire);
     apercu();
@@ -282,7 +358,13 @@ const Circuits = {
     if (!d.nom.trim()) { statut.textContent = "Le nom du circuit est obligatoire."; return; }
     if (!g.every(Boolean) || new Set(g).size !== 4) { statut.textContent = "Choisis 4 canaux différents."; return; }
     const champs = { nom: d.nom.trim(), alias: this.lignes(d.alias), grille: [...g], figure: +d.figure, syndromes: this.lignes(d.syndromes), actions: this.lignes(d.actions),
-                     indications: this.lignes(d.indications), ajouts: this.texteEnAjouts(d.ajouts, c.ajouts), notes: this.lignes(d.notes), syndromes_lies: [...d.syndromes_lies], niveaux: this.lignes(d.niveaux) };
+                     indications: this.lignes(d.indications), ajouts: this.texteEnAjouts(d.ajouts, c.ajouts), notes: this.lignes(d.notes), syndromes_lies: [...d.syndromes_lies], niveaux: this.lignes(d.niveaux),
+                     associations: (d.associations || []).map(a => {
+                       const nom = dsNorm((a.tableau || "").trim()), e = (Syndromes.entries || []).find(x => dsNorm(x.nom) === nom);
+                       const o = { tableau: (a.tableau || "").trim(), points: Object.fromEntries(Object.entries(a.points || {}).map(([k, v]) => [k, String(v).split(/[,;]\s*/).map(x => x.trim()).filter(Boolean)]).filter(([, v]) => v.length)), note: (a.note || "").trim() };
+                       if (e) o.synd = this.cleSynd(e); else if (a.synd && this.entreeSynd(a.synd) && dsNorm(this.entreeSynd(a.synd).nom) === nom) o.synd = a.synd;
+                       return o;
+                     }).filter(a => a.tableau && Object.keys(a.points).length) };
     let id = c.id;
     if (d.nouveau) {
       id = "perso_" + dsNorm(champs.nom).replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40) + "_" + Date.now().toString(36);
@@ -291,7 +373,7 @@ const Circuits = {
       const i = this.perso.circuits.findIndex(x => x.id === c.id);
       this.perso.circuits[i] = { id: c.id, ...champs };
     } else {
-      const defaut = { alias: [], syndromes: [], actions: [], indications: [], ajouts: [], notes: [], syndromes_lies: [], niveaux: [] };
+      const defaut = { alias: [], syndromes: [], actions: [], indications: [], ajouts: [], notes: [], syndromes_lies: [], niveaux: [], associations: [] };
       const diff = {};
       Object.keys(champs).forEach(k => { const ref = c.de_base[k] !== undefined ? c.de_base[k] : defaut[k]; if (JSON.stringify(champs[k]) !== JSON.stringify(ref)) diff[k] = champs[k]; });
       if (Object.keys(diff).length) this.perso.surcharges[c.id] = diff; else delete this.perso.surcharges[c.id];
@@ -394,6 +476,7 @@ const CircuitsProposition = {
         <div class="prop-raisons">${raisons.join("")}</div>
         ${synd ? `<p class="muted">${escapeHtml(synd)}</p>` : ""}
         ${c.indications.length ? `<p class="circ-prop-ind"><span class="cm-etiq">Indications</span> ${escapeHtml(c.indications.slice(0, 2).join(" · "))}</p>` : ""}
+        ${(c.associations || []).filter(a => a.synd && (Proposer.diag || []).some(d => String(d).split("#")[0] === a.synd)).map(a => `<p class="circ-prop-ass"><span class="cm-etiq">Association de points</span> ${escapeHtml(a.tableau)} : ${Object.entries(a.points || {}).map(([k, v]) => `<span class="sx-code">${escapeHtml(k)}</span> ${escapeHtml(v.join(", "))}`).join(" · ")}</p>`).join("")}
         ${r.astuces.map(a => `<p class="circ-prop-ast"><span class="cm-etiq">Astuce du Dr Tán Té Fū</span> ${escapeHtml(a.texte)}</p>`).join("")}
         <footer><button type="button" class="edit-toggle-btn" data-circ="${escapeHtml(c.id)}">Fiche du circuit</button></footer>
       </div></article>`;

@@ -1075,3 +1075,8 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .circ-puces .cat-chip { min-width: 2.4rem; text-align: center; }
 .circ-puces .cat-chip, #circuit-canaux .cat-chip { text-transform: none; }
 .circ-table tbody th { background: var(--panel); color: var(--ink); text-transform: none; font-size: 0.78rem; }
+
+.circ-assoc-detail { margin-top: 0.4rem; }
+.circ-assoc-form .circ-assoc-ligne { border: 1px solid var(--line); padding: 0.5rem 0.7rem; margin: 0.5rem 0; }
+.circ-assoc-pts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.4rem; margin: 0.3rem 0; }
+.circ-prop-ass { font-size: 0.85rem; margin: 0.3rem 0; }
