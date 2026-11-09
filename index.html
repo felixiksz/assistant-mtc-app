@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&family=Noto+Serif:wght@700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=98">
+<link rel="stylesheet" href="style.css?v=99">
 <script src="theme.js?v=2"></script>
 </head>
 <body>
@@ -23,17 +23,28 @@
   </div>
   <button type="button" id="sync-settings-btn" class="sync-btn">⚙ Synchronisation</button>
   <button type="button" id="theme-btn" class="sync-btn" aria-expanded="false" aria-controls="theme-panel">🎨 Thème</button>
-  <nav class="tabs">
-    <button class="tab-btn active" data-tab="formules">Formules</button>
-    <button class="tab-btn" data-tab="comparer">Comparer</button>
-    <button class="tab-btn" data-tab="proposer">Proposer une formule</button>
-    <button class="tab-btn" data-tab="psy">Principes Taoïstes</button>
-    <button class="tab-btn" data-tab="syndromes">Syndromes</button>
-    <button class="tab-btn" data-tab="diag-signes">Diagnostic par signes</button>
-    <button class="tab-btn" data-tab="cas-pratique">Exemples de cas cliniques</button>
-    <button class="tab-btn" data-tab="tableaux-psy">Tableaux Psy</button>
-    <button class="tab-btn" data-tab="points">Points</button>
-    <button class="tab-btn" data-tab="circuits">Circuits</button>
+  <nav class="tabs menu-onglets" aria-label="Sections de l'application">
+    <button type="button" id="menu-btn" class="menu-btn" aria-expanded="false" aria-controls="menu-panneau"><span aria-hidden="true">☰</span> <span id="menu-courant">Formules</span> <span aria-hidden="true" class="menu-fleche">▾</span></button>
+    <div id="menu-panneau" class="menu-panneau" hidden>
+      <div class="menu-groupe"><div class="menu-titre">Formules</div>
+        <button class="tab-btn active" data-tab="formules">Formules</button>
+        <button class="tab-btn" data-tab="comparer">Comparer</button>
+        <button class="tab-btn" data-tab="proposer">Proposer une formule</button>
+      </div>
+      <div class="menu-groupe"><div class="menu-titre">Diagnostic</div>
+        <button class="tab-btn" data-tab="syndromes">Syndromes</button>
+        <button class="tab-btn" data-tab="diag-signes">Diagnostic par signes</button>
+        <button class="tab-btn" data-tab="cas-pratique">Exemples de cas cliniques</button>
+        <button class="tab-btn" data-tab="tableaux-psy">Tableaux Psy</button>
+      </div>
+      <div class="menu-groupe"><div class="menu-titre">Acupuncture</div>
+        <button class="tab-btn" data-tab="points">Points</button>
+        <button class="tab-btn" data-tab="circuits">Circuits</button>
+      </div>
+      <div class="menu-groupe"><div class="menu-titre">Principes</div>
+        <button class="tab-btn" data-tab="psy">Principes Taoïstes</button>
+      </div>
+    </div>
   </nav>
 </header>
 
@@ -445,7 +456,7 @@
 
 </main>
 
-<script src="app.js?v=131"></script>
+<script src="app.js?v=132"></script>
 <script src="circuits.js?v=9"></script>
 </body>
 </html>

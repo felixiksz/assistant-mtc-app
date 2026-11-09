@@ -7,8 +7,22 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+    // menu des sections : l'entrée correspondante est marquée et son nom s'affiche sur le bouton du menu
+    const entree = document.querySelector('#menu-panneau .tab-btn[data-tab="' + btn.dataset.tab + '"]');
+    if (entree) entree.classList.add("active");
+    const lib = document.getElementById("menu-courant");
+    if (lib) lib.textContent = (entree || btn).title || (entree || btn).textContent.trim();
   });
 });
+(() => {
+  const bt = document.getElementById("menu-btn"), pan = document.getElementById("menu-panneau");
+  if (!bt || !pan) return;
+  const fermer = () => { pan.hidden = true; bt.setAttribute("aria-expanded", "false"); };
+  bt.addEventListener("click", e => { e.stopPropagation(); pan.hidden = !pan.hidden; bt.setAttribute("aria-expanded", String(!pan.hidden)); });
+  document.addEventListener("click", e => { if (!pan.hidden && !e.target.closest(".menu-onglets")) fermer(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") fermer(); });
+  pan.querySelectorAll(".tab-btn").forEach(b => b.addEventListener("click", fermer));
+})();
 
 /* ============================= Source des données (local ou GitHub) =============================
    Toutes les lectures/écritures de fichiers JSON passent par Store, qui redirige soit vers le disque

@@ -1089,3 +1089,13 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .circ-ajout-canal { border-style: dashed; border-color: var(--ink); opacity: 1; }
 .circ-ajout-cond { border-style: dashed; }
 .circ-equiv { margin: 0.6rem 0; }
+
+/* Menu des sections : un seul bouton, les sections sont rangées par groupes */
+.menu-onglets { position: relative; overflow: visible; }
+.menu-btn { padding: 0.55rem 1.1rem; border: 2px solid var(--ink); background: var(--bg); color: var(--ink); cursor: pointer; font: inherit; font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.menu-btn:hover, .menu-btn[aria-expanded="true"] { background: var(--ink); color: var(--bg); }
+.menu-panneau { position: absolute; z-index: 60; top: calc(100% + 0.3rem); left: 0; width: min(24rem, calc(100vw - 2rem)); max-height: 80vh; overflow-y: auto; background: var(--bg); border: 2px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); padding: 0.5rem 0.6rem 0.7rem; display: grid; gap: 0.6rem; }
+.menu-panneau[hidden] { display: none; }
+.menu-titre { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 2px solid var(--ink); padding-bottom: 0.15rem; margin-bottom: 0.25rem; }
+.menu-panneau .tab-btn { display: block; width: 100%; text-align: left; border-color: transparent; padding: 0.55rem 0.7rem; white-space: normal; }
+.menu-panneau .tab-btn:hover { border-color: var(--accent); }
