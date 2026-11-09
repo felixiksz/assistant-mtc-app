@@ -743,6 +743,7 @@ const Formules = {
       ${v.non_detaillee && carteVar ? `<p class="muted">Le cours ne détaille pas cette variation ; sa composition vient de ta carte mentale.</p>` : ""}
       ${v.note ? `<p class="muted">${escapeHtml(v.note)}</p>` : ""}
       ${Sinolux.entete(v.sinolux)}
+      ${typeof Circuits !== "undefined" ? Circuits.blocFormule(v.id) : ""}
       ${Sinolux.blocCodes(v.sinolux, v.nom, v.sinolux_proches)}
       ${Animaux.bloc(an)}
       ${chips ? `<section><h3>Ce qui change par rapport à ${escapeHtml(base ? base.nom : parent.pinyin)}</h3><div>${chips}</div>${v.doses_citees ? `<p class="muted">Doses citées : ${escapeHtml(v.doses_citees)}</p>` : ""}</section>` : (v.doses_citees ? `<section><h3>Doses citées</h3><p>${escapeHtml(v.doses_citees)}</p></section>` : "")}
@@ -766,6 +767,7 @@ const Formules = {
       <p class="muted">${escapeHtml(f.categorie_nom || "")}${f.sous_type ? " · " + escapeHtml(f.sous_type) : ""}</p>
       ${f.nom_fr ? `<p><em>${escapeHtml(f.nom_fr)}</em></p>` : ""}
       ${CarteMentale.natSav(f)}
+      ${typeof Circuits !== "undefined" ? Circuits.blocFormule(f.id) : ""}
       ${(i => Sinolux.entete(i && i.codes, i && i.statut === "plusieurs_codes"))(Sinolux.infoFormule(f.id))}
       ${Sinolux.blocFormule(f.id)}
       ${Animaux.bloc(Animaux.depuisFiche(f))}

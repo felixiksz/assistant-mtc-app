@@ -1080,3 +1080,12 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .circ-assoc-form .circ-assoc-ligne { border: 1px solid var(--line); padding: 0.5rem 0.7rem; margin: 0.5rem 0; }
 .circ-assoc-pts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.4rem; margin: 0.3rem 0; }
 .circ-prop-ass { font-size: 0.85rem; margin: 0.3rem 0; }
+
+.circ-graphe { margin-top: 0.3rem; }
+.circ-graphe .pm-si-t { min-width: 3.6rem; justify-content: center; }
+.circ-graphe .pm-cond .pm-principe { padding-left: 0.65rem; }
+.circ-commun { border-width: 2px; }
+.circ-x { font-size: 0.7rem; font-weight: 700; border: 1px solid var(--ink); padding: 0 0.25rem; margin-left: 0.3rem; }
+.circ-ajout-canal { border-style: dashed; border-color: var(--ink); opacity: 1; }
+.circ-ajout-cond { border-style: dashed; }
+.circ-equiv { margin: 0.6rem 0; }

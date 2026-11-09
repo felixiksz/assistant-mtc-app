@@ -47,7 +47,7 @@ const Circuits = {
 
   recomposer() {
     const surch = this.perso.surcharges || {};
-    const vide = { ajouts: [], actions: [], indications: [], syndromes: [], alias: [], notes: [], syndromes_lies: [], niveaux: [], associations: [] };
+    const vide = { ajouts: [], actions: [], indications: [], syndromes: [], alias: [], notes: [], syndromes_lies: [], niveaux: [], associations: [], formules: [], formules_note: "" };
     const b = this.base.circuits.map(c => ({ ...vide, ...c, ...(surch[c.id] || {}), origine: "cours", modifie: !!surch[c.id], de_base: c }));
     const p = (this.perso.circuits || []).map(c => ({ ...vide, figure: 1, ...c, origine: "perso", modifie: false }));
     this.liste = [...b, ...p];
@@ -132,6 +132,13 @@ const Circuits = {
     document.getElementById("circuit-search").addEventListener("input", e => { this.recherche = e.target.value; this.rendreListe(); });
     document.getElementById("circuit-nouveau").addEventListener("click", () => this.nouveau());
     document.querySelector('.tab-btn[data-tab="circuits"]').addEventListener("click", () => this.ouvert());
+    document.addEventListener("click", e => {
+      const b = e.target.closest("[data-circ-fiche]"), f = e.target.closest("[data-form]");
+      if (b) this.ouvrirCircuit(b.dataset.circFiche);
+      else if (f) this.ouvrirFormule(f.dataset.form);
+    });
+    window.addEventListener("resize", () => { const g = document.querySelector(".circ-graphe"); if (g && g.offsetParent) ModifArbre.tracer(g); });
+    this.ensureLoaded().catch(() => { /* les fiches de formules n'afficheront pas de circuit équivalent tant que les données manquent */ });
   },
 
   async ouvert() {
@@ -201,6 +208,8 @@ const Circuits = {
       ${this.section("Associations de points", (c.associations || []).length
         ? `<div class="cat-chip-row circ-assoc-puces">${c.associations.map((a, i) => `<button type="button" class="cat-chip" data-a="${i}">${escapeHtml(a.tableau)}</button>`).join("")}</div><div id="circ-assoc-detail" class="circ-assoc-detail"></div>`
         : `<p class="muted">Aucune pour l'instant : « Modifier cette fiche » permet d'ajouter un tableau avec les points de chaque canal.</p>`)}
+      ${this.section("Comparaison des associations et des ajouts", this.graphe(c))}
+      ${this.section("Formule de pharmacopée équivalente", this.equivalent(c))}
       ${(c.notes || []).length ? this.section("Notes", this.ul(c.notes)) : ""}
       ${niveaux ? this.section("Niveaux", niveaux) : ""}
       ${astuces ? this.section("Astuces du Dr Tán Té Fū (cours, p. 41)", `<ul class="tcm-list">${astuces}</ul>`) : ""}
@@ -211,9 +220,74 @@ const Circuits = {
     this.assocActive = null;
     zone.querySelectorAll(".circ-assoc-puces [data-a]").forEach(b => b.addEventListener("click", () => { this.assocActive = this.assocActive === +b.dataset.a ? null : +b.dataset.a; this.majAssoc(c); }));
     this.majAssoc(c);
+    this.tracerGraphe();
     document.getElementById("circ-edit").addEventListener("click", () => this.modifier(c));
     const s = document.getElementById("circ-suppr"); if (s) s.addEventListener("click", () => this.supprimer(c));
     const r = document.getElementById("circ-retablir"); if (r) r.addEventListener("click", () => this.retablir(c));
+  },
+
+  // graphe de comparaison (même principe que l'arbre des modifications d'une formule) : à gauche les tableaux et les ajouts,
+  // à droite les points (par canal) et les canaux ajoutés ; un point utilisé par plusieurs tableaux reçoit plusieurs traits
+  graphe(c) {
+    const assoc = c.associations || [], ajouts = (c.ajouts || []).filter(a => (a.canaux || []).length);
+    if (!assoc.length && !ajouts.length) return "";
+    const points = new Map();
+    assoc.forEach((a, i) => Object.entries(a.points || {}).forEach(([code, l]) => (l || []).forEach(p => {
+      const k = String(p).trim();
+      if (!k) return;
+      if (!points.has(k)) points.set(k, { code, n: new Set() });
+      points.get(k).n.add(i);
+    })));
+    const nomCanal = k => (this.canaux.get(k) || {}).nom || "";
+    const codes = [...new Set([...c.grille, ...[...points.values()].map(v => v.code)])].filter(k => [...points.values()].some(v => v.code === k));
+    const canauxAj = [...new Set(ajouts.flatMap(a => a.canaux))];
+    const gauche = assoc.map((a, i) => {
+      const liens = Object.values(a.points || {}).flat().map(x => String(x).trim()).filter(Boolean).map(x => x + ":+").join(",");
+      return `<div class="pm-cond" data-id="a${i}" data-liens="${escapeHtml(liens)}"><div class="pm-si"><span class="pm-si-t">Tableau</span><span class="pm-cond-t">${escapeHtml(a.tableau)}</span></div>${a.note ? `<div class="pm-principe">${escapeHtml(a.note)}</div>` : ""}</div>`;
+    }).join("") + ajouts.map((a, j) => `<div class="pm-cond circ-ajout-cond" data-id="j${j}" data-liens="${escapeHtml(a.canaux.map(k => k + ":-").join(","))}"><div class="pm-si"><span class="pm-si-t">Ajout</span><span class="pm-cond-t">${escapeHtml(sansChinois(a.action || a.texte || ""))}</span></div><div class="pm-principe">${escapeHtml(a.texte || "")}</div></div>`).join("");
+    const droite = codes.map(k => `<div class="pm-groupe">${escapeHtml(k)} · ${escapeHtml(nomCanal(k))}</div>` +
+      [...points].filter(([, v]) => v.code === k).map(([pt, v]) => `<div class="pm-sub pm-ajout${v.n.size > 1 ? " circ-commun" : ""}" data-id="s${escapeHtml(pt)}:+" data-cle="${escapeHtml(pt)}:+"><strong>${escapeHtml(pt)}</strong>${v.n.size > 1 ? ` <span class="circ-x">× ${v.n.size}</span>` : ""}</div>`).join("")).join("") +
+      (canauxAj.length ? `<div class="pm-groupe">Canaux ajoutés</div>` + canauxAj.map(k => `<div class="pm-sub circ-ajout-canal" data-id="s${escapeHtml(k)}:-" data-cle="${escapeHtml(k)}:-"><span class="pm-sens">+ ajout</span> <strong>${escapeHtml(k)}</strong> <span class="muted">${escapeHtml(nomCanal(k))}</span></div>`).join("") : "");
+    return `<div class="circ-graphe"><p class="muted pf-legende">Trait plein : point de l'association · trait pointillé : canal ajouté · × n : point commun à plusieurs tableaux. Survole un tableau, un ajout ou un point pour voir ses liens.</p>` +
+      `<div class="pm-mm"><svg class="pf-traits" aria-hidden="true"></svg><div class="pm-gauche">${gauche}</div><div class="pm-droite">${droite}</div></div></div>`;
+  },
+  tracerGraphe() {
+    const g = document.querySelector(".circ-graphe");
+    if (!g) return;
+    ModifArbre.survol(g);
+    ModifArbre.tracer(g);
+    setTimeout(() => { if (g.isConnected) ModifArbre.tracer(g); }, 250);
+  },
+
+  // formule de pharmacopée équivalente à un circuit (facultatif) : liens dans les deux sens
+  nomFormule(id) {
+    const f = Formules.byId && Formules.byId.get(id);
+    if (f) return { nom: f.pinyin, fr: f.nom_fr || "" };
+    const v = Formules.varParId && Formules.varParId.get(id);
+    return v ? { nom: v.nom, fr: "" } : null;
+  },
+  equivalent(c) {
+    const l = (c.formules || []);
+    if (!l.length) return "";
+    return `<div class="circ-synd-liste">${l.map(id => { const n = this.nomFormule(id); return `<button type="button" class="edit-toggle-btn" data-form="${escapeHtml(id)}">${escapeHtml(n ? n.nom : id)}${n && n.fr ? ` <span class="muted">${escapeHtml(n.fr)}</span>` : ""}</button>`; }).join(" ")}</div>${c.formules_note ? `<p class="muted">${escapeHtml(c.formules_note)}</p>` : ""}`;
+  },
+  ouvrirFormule(id) {
+    const f = Formules.byId.get(id), v = Formules.varParId.get(id);
+    if (!f && !v) return;
+    document.querySelector('.tab-btn[data-tab="formules"]').click();
+    if (f) Formules.showDetail(f); else Formules.showVariation(v);
+  },
+  async ouvrirCircuit(id) {
+    document.querySelector('.tab-btn[data-tab="circuits"]').click();
+    await this.ouvert();
+    this.filtre = null; this.recherche = ""; document.getElementById("circuit-search").value = "";
+    this.rendrePuces(); this.afficher(id);
+  },
+  // bloc « Circuit équivalent » pour la fiche d'une formule (ou d'une variation)
+  blocFormule(id) {
+    const l = this.liste.filter(c => (c.formules || []).includes(id));
+    if (!l.length) return "";
+    return `<section class="circ-equiv"><h3>Circuit équivalent</h3><div class="circ-synd-liste">${l.map(c => `<button type="button" class="edit-toggle-btn" data-circ-fiche="${escapeHtml(c.id)}">${escapeHtml(this.nomCourt(c))} <span class="muted">${c.grille.join(" · ")}</span></button>`).join(" ")}</div></section>`;
   },
 
   // une association = un tableau (syndrome) et les points de chaque canal du circuit ; un seul tableau est affiché à la fois, sur le dessin
@@ -247,7 +321,7 @@ const Circuits = {
   nouveau() {
     this.ensureLoaded().then(() => {
       this.actif = "(nouveau)";
-      this.edition = { nouveau: true, nom: "", alias: "", grille: ["", "", "", ""], figure: 1, syndromes: "", actions: "", indications: "", ajouts: "", notes: "", syndromes_lies: [], niveaux: "", associations: [] };
+      this.edition = { nouveau: true, nom: "", alias: "", grille: ["", "", "", ""], figure: 1, syndromes: "", actions: "", indications: "", ajouts: "", notes: "", syndromes_lies: [], niveaux: "", associations: [], formules: [], formules_note: "" };
       this.rendreListe();
       document.getElementById("circuit-detail").innerHTML = "";
       this.rendreEdition({ id: "(nouveau)", origine: "perso" });
@@ -259,7 +333,8 @@ const Circuits = {
     this.edition = { nouveau: false, nom: c.nom, alias: (c.alias || []).join("\n"), grille: [...c.grille], figure: c.figure, syndromes: (c.syndromes || []).join("\n"),
                      actions: (c.actions || []).join("\n"), indications: (c.indications || []).join("\n"), ajouts: this.ajoutsEnTexte(c.ajouts),
                      notes: (c.notes || []).join("\n"), syndromes_lies: [...(c.syndromes_lies || [])], niveaux: (c.niveaux || []).join("\n"),
-                     associations: (c.associations || []).map(a => ({ tableau: a.tableau, synd: a.synd, note: a.note || "", points: Object.fromEntries(Object.entries(a.points || {}).map(([k, v]) => [k, (v || []).join(", ")])) })) };
+                     associations: (c.associations || []).map(a => ({ tableau: a.tableau, synd: a.synd, note: a.note || "", points: Object.fromEntries(Object.entries(a.points || {}).map(([k, v]) => [k, (v || []).join(", ")])) })),
+                     formules: [...(c.formules || [])], formules_note: c.formules_note || "" };
     this.rendreFiche();
   },
 
@@ -287,6 +362,12 @@ const Circuits = {
           <div id="ce-assoc"></div>
           <button type="button" class="edit-toggle-btn" id="ce-assoc-add">+ Ajouter une association</button>
           <datalist id="ce-synd-noms">${(Syndromes.entries || []).map(e => `<option value="${escapeHtml(e.nom)}">`).join("")}</datalist>
+        </fieldset>
+        <fieldset><legend>Formule de pharmacopée équivalente (facultatif)</legend>
+          <div id="ce-form-lies" class="prop-choisis"></div>
+          <input type="search" id="ce-form-search" placeholder="Ajouter une formule (pinyin, nom français)" autocomplete="off">
+          <ul id="ce-form-sugg" class="prop-sugg"></ul>
+          <label>Note sur l'équivalence<input type="text" id="ce-form-note" value="${escapeHtml(d.formules_note || "")}"></label>
         </fieldset>
         <fieldset><legend>Syndromes de ta base rattachés à ce circuit</legend>
           <div id="ce-lies" class="prop-choisis"></div>
@@ -348,6 +429,21 @@ const Circuits = {
       ul.innerHTML = l.map(e => `<li data-k="${escapeHtml(this.cleSynd(e))}"><strong>${escapeHtml(e.nom)}</strong> <span class="muted">${escapeHtml((Syndromes.domaineLabels || {})[e.domaine] || "")}${e.sousLabel ? " · " + escapeHtml(e.sousLabel) : ""}</span></li>`).join("") || `<li class="muted">Aucun résultat.</li>`;
       ul.querySelectorAll("li[data-k]").forEach(li => li.addEventListener("click", () => { d.syndromes_lies.push(li.dataset.k); document.getElementById("ce-synd-search").value = ""; ul.innerHTML = ""; puces(); }));
     });
+    const pf = () => {
+      const el = document.getElementById("ce-form-lies");
+      el.innerHTML = d.formules.map(id => { const n = this.nomFormule(id); return `<span class="chosen-item">${escapeHtml(n ? n.nom : id)}<button type="button" data-k="${escapeHtml(id)}" aria-label="Retirer">✕</button></span>`; }).join("") || `<span class="muted">Aucune.</span>`;
+      el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { d.formules = d.formules.filter(x => x !== b.dataset.k); pf(); }));
+    };
+    pf();
+    document.getElementById("ce-form-note").addEventListener("input", ev => { d.formules_note = ev.target.value; });
+    document.getElementById("ce-form-search").addEventListener("input", ev => {
+      const ul = document.getElementById("ce-form-sugg"), q = dsNorm(ev.target.value.trim());
+      if (!q) { ul.innerHTML = ""; return; }
+      const tout = [...(Formules.index || []).map(f => ({ id: f.id, nom: f.pinyin, fr: f.nom_fr || "" })), ...(Formules.variations || []).map(v => ({ id: v.id, nom: v.nom, fr: "variation" }))];
+      const l = tout.filter(x => !d.formules.includes(x.id) && q.split(/\s+/).every(m => dsNorm(x.nom + " " + x.fr).includes(m))).slice(0, 12);
+      ul.innerHTML = l.map(x => `<li data-k="${escapeHtml(x.id)}"><strong>${escapeHtml(x.nom)}</strong> <span class="muted">${escapeHtml(x.fr)}</span></li>`).join("") || `<li class="muted">Aucun résultat.</li>`;
+      ul.querySelectorAll("li[data-k]").forEach(li => li.addEventListener("click", () => { d.formules.push(li.dataset.k); document.getElementById("ce-form-search").value = ""; ul.innerHTML = ""; pf(); }));
+    });
     document.getElementById("ce-annuler").addEventListener("click", () => { this.edition = null; if (d.nouveau) { this.actif = null; this.rendreListe(); } this.rendreFiche(); });
     document.getElementById("circ-form").addEventListener("submit", ev => { ev.preventDefault(); lire(); this.sauver(c); });
   },
@@ -364,7 +460,8 @@ const Circuits = {
                        const o = { tableau: (a.tableau || "").trim(), points: Object.fromEntries(Object.entries(a.points || {}).map(([k, v]) => [k, String(v).split(/[,;]\s*/).map(x => x.trim()).filter(Boolean)]).filter(([, v]) => v.length)), note: (a.note || "").trim() };
                        if (e) o.synd = this.cleSynd(e); else if (a.synd && this.entreeSynd(a.synd) && dsNorm(this.entreeSynd(a.synd).nom) === nom) o.synd = a.synd;
                        return o;
-                     }).filter(a => a.tableau && Object.keys(a.points).length) };
+                     }).filter(a => a.tableau && Object.keys(a.points).length),
+                     formules: [...(d.formules || [])], formules_note: (d.formules_note || "").trim() };
     let id = c.id;
     if (d.nouveau) {
       id = "perso_" + dsNorm(champs.nom).replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40) + "_" + Date.now().toString(36);
@@ -373,7 +470,7 @@ const Circuits = {
       const i = this.perso.circuits.findIndex(x => x.id === c.id);
       this.perso.circuits[i] = { id: c.id, ...champs };
     } else {
-      const defaut = { alias: [], syndromes: [], actions: [], indications: [], ajouts: [], notes: [], syndromes_lies: [], niveaux: [], associations: [] };
+      const defaut = { alias: [], syndromes: [], actions: [], indications: [], ajouts: [], notes: [], syndromes_lies: [], niveaux: [], associations: [], formules: [], formules_note: "" };
       const diff = {};
       Object.keys(champs).forEach(k => { const ref = c.de_base[k] !== undefined ? c.de_base[k] : defaut[k]; if (JSON.stringify(champs[k]) !== JSON.stringify(ref)) diff[k] = champs[k]; });
       if (Object.keys(diff).length) this.perso.surcharges[c.id] = diff; else delete this.perso.surcharges[c.id];
@@ -478,6 +575,7 @@ const CircuitsProposition = {
         ${c.indications.length ? `<p class="circ-prop-ind"><span class="cm-etiq">Indications</span> ${escapeHtml(c.indications.slice(0, 2).join(" · "))}</p>` : ""}
         ${(c.associations || []).filter(a => a.synd && (Proposer.diag || []).some(d => String(d).split("#")[0] === a.synd)).map(a => `<p class="circ-prop-ass"><span class="cm-etiq">Association de points</span> ${escapeHtml(a.tableau)} : ${Object.entries(a.points || {}).map(([k, v]) => `<span class="sx-code">${escapeHtml(k)}</span> ${escapeHtml(v.join(", "))}`).join(" · ")}</p>`).join("")}
         ${r.astuces.map(a => `<p class="circ-prop-ast"><span class="cm-etiq">Astuce du Dr Tán Té Fū</span> ${escapeHtml(a.texte)}</p>`).join("")}
+        ${(c.formules || []).length ? `<p class="circ-prop-ast"><span class="cm-etiq">Formule équivalente</span> ${c.formules.map(id => { const n = Circuits.nomFormule(id); return `<button type="button" class="edit-toggle-btn" data-form="${escapeHtml(id)}">${escapeHtml(n ? n.nom : id)}</button>`; }).join(" ")}</p>` : ""}
         <footer><button type="button" class="edit-toggle-btn" data-circ="${escapeHtml(c.id)}">Fiche du circuit</button></footer>
       </div></article>`;
   },
@@ -505,6 +603,14 @@ const CircuitsProposition = {
     Proposer.rendre = function (...a) {
       if (this.vue === "circuits") return CircuitsProposition.rendre(document.getElementById("prop-res"));
       return rendreFormules.apply(this, a);
+    };
+    const carte = Proposer.carte;
+    Proposer.carte = function (...a) {
+      const h = carte.apply(this, a), r = a[0], id = r.v ? r.v.id : r.f.id;
+      const eq = Circuits.liste.filter(c => (c.formules || []).includes(id));
+      if (!eq.length) return h;
+      const bloc = `<p class="circ-prop-ast"><span class="cm-etiq">Circuit équivalent</span> ${eq.map(c => `<button type="button" class="edit-toggle-btn" data-circ-fiche="${escapeHtml(c.id)}">${escapeHtml(Circuits.nomCourt(c))} <span class="muted">${c.grille.join(" · ")}</span></button>`).join(" ")}</p>`;
+      return /<\/article>\s*$/.test(h) ? h.replace(/<\/article>\s*$/, bloc + "</article>") : h + bloc;
     };
     section.querySelectorAll(".prop-vues [data-vue]").forEach(b => b.addEventListener("click", () => {
       Proposer.vue = b.dataset.vue;
