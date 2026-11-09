@@ -94,17 +94,18 @@ const Circuits = {
     // ajouts possibles : canaux en pointillé sous la figure, « + » devant, trait entre eux quand ils vont ensemble
     const groupes = o.ajouts ? (c.ajouts || []).filter(a => (a.canaux || []).length) : [];
     const aj = groupes.map((a, k) => {
-      const n = a.canaux.length, cy = 120 + marge + 24 + k * 46, x0 = 60 - n * 15 + 15;
+      const n = a.canaux.length, cy = 120 + marge + 30 + k * 52, x0 = 60 - n * 15 + 15;
       const lien = n > 1 ? a.canaux.slice(1).map((_, j) => a.ensemble
         ? `<line x1="${x0 + j * 30}" y1="${cy}" x2="${x0 + (j + 1) * 30}" y2="${cy}" stroke="var(--ink)" stroke-width="2"/>`
         : `<text x="${x0 + j * 30 + 15}" y="${cy + 3}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)">ou</text>`).join("") : "";
       const noeuds = a.canaux.map((code, j) => rond(x0 + j * 30, cy, 11, code, { etiquette: true, pointille: true })).join("");
       const legende = sansChinois(a.action || "").slice(0, 34);
-      return `${lien}${noeuds}<text x="${x0 - 22}" y="${cy + 5}" text-anchor="middle" font-size="15" font-weight="700" ${police} fill="var(--ink)">+</text>` +
+      const marque = `<text x="60" y="${cy - 17}" text-anchor="middle" font-size="6.6" font-weight="700" letter-spacing="0.6" ${police} fill="var(--ink)">AJOUT POSSIBLE</text>`;
+      return `${marque}${lien}${noeuds}<text x="${x0 - 22}" y="${cy + 5}" text-anchor="middle" font-size="15" font-weight="700" ${police} fill="var(--ink)">+</text>` +
         (legende ? `<text x="60" y="${cy + 25}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)" opacity="0.8">${escapeHtml(legende)}</text>` : "");
     }).join("");
     const cote = "";                                   // pas de mention « main » / « pied » : ça va de soi
-    const L = 120, H = 120 + marge * 2 + (groupes.length ? groupes.length * 46 + 4 : 0);
+    const L = 120, H = 120 + marge * 2 + (groupes.length ? groupes.length * 52 + 6 : 0);
     return `<svg class="circ-svg" viewBox="0 ${-marge} ${L} ${H}" width="${taille}" height="${Math.round(taille * H / L)}" role="img" aria-label="Circuit ${escapeHtml(g.join(", "))}">${traits}${ronds}${etiq}${cote}${aj}</svg>`;
   },
 
@@ -194,8 +195,6 @@ const Circuits = {
         ${c.origine === "perso" ? `<button type="button" class="edit-toggle-btn" id="circ-suppr">🗑 Supprimer</button>` : c.modifie ? `<button type="button" class="edit-toggle-btn" id="circ-retablir">↺ Revenir à la version du cours</button>` : ""}
       </div>
       <h2>${escapeHtml(c.nom)}</h2>
-      ${(c.alias || []).length ? `<p class="muted">Aussi écrit : ${c.alias.map(a => escapeHtml(a)).join(" ; ")}</p>` : ""}
-      <p class="muted">${c.origine === "perso" ? "Circuit créé dans l'application" : "Cours « Les circuits thérapeutiques » (Zhōng Lì), page " + c.page}${c.modifie ? " · fiche modifiée par toi" : ""}</p>
       <div class="circ-haut">
         <div class="circ-grand" id="circ-dessin">${this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true })}</div>
         <div class="circ-canaux">
