@@ -1251,3 +1251,9 @@ h3:hover > .edit-champ, .edit-champ:focus, .edit-champ:hover { opacity: 1; borde
 .edit-champ-item { font: inherit; font-size: 0.85rem; text-align: left; background: none; border: 0; border-bottom: 1px dotted var(--line); cursor: pointer; color: inherit; padding: 0.25rem 0.3rem; }
 .edit-champ-item:hover { background: var(--ink); color: var(--bg); }
 #ce-schema { margin: 0.4rem 0; }
+.circ-com { font-size: 0.82rem; font-style: italic; border-left: 3px solid var(--accent); padding-left: 0.35rem; margin-left: 0.3rem; }
+.circ-com-btn { font: inherit; font-size: 0.75rem; background: none; border: 1px solid transparent; cursor: pointer; padding: 0 0.2rem; opacity: 0.55; border-radius: 3px; }
+li:hover > .circ-com-btn, .circ-com-btn:focus, .circ-com-btn:hover { opacity: 1; border-color: var(--ink); }
+@media (hover: none) { .circ-com-btn { opacity: 0.9; } }
+.circ-com-input { font: inherit; font-size: 0.85rem; margin-left: 0.3rem; min-width: 12rem; max-width: 100%; box-sizing: border-box; padding: 0.15rem 0.35rem; }
+.circ-note-pt { font-size: 0.78rem; font-weight: 400; font-style: italic; margin-left: 0.35rem; }
