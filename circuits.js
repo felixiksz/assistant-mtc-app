@@ -8,6 +8,11 @@
            + acupuncture/circuits/circuits_perso.json (circuits créés et modifications faites dans l'application ; jamais réécrit par le script).
    Dépend de app.js : Store, escapeHtml, dsNorm, sansChinois, Syndromes, DiagSignes, Proposer. */
 
+// retire les caractères chinois d'un texte (le pinyin reste) et les parenthèses devenues vides : « tǔ 土 » → « tǔ », « (气) » → rien
+function sansHanzi(t) {
+  return String(t || "").replace(/[一-鿿㐀-䶿]+/g, "").replace(/\s*[(（]\s*[)）]/g, "").replace(/[(（]\s+/g, "(").replace(/\s+([)）,;.:])/g, "$1").replace(/\s{2,}/g, " ").trim();
+}
+
 const Circuits = {
   CHEMIN_BASE: "acupuncture/circuits/circuits.json",
   CHEMIN_PERSO: "acupuncture/circuits/circuits_perso.json",
@@ -99,7 +104,7 @@ const Circuits = {
         ? `<line x1="${x0 + j * 30}" y1="${cy}" x2="${x0 + (j + 1) * 30}" y2="${cy}" stroke="var(--ink)" stroke-width="2"/>`
         : `<text x="${x0 + j * 30 + 15}" y="${cy + 3}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)">ou</text>`).join("") : "";
       const noeuds = a.canaux.map((code, j) => rond(x0 + j * 30, cy, 11, code, { etiquette: true, pointille: true })).join("");
-      const legende = sansChinois(a.action || "").slice(0, 34);
+      const legende = sansHanzi(a.action || "").slice(0, 34);
       const marque = `<text x="60" y="${cy - 17}" text-anchor="middle" font-size="6.6" font-weight="700" letter-spacing="0.6" ${police} fill="var(--ink)">AJOUT POSSIBLE</text>`;
       return `${marque}${lien}${noeuds}<text x="${x0 - 22}" y="${cy + 5}" text-anchor="middle" font-size="15" font-weight="700" ${police} fill="var(--ink)">+</text>` +
         (legende ? `<text x="60" y="${cy + 25}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)" opacity="0.8">${escapeHtml(legende)}</text>` : "");
@@ -168,7 +173,7 @@ const Circuits = {
 
   afficher(id) { this.actif = id; this.edition = null; this.rendreListe(); this.rendreFiche(); },
 
-  ul(items) { return items && items.length ? `<ul class="tcm-list">${items.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : ""; },
+  ul(items) { return items && items.length ? `<ul class="tcm-list">${items.map(x => `<li>${escapeHtml(sansHanzi(x))}</li>`).join("")}</ul>` : ""; },
   section(titre, html) { return html ? `<section><h3>${titre}</h3>${html}</section>` : ""; },
 
   rendreFiche() {
@@ -180,30 +185,31 @@ const Circuits = {
       const co = (this.base.niveaux || []).find(y => n.includes(dsNorm(y.nom)));
       return co ? `<details class="circ-niveau"><summary>Fonctions de ${escapeHtml(co.nom)} <span class="muted">(cours p. ${co.page})</span></summary>${this.ul(co.fonctions)}</details>` : "";
     }).join("");
-    const astuces = (this.base.astuces || []).filter(a => a.paires.some(p => p.every(k => c.grille.includes(k)))).map(a => `<li>${escapeHtml(a.texte)}</li>`).join("");
-    const ajouts = (c.ajouts || []).map(a => `<li>${a.action ? escapeHtml(a.action) + " : " : ""}${escapeHtml(a.texte || "")} ${(a.canaux || []).map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")}${a.source && /correction/.test(a.source) ? ` <span class="muted">(selon ta correction)</span>` : ""}</li>`).join("");
-    const lies = (c.syndromes_lies || []).map(k => { const e = this.entreeSynd(k); return e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(k)}">${escapeHtml(e.nom)}</button>` : `<span class="muted">${escapeHtml(k)} (introuvable)</span>`; }).join(" ");
+    const astuces = (this.base.astuces || []).filter(a => a.paires.some(p => p.every(k => c.grille.includes(k)))).map(a => `<li>${escapeHtml(sansHanzi(a.texte))}</li>`).join("");
+    const ajouts = (c.ajouts || []).map(a => `<li>${a.action ? escapeHtml(sansHanzi(a.action)) + " : " : ""}${escapeHtml(sansHanzi(a.texte || ""))} ${(a.canaux || []).map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")}${a.source && /correction/.test(a.source) ? ` <span class="muted">(selon ta correction)</span>` : ""}</li>`).join("");
+    const lies = (c.syndromes_lies || []).map(k => { const e = this.entreeSynd(k); return e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(k)}">${escapeHtml(sansHanzi(e.nom))}</button>` : `<span class="muted">${escapeHtml(k)} (introuvable)</span>`; }).join(" ");
     const parCanal = c.grille.map(code => {
       const l = this.syndromesDuCanal(code);
       if (!l.length) return "";
-      return `<details class="circ-synd"><summary><span class="sx-code">${code}</span> ${escapeHtml((this.canaux.get(code) || {}).nom || "")} <span class="muted">(${l.length})</span></summary><div class="circ-synd-liste">${l.map(e => `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(this.cleSynd(e))}">${escapeHtml(e.nom)}</button>`).join(" ")}</div></details>`;
+      return `<details class="circ-synd"><summary><span class="sx-code">${code}</span> ${escapeHtml((this.canaux.get(code) || {}).nom || "")} <span class="muted">(${l.length})</span></summary><div class="circ-synd-liste">${l.map(e => `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(this.cleSynd(e))}">${escapeHtml(sansHanzi(e.nom))}</button>`).join(" ")}</div></details>`;
     }).join("");
     zone.innerHTML = `
       <div class="circ-barre">
         <button type="button" class="edit-toggle-btn" id="circ-edit">✏️ Modifier cette fiche</button>
         ${c.origine === "perso" ? `<button type="button" class="edit-toggle-btn" id="circ-suppr">🗑 Supprimer</button>` : c.modifie ? `<button type="button" class="edit-toggle-btn" id="circ-retablir">↺ Revenir à la version du cours</button>` : ""}
       </div>
-      <h2>${escapeHtml(c.nom)}</h2>
+      <h2>${escapeHtml(sansHanzi(c.nom))}</h2>
       <div class="circ-haut">
         <div class="circ-grand" id="circ-dessin">${this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true })}</div>
 
       </div>
       ${this.section("Syndromes du circuit", this.ul((c.syndromes || []).map(s => s.replace(/^syndromes? du /i, "du ").replace(/^du /, "Syndromes du "))))}
+      ${this.section("Syndromes de ta base rattachés à ce circuit", lies ? `<div class="circ-synd-liste">${lies}</div>` : `<p class="muted">Aucun pour l'instant : « Modifier cette fiche » permet d'en rattacher.</p>`)}
       ${this.section("Actions / fonctions du circuit", `${c.actions_exemples ? `<p class="muted">Exemples non exclusifs des fonctions du circuit.</p>` : ""}${this.ul(c.actions)}`)}
       ${this.section("Indications", this.ul(c.indications))}
       ${this.section("Ajouts possibles", ajouts ? `<ul class="tcm-list">${ajouts}</ul><p class="muted">Dessinés en pointillé sous le circuit.</p>` : "")}
       ${this.section("Associations de points", (c.associations || []).length
-        ? `<div class="cat-chip-row circ-assoc-puces">${c.associations.map((a, i) => `<button type="button" class="cat-chip" data-a="${i}">${escapeHtml(a.tableau)}</button>`).join("")}</div><div id="circ-assoc-detail" class="circ-assoc-detail"></div>`
+        ? `<div class="cat-chip-row circ-assoc-puces">${c.associations.map((a, i) => `<button type="button" class="cat-chip" data-a="${i}">${escapeHtml(sansHanzi(a.tableau))}</button>`).join("")}</div><div id="circ-assoc-detail" class="circ-assoc-detail"></div>`
         : `<p class="muted">Aucune pour l'instant : « Modifier cette fiche » permet d'ajouter un tableau avec les points de chaque canal.</p>`)}
       ${this.section("Comparaison des associations et des ajouts", this.graphe(c))}
       ${this.section("Formule de pharmacopée équivalente", this.equivalent(c))}
@@ -211,7 +217,6 @@ const Circuits = {
       ${(c.notes || []).length ? this.section("Notes", this.ul(c.notes)) : ""}
       ${niveaux ? this.section("Niveaux", niveaux) : ""}
       ${astuces ? this.section("Astuces du Dr Tán Té Fū (cours, p. 41)", `<ul class="tcm-list">${astuces}</ul>`) : ""}
-      ${this.section("Syndromes de ta base rattachés à ce circuit", lies ? `<div class="circ-synd-liste">${lies}</div>` : `<p class="muted">Aucun pour l'instant : « Modifier cette fiche » permet d'en rattacher.</p>`)}
       <section><h3>Syndromes de ta base portant sur ces canaux</h3><p class="muted">Syndromes des organes, des canaux et des six niveaux dont l'organe ou le niveau est un des quatre canaux.</p>${parCanal || `<p class="muted">Aucun.</p>`}</section>
       <p class="muted">Méthode de l'équilibre global : chaque canal du circuit doit avoir au moins deux connexions (une entrée, une sortie). ${escapeHtml(this.base.regles.changer || "")}</p>`;
     zone.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const e = this.entreeSynd(b.dataset.synd); if (e) this.ouvrirSyndrome(e); }));
@@ -231,7 +236,7 @@ const Circuits = {
     if (!el) return;
     try { await Tung.ensureLoaded(); } catch (e) { el.innerHTML = `<p class="muted">Points Tung indisponibles (${escapeHtml(e.message)}).</p>`; return; }
     const r = Tung.compatibles(c.grille, (c.ajouts || []).map(a => a.canaux || []));
-    const bt = f => `<li class="circ-tung-ligne"><button type="button" class="edit-toggle-btn" data-tung-fiche="${escapeHtml(f.id)}" title="${escapeHtml(Tung.localisation(f) || "Localisation non précisée dans les sources")}">${escapeHtml(f.nom)}${(f.numeros || []).length ? " " + escapeHtml(f.numeros.join("/")) : ""} <span class="muted">${f.canaux.codes.join("+")}</span></button> <span class="circ-tung-action">${escapeHtml(Tung.action(f))}</span></li>`;
+    const bt = f => `<li class="circ-tung-ligne"><button type="button" class="edit-toggle-btn" data-tung-fiche="${escapeHtml(f.id)}" title="${escapeHtml(Tung.localisation(f) || "Localisation non précisée dans les sources")}">${escapeHtml(f.nom)}${(f.numeros || []).length ? " " + escapeHtml(f.numeros.join("/")) : ""} <span class="muted">${f.canaux.codes.join("+")}</span></button> <span class="circ-tung-action">${escapeHtml(sansHanzi(Tung.action(f)))}</span></li>`;
     el.innerHTML = (r.ok.length ? `<p class="muted">Leurs canaux sont déjà dans le circuit : ils s'y ajoutent sans le déséquilibrer. Survole un nom pour voir la localisation.</p><ul class="circ-tung-liste">${r.ok.map(bt).join("")}</ul>` : `<p class="muted">Aucun point Tung dont le canal soit dans ce circuit pour l'instant (les canaux se renseignent dans l'onglet Points Tung).</p>`) +
       (r.avec.length ? `<p class="muted">Avec un des ajouts possibles du circuit :</p><ul class="circ-tung-liste">${r.avec.map(bt).join("")}</ul>` : "") +
       (r.collectifs.length ? `<p class="muted">Points qui agissent sur un ensemble de canaux à la fois (ici, les six fu) : à juger selon l'équilibre voulu, car ils touchent aussi les canaux absents du circuit.</p><div class="circ-synd-liste">${r.collectifs.map(f => `<button type="button" class="edit-toggle-btn" data-tung-fiche="${escapeHtml(f.id)}" title="${escapeHtml(Tung.localisation(f) || "Voir la fiche et le schéma")}">${escapeHtml(f.nom)}${(f.numeros || []).length ? " " + escapeHtml(f.numeros.join("/")) : ""}</button>`).join(" ")}</div>` : "");
@@ -254,8 +259,8 @@ const Circuits = {
     const canauxAj = [...new Set(ajouts.flatMap(a => a.canaux))];
     const gauche = assoc.map((a, i) => {
       const liens = Object.values(a.points || {}).flat().map(x => String(x).trim()).filter(Boolean).map(x => x + ":+").join(",");
-      return `<div class="pm-cond" data-id="a${i}" data-liens="${escapeHtml(liens)}"><div class="pm-si"><span class="pm-si-t">Tableau</span><span class="pm-cond-t">${escapeHtml(a.tableau)}</span></div>${a.note ? `<div class="pm-principe">${escapeHtml(a.note)}</div>` : ""}</div>`;
-    }).join("") + ajouts.map((a, j) => `<div class="pm-cond circ-ajout-cond" data-id="j${j}" data-liens="${escapeHtml(a.canaux.map(k => k + ":-").join(","))}"><div class="pm-si"><span class="pm-si-t">Ajout</span><span class="pm-cond-t">${escapeHtml(sansChinois(a.action || a.texte || ""))}</span></div><div class="pm-principe">${escapeHtml(a.texte || "")}</div></div>`).join("");
+      return `<div class="pm-cond" data-id="a${i}" data-liens="${escapeHtml(liens)}"><div class="pm-si"><span class="pm-si-t">Tableau</span><span class="pm-cond-t">${escapeHtml(sansHanzi(a.tableau))}</span></div>${a.note ? `<div class="pm-principe">${escapeHtml(sansHanzi(a.note))}</div>` : ""}</div>`;
+    }).join("") + ajouts.map((a, j) => `<div class="pm-cond circ-ajout-cond" data-id="j${j}" data-liens="${escapeHtml(a.canaux.map(k => k + ":-").join(","))}"><div class="pm-si"><span class="pm-si-t">Ajout</span><span class="pm-cond-t">${escapeHtml(sansHanzi(a.action || a.texte || ""))}</span></div><div class="pm-principe">${escapeHtml(sansHanzi(a.texte || ""))}</div></div>`).join("");
     const droite = codes.map(k => `<div class="pm-groupe">${escapeHtml(k)} · ${escapeHtml(nomCanal(k))}</div>` +
       [...points].filter(([, v]) => v.code === k).map(([pt, v]) => `<div class="pm-sub pm-ajout${v.n.size > 1 ? " circ-commun" : ""}" data-id="s${escapeHtml(pt)}:+" data-cle="${escapeHtml(pt)}:+"><strong>${escapeHtml(pt)}</strong>${v.n.size > 1 ? ` <span class="circ-x">× ${v.n.size}</span>` : ""}</div>`).join("")).join("") +
       (canauxAj.length ? `<div class="pm-groupe">Canaux ajoutés</div>` + canauxAj.map(k => `<div class="pm-sub circ-ajout-canal" data-id="s${escapeHtml(k)}:-" data-cle="${escapeHtml(k)}:-"><span class="pm-sens">+ ajout</span> <strong>${escapeHtml(k)}</strong> <span class="muted">${escapeHtml(nomCanal(k))}</span></div>`).join("") : "");
@@ -310,8 +315,8 @@ const Circuits = {
     if (!det) return;
     if (!a) { det.innerHTML = `<p class="muted">Choisis un tableau : ses points s'écrivent sur le dessin.</p>`; return; }
     const e = a.synd ? this.entreeSynd(a.synd) : null;
-    det.innerHTML = `<p>${e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(a.synd)}">${escapeHtml(a.tableau)}</button>` : `<strong>${escapeHtml(a.tableau)}</strong>`}</p>` +
-      `<p>${Object.entries(a.points || {}).map(([k, v]) => `<span class="sx-code">${escapeHtml(k)}</span> ${escapeHtml(v.join(", "))}`).join(" · ")}</p>` + (a.note ? `<p class="muted">${escapeHtml(a.note)}</p>` : "");
+    det.innerHTML = `<p>${e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(a.synd)}">${escapeHtml(sansHanzi(a.tableau))}</button>` : `<strong>${escapeHtml(sansHanzi(a.tableau))}</strong>`}</p>` +
+      `<p>${Object.entries(a.points || {}).map(([k, v]) => `<span class="sx-code">${escapeHtml(k)}</span> ${escapeHtml(v.join(", "))}`).join(" · ")}</p>` + (a.note ? `<p class="muted">${escapeHtml(sansHanzi(a.note))}</p>` : "");
     det.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const en = this.entreeSynd(b.dataset.synd); if (en) this.ouvrirSyndrome(en); }));
   },
 
@@ -583,9 +588,9 @@ const CircuitsProposition = {
         <header><strong class="prop-nom">${escapeHtml(Circuits.nomCourt(c))}</strong> <span class="muted">${c.grille.join(" · ")}</span></header>
         <div class="prop-raisons">${raisons.join("")}</div>
         ${synd ? `<p class="muted">${escapeHtml(synd)}</p>` : ""}
-        ${c.indications.length ? `<p class="circ-prop-ind"><span class="cm-etiq">Indications</span> ${escapeHtml(c.indications.slice(0, 2).join(" · "))}</p>` : ""}
-        ${(c.associations || []).filter(a => a.synd && (Proposer.diag || []).some(d => String(d).split("#")[0] === a.synd)).map(a => `<p class="circ-prop-ass"><span class="cm-etiq">Association de points</span> ${escapeHtml(a.tableau)} : ${Object.entries(a.points || {}).map(([k, v]) => `<span class="sx-code">${escapeHtml(k)}</span> ${escapeHtml(v.join(", "))}`).join(" · ")}</p>`).join("")}
-        ${r.astuces.map(a => `<p class="circ-prop-ast"><span class="cm-etiq">Astuce du Dr Tán Té Fū</span> ${escapeHtml(a.texte)}</p>`).join("")}
+        ${c.indications.length ? `<p class="circ-prop-ind"><span class="cm-etiq">Indications</span> ${escapeHtml(sansHanzi(c.indications.slice(0, 2).join(" · ")))}</p>` : ""}
+        ${(c.associations || []).filter(a => a.synd && (Proposer.diag || []).some(d => String(d).split("#")[0] === a.synd)).map(a => `<p class="circ-prop-ass"><span class="cm-etiq">Association de points</span> ${escapeHtml(sansHanzi(a.tableau))} : ${Object.entries(a.points || {}).map(([k, v]) => `<span class="sx-code">${escapeHtml(k)}</span> ${escapeHtml(v.join(", "))}`).join(" · ")}</p>`).join("")}
+        ${r.astuces.map(a => `<p class="circ-prop-ast"><span class="cm-etiq">Astuce du Dr Tán Té Fū</span> ${escapeHtml(sansHanzi(a.texte))}</p>`).join("")}
         ${(c.formules || []).length ? `<p class="circ-prop-ast"><span class="cm-etiq">Formule équivalente</span> ${c.formules.map(id => { const n = Circuits.nomFormule(id); return `<button type="button" class="edit-toggle-btn" data-form="${escapeHtml(id)}">${escapeHtml(n ? n.nom : id)}</button>`; }).join(" ")}</p>` : ""}
         <footer><button type="button" class="edit-toggle-btn" data-circ="${escapeHtml(c.id)}">Fiche du circuit</button></footer>
       </div></article>`;
