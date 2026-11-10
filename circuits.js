@@ -189,7 +189,7 @@ const Circuits = {
     document.getElementById("circuit-count").textContent = l.length + " circuit(s)";
   },
 
-  afficher(id) { this.actif = id; this.edition = null; this.rendreListe(); this.rendreFiche(); },
+  afficher(id) { this.actif = id; this.edition = null; this.rendreListe(); this.rendreFiche(); if (typeof Onglets !== "undefined") { Onglets.rendreBarre(); Onglets.memoriser(); } },
 
   // ---------- indications rangées par catégories (les notes gardent leur découpage ; la liste à plat sert à la recherche et à la proposition)
   indicationsEnTexte(c) {
