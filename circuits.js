@@ -494,11 +494,20 @@ const Circuits = {
   actionsDe(p) { return this.enListe(p.actions).map(a => this.texteItem(a).replace(/^[➢•\-\s]+/, "").replace(/\.$/, "").trim()).filter(Boolean); },
   // catégories « utiles » d'un point de la base (cinq points shu, yuán, luò, xī, hé…)
   categoriesDe(p) {
-    const lib = String(p.categories_point || "").split(/\n+/).map(s => s.replace(/^[\s\-•🖇️⊞]*Point\s*/u, "").trim()).filter(s => /jǐng|yíng|shū-rivière|jīng-fleuve|hé-réunion|yuán|luò|xì|mù|bèi|ouverture|mer d/i.test(s) && !/jiāo huì/i.test(s));
+    const lib = String(p.categories_point || "").split(/\n+/).map(s => s.replace(/^[\s\-•🖇️⊞]*Point\s*/u, "").trim()).filter(s => /jǐng|yíng|shū-rivière|jīng-fleuve|hé-réunion|huì-réunion|yuán|luò|xì|mù|bèi|ouverture|mer d|fenêtre du ciel/i.test(s) && !/jiāo huì/i.test(s));
     return lib;
   },
+  // mù-collecteurs des organes des canaux, situés sur RM (ex. RM12 pour l'estomac, RM14 pour le cœur) : proposés avec le canal correspondant
+  ORGANE_MU: { P: /poumon/i, GI: /gros intestin/i, E: /estomac/i, Rt: /rate/i, C: /mù-collecteur d[ue] c(œ|oe)ur/i, IG: /intestin grêle/i, V: /vessie/i, Rn: /reins?\b/i,
+               EC: /enveloppe du c(œ|oe)ur/i, TF: /trois foyers/i, VB: /vésicule/i, F: /foie/i },
+  async pointsAxe(code) {
+    const re = this.ORGANE_MU[code];
+    if (!re) return [];
+    const axe = [...(await this.dbCanal("RM")), ...(await this.dbCanal("DM"))];
+    return axe.filter(p => String(p.categories_point || "").split(/\n+/).some(l => /mù-collecteur/i.test(l) && re.test(l)));
+  },
   async propositionsCanal(code) {
-    const db = await this.dbCanal(code);
+    const db = [...(await this.dbCanal(code)), ...(await this.pointsAxe(code))];
     if (db.length) return db.filter(p => this.pointAdmis(p.point, code)).map(p => ({ point: String(p.point).replace(/\s+/g, ""), categorie: this.categoriesDe(p).join(" ; "), action: this.actionsDe(p).slice(0, 2).join(" ; "), saignee: this.saigneeDe(p), indic: p })).filter(x => x.categorie || x.saignee.length);
     if (!this.proposes) { try { this.proposes = await Store.readJSON(this.CHEMIN_PROPOSES); } catch (e) { return []; } }
     return ((this.proposes.canaux || {})[code] || []).map(x => ({ ...x, saignee: [], repli: true })).filter(x => this.pointAdmis(x.point, code));
