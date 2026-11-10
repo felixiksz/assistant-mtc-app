@@ -1187,3 +1187,38 @@ body:has(.onglets-travail:not([hidden])) .formules-sidebar { top: 3.4rem; max-he
 body:has(.onglets-travail:not([hidden])) .edit-flottante, body:has(.onglets-travail:not([hidden])) .barre-flottante { top: 3.4rem; }
 .edit-flottante + h2, .edit-flottante + * > h2:first-child { padding-right: 3.4rem; }
 .barre-flottante + h2 { padding-right: 6.4rem; }
+
+/* Réseau de la patiente : fenêtre flottante */
+.reseau-lanceur { position: fixed; right: 1rem; bottom: 1rem; z-index: 55; font: inherit; font-size: 0.85rem; font-weight: 700; padding: 0.55rem 0.9rem; border: 2px solid var(--ink); background: var(--bg); color: var(--ink); cursor: pointer; box-shadow: 4px 4px 0 var(--ink); }
+.reseau-lanceur:hover { background: var(--ink); color: var(--bg); }
+.reseau-fenetre { position: fixed; right: 1rem; bottom: 4rem; z-index: 56; width: 27rem; min-width: 18rem; max-width: calc(100vw - 1rem); max-height: 80vh; display: flex; flex-direction: column; background: var(--bg); color: var(--ink); border: 2px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); resize: both; overflow: hidden; }
+.reseau-fenetre[hidden] { display: none; }
+.reseau-tete { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; background: var(--ink); color: var(--bg); cursor: move; user-select: none; touch-action: none; flex: none; }
+.reseau-ic { font: inherit; background: none; border: 0; color: inherit; cursor: pointer; padding: 0 0.4rem; font-size: 1rem; }
+.reseau-corps { padding: 0.6rem; overflow-y: auto; flex: 1 1 auto; }
+.reseau-reduit { resize: none; }
+.reseau-reduit .reseau-corps { display: none; }
+.reseau-champ { display: block; font-weight: 600; font-size: 0.82rem; margin: 0.3rem 0; }
+.reseau-champ input, .reseau-champ select { display: block; width: 100%; box-sizing: border-box; font: inherit; margin-top: 0.15rem; padding: 0.25rem 0.4rem; }
+.reseau-schema { text-align: center; margin: 0.5rem 0; line-height: 0; }
+.reseau-hors { font-size: 0.8rem; line-height: 1.3; margin: 0.2rem 0; text-align: center; }
+.reseau-avis { min-height: 1.1em; margin: 0.2rem 0; font-size: 0.82rem; }
+.reseau-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.reseau-ligne { border: 1px solid var(--line); padding: 0.4rem; }
+.reseau-ligne-tete { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.reseau-cote { font: inherit; font-size: 0.8rem; margin-left: auto; }
+.reseau-x { font: inherit; background: none; border: 1px solid var(--ink); color: var(--ink); cursor: pointer; padding: 0 0.35rem; }
+.reseau-raison { display: block; width: 100%; box-sizing: border-box; margin-top: 0.3rem; font: inherit; font-size: 0.85rem; }
+.reseau-nouveau { outline: 3px solid var(--accent); }
+.reseau-ajout { display: flex; gap: 0.4rem; margin: 0.6rem 0; }
+.reseau-ajout input { flex: 1; font: inherit; padding: 0.3rem 0.4rem; min-width: 0; }
+.reseau-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.5rem 0; }
+.reseau-archives { margin: 0.4rem 0; font-size: 0.85rem; }
+.reseau-archives li { display: flex; gap: 0.4rem; align-items: center; justify-content: space-between; margin: 0.2rem 0; }
+.reseau-confid { font-size: 0.72rem; margin: 0.4rem 0 0; }
+.circ-pt-choisir { font: inherit; font-weight: 700; border: 1px solid var(--ink); background: var(--bg); color: var(--ink); cursor: pointer; padding: 0 0.3rem; line-height: 1.3; }
+.circ-pt-choisir:hover { background: var(--ink); color: var(--bg); }
+@media (max-width: 700px) {
+  .reseau-fenetre { left: 0.5rem !important; right: 0.5rem !important; top: auto !important; bottom: 3.6rem !important; width: auto; max-height: 70vh; resize: none; }
+}
+@media print { .reseau-lanceur, .reseau-fenetre { display: none !important; } }

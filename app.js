@@ -3898,6 +3898,7 @@ const Points = {
     return `
       <h2>${escapeHtml(entry.id)} <span class="hanzi">${escapeHtml(d.hanzi || "")}</span></h2>
       <p class="muted">${escapeHtml(d.pinyin || "")}${d.nom_fr ? " — " + escapeHtml(d.nom_fr) : ""} · ${escapeHtml(entry.canalNom)}${d.canal_indicatif ? " (canal indicatif : " + escapeHtml(d.canal_indicatif) + ")" : ""}</p>
+      <p><button type="button" class="edit-toggle-btn" data-reseau="${escapeHtml(JSON.stringify({ point: entry.id.replace(/\s+/g, ""), canal: entry.canal, raison: (d.actions || [])[0] ? String(d.actions[0]).replace(/^[➢•\-\s]+/, "") : "", source: "fiche du point" }))}" title="Ajouter ce point au réseau de la patiente">✓ Choisir pour le réseau de la patiente</button></p>
       ${imgs ? `<section><h3>Localisation (images)</h3>${imgs}</section>` : ""}
       ${d.localisation ? `<section><h3>Localisation</h3><div class="tcm-text">${formatTcmText(d.localisation)}</div></section>` : ""}
       ${d.methode_localisation ? `<section><h3>Méthode de localisation</h3><div class="tcm-text">${formatTcmText(d.methode_localisation)}</div></section>` : ""}
