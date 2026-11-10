@@ -39,7 +39,7 @@ const Onglets = {
     this.barre.hidden = !this.liste.length;
     if (!this.liste.length) return;
     this.barre.innerHTML = `<button type="button" class="onglet-t${this.actif === null ? " actif" : ""}" data-o="" title="Retour à la vue du module">${escapeHtml(this.etiquetteModule())}</button>` +
-      this.liste.map(o => `<span class="onglet-t${this.actif === o.id ? " actif" : ""}" data-o="${escapeHtml(o.id)}"><button type="button" class="onglet-nom" data-o="${escapeHtml(o.id)}" title="${escapeHtml(o.titre)}">${escapeHtml(o.genre)} ${escapeHtml(o.titre)}</button><button type="button" class="onglet-x" data-x="${escapeHtml(o.id)}" aria-label="Fermer l'onglet">✕</button></span>`).join("");
+      this.liste.map(o => `<span class="onglet-t${this.actif === o.id ? " actif" : ""}" data-o="${escapeHtml(o.id)}"><button type="button" class="onglet-nom" data-o="${escapeHtml(o.id)}" title="${escapeHtml(o.titre)}">${escapeHtml(o.genre)} ${escapeHtml(o.titre)}</button><button type="button" class="onglet-x" data-x="${escapeHtml(o.id)}" aria-label="Fermer l'onglet">✕</button></span>`).join("") + (this.enLigne() ? `<span class="onglet-sync" title="Onglets synchronisés avec tes autres appareils (via ton dépôt GitHub)">🔄</span>` : "");
     this.barre.querySelectorAll("[data-o]").forEach(b => b.addEventListener("click", () => { const id = b.dataset.o; if (!id) this.voirModule(); else this.activer(id); }));
     this.barre.querySelectorAll("[data-x]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); this.fermer(b.dataset.x); }));
   },
@@ -105,27 +105,106 @@ const Onglets = {
     await o.charger();
   },
 
-  // ---------- mémoire des onglets : ils reviennent quand on ferme puis rouvre le navigateur (stockage local de ce navigateur)
+  // ---------- mémoire et synchronisation des onglets
+  // Local : les onglets sont gardés dans ce navigateur (ils reviennent quand on ferme puis rouvre).
+  // Entre appareils : avec la connexion GitHub, la liste est aussi écrite dans app/onglets_synchro.json de ton dépôt de données ;
+  // chaque appareil la relit à l'ouverture, quand il redevient actif et toutes les minutes. Le dernier appareil qui modifie les onglets l'emporte.
   CLE_MEMOIRE: "onglets_travail_v1",
-  memoriser() {
+  FICHIER_SYNCHRO: "app/onglets_synchro.json",
+  _maj: 0,
+  _envoi: null,
+
+  appareilId() {
     try {
-      const tab = document.querySelector(".menu-onglets .tab-btn.active");
-      localStorage.setItem(this.CLE_MEMOIRE, JSON.stringify({
-        onglets: this.liste.map(x => x.desc), actif: this.actif === null ? null : (this.liste.find(x => x.id === this.actif) || {}).id || null,
-        module: tab ? tab.dataset.tab : null, circuit: typeof Circuits !== "undefined" ? Circuits.actif : null,
-      }));
-    } catch (e) { /* stockage indisponible (navigation privée…) : les onglets ne seront simplement pas retrouvés */ }
+      let id = localStorage.getItem("onglets_appareil_id");
+      if (!id) { id = "app_" + Math.random().toString(36).slice(2, 10); localStorage.setItem("onglets_appareil_id", id); }
+      return id;
+    } catch (e) { return "app_sans_stockage"; }
   },
+  enLigne() { return typeof Store !== "undefined" && Store.mode === "github"; },
+  idDesc(d) {
+    const n = k => String(k).toUpperCase().replace(/[\s.\-]/g, "");
+    if (d.kind === "synd") return "synd:" + d.entry.domaine + "/" + d.entry.chemin;
+    if (d.kind === "pt") return "pt:" + n(d.id);
+    if (d.kind === "tung") return "tung:" + d.id;
+    if (d.kind === "form") return "form:" + d.id;
+    return "";
+  },
+  etat() {
+    const tab = document.querySelector(".menu-onglets .tab-btn.active");
+    return {
+      maj: this._maj, appareil: this.appareilId(), onglets: this.liste.map(x => x.desc),
+      actif: this.actif === null ? null : ((this.liste.find(x => x.id === this.actif) || {}).id || null),
+      module: tab ? tab.dataset.tab : null, circuit: typeof Circuits !== "undefined" ? Circuits.actif : null,
+    };
+  },
+  memoriser(sansEnvoi) {
+    if (!sansEnvoi && !this._restauration) this._maj = Date.now();
+    try { localStorage.setItem(this.CLE_MEMOIRE, JSON.stringify(this.etat())); } catch (e) { /* stockage indisponible (navigation privée…) */ }
+    if (!sansEnvoi && this.enLigne() && !this._restauration) this.planifierEnvoi();
+  },
+  planifierEnvoi() {
+    clearTimeout(this._envoi);
+    this._envoi = setTimeout(() => { this._envoi = null; this.envoyer(); }, 3000);   // regroupe les changements rapprochés (un envoi = un enregistrement dans le dépôt)
+  },
+  async envoyer() {
+    if (!this.enLigne()) return;
+    const etat = this.etat();
+    try { await Store.writeJSON(this.FICHIER_SYNCHRO, etat); }
+    catch (e) {
+      try { await Store._ghGet(this.FICHIER_SYNCHRO).catch(() => null); await Store.writeJSON(this.FICHIER_SYNCHRO, etat); }   // un autre appareil a écrit entre-temps : on relit et on réessaie une fois
+      catch (e2) { /* hors ligne ou droits insuffisants : la mémoire locale reste valable */ }
+    }
+  },
+  async lireDistant() {
+    try { const d = await Store.readJSON(this.FICHIER_SYNCHRO); return d && Array.isArray(d.onglets) ? d : null; } catch (e) { return null; }
+  },
+
+  // met la liste d'onglets d'accord avec celle d'un autre appareil (sans changer la vue affichée, sauf si l'onglet affiché a été fermé là-bas)
+  async adopterListe(d) {
+    const voulus = (d.onglets || []).map(x => ({ x, id: this.idDesc(x) })).filter(v => v.id);
+    const ids = new Set(voulus.map(v => v.id));
+    this._restauration = true;
+    for (const o of [...this.liste]) if (!ids.has(o.id)) this.fermer(o.id);
+    for (const v of voulus) {
+      const x = v.x;
+      try {
+        if (x.kind === "synd") await this.ouvrirSyndrome(x.entry, { differe: true });
+        else if (x.kind === "pt") await this.ouvrirPoint(x.id, { differe: true });
+        else if (x.kind === "tung") await this.ouvrirTung(x.id, { differe: true, titre: x.titre });
+        else if (x.kind === "form") await this.ouvrirFormule(x.id, { differe: true });
+      } catch (e) { /* fiche disparue */ }
+    }
+    this._restauration = false;
+    this._maj = d.maj || this._maj;
+    this.memoriser(true);
+    this.rendreBarre();
+  },
+  async synchroniser() {
+    if (!this.enLigne() || this._envoi || this._restauration) return;
+    const d = await this.lireDistant();
+    if (d && d.appareil !== this.appareilId() && (d.maj || 0) > this._maj) await this.adopterListe(d);
+  },
+  demarrerSynchro() {
+    if (!this.enLigne()) return;
+    setInterval(() => this.synchroniser(), 60000);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") this.synchroniser(); });
+  },
+
   async restaurer() {
-    let m = null;
-    try { m = JSON.parse(localStorage.getItem(this.CLE_MEMOIRE) || "null"); } catch (e) { return; }
-    if (!m) return;
+    let local = null;
+    try { local = JSON.parse(localStorage.getItem(this.CLE_MEMOIRE) || "null"); } catch (e) { /* illisible : on repart du distant */ }
     // attend que les bases (points, formules, syndromes) soient chargées
     for (let i = 0; i < 60; i++) {
       const pret = (typeof Points !== "undefined" && (Points.entries || []).length) && (typeof Formules !== "undefined" && Formules.byId && Formules.byId.size) && (typeof Syndromes !== "undefined" && (Syndromes.entries || []).length);
       if (pret) break;
       await new Promise(r => setTimeout(r, 400));
     }
+    // l'état le plus récent l'emporte : celui de ce navigateur ou celui qu'un autre appareil a enregistré dans le dépôt
+    const distant = await this.lireDistant();
+    const m = distant && (!local || (distant.maj || 0) > (local.maj || 0)) ? distant : local;
+    this._maj = (m && m.maj) || 0;
+    if (!m) { this.demarrerSynchro(); return; }
     this._restauration = true;
     for (const d of (m.onglets || [])) {
       try {
@@ -146,9 +225,11 @@ const Onglets = {
         }
       }
     } catch (e) { /* module indisponible */ }
-    this._restauration = false;
     const a = m.actif && this.liste.find(x => x.id === m.actif);
-    if (a) this.activer(a.id); else { this.voirModule(true); this.memoriser(); }
+    if (a) this.activer(a.id); else this.voirModule(true);
+    this._restauration = false;
+    this.memoriser(true);
+    this.demarrerSynchro();
   },
 
   // ---------- les différents types de fiches

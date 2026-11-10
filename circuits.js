@@ -335,7 +335,9 @@ const Circuits = {
     return `<p><strong>${r.points.map(p => this.pointHtml(p)).join(" – ")}</strong> <span class="circ-pt-tag circ-pt-base" title="${escapeHtml(this.wjy.source || "")}">Wang Ju Yi</span> <span class="muted">${escapeHtml(r.groupe)}</span>${r.vaisseaux ? ` <span class="muted">(${escapeHtml(r.vaisseaux)})</span>` : ""}</p>` +
       (w.ajout && w.ajout.length ? `<p class="muted">Utilise ${escapeHtml(w.ajout.join(", "))} : un des ajouts possibles de ce circuit.</p>` : "") +
       (w.manque && w.manque.length ? `<p class="muted">${escapeHtml(w.manque.join(", "))} n'est pas dans ce circuit : non intégrée, à toi de juger.</p>` : "") +
-      this.ul(r.puces) + (notes.length ? `<p class="muted">${notes.map(escapeHtml).join(" · ")}</p>` : "");
+      this.ul(r.puces) + (notes.length ? `<p class="muted">${notes.map(escapeHtml).join(" · ")}</p>` : "") +
+      ((r.circuits_notes || []).length ? `<p class="muted">Circuits cités dans tes notes : ${escapeHtml(r.circuits_notes.join(", "))}.</p>` : "") +
+      ((r.lectures || []).length ? `<p class="muted">Lu autrement que tes notes : ${r.lectures.map(l => `« ${escapeHtml(l.note)} » → ${escapeHtml(l.lu)}`).join(" ; ")} (faute probable dans tes notes).</p>` : "");
   },
   wjyChipsHtml(c) {
     const res = this.recettesWjy(c);
@@ -379,12 +381,15 @@ const Circuits = {
     z.innerHTML = `<p class="muted circ-pts-avert">Seuls sont proposés les canaux qui gardent l'équilibre du circuit : statique (même polarité et même membre qu'un canal du circuit, donc même place) et dynamique (au moins deux connexions avec les canaux du circuit, selon les 6 systèmes). Règles du cours « Méthode de l'équilibre global ».</p>` +
       (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${escapeHtml(x.code)}</strong> <span class="muted">${escapeHtml((this.canaux.get(x.code) || {}).nom || "")}</span> — ${escapeHtml(x.raisons.join(" ; "))} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button></li>`).join("")}</ul>` : `<p class="muted">Aucun autre canal ne garde l'équilibre statique et dynamique de ce circuit.</p>`);
     z.querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", async () => {
+      b.disabled = true;                                                     // pas de double clic
       const x = l[+b.dataset.i], nom = ((this.canaux.get(x.code) || {}).nom || x.code).toLowerCase();
       const a = { action: "", texte: `canal ${nom} (${x.code}) — ${x.raisons.join(" ; ")}`, canaux: [x.code], ensemble: false, source: "proposition (équilibre statique et dynamique vérifié)" };
       await this.ajouterAjout(c, a);
     }));
   },
   async ajouterAjout(c, a) {
+    const dejaLa = new Set((c.ajouts || []).flatMap(x => x.canaux || []));
+    if ((a.canaux || []).length && a.canaux.every(k => dejaLa.has(k))) { this.rendreFiche(); return; }      // ce canal est déjà un ajout possible du circuit
     const nouveaux = [...(c.ajouts || []), a];
     if (c.origine === "perso") { const i = this.perso.circuits.findIndex(x => x.id === c.id); this.perso.circuits[i] = { ...this.perso.circuits[i], ajouts: nouveaux }; }
     else this.perso.surcharges[c.id] = { ...(this.perso.surcharges[c.id] || {}), ajouts: nouveaux };
@@ -450,8 +455,10 @@ const Circuits = {
         const a = anciens.find(y => y.point === x.point && y.action === x.action);      // ligne inchangée : garde son statut (une proposition reste « à valider »)
         return { ...x, statut: a ? a.statut : "toi" };
       });
-      this.points.canaux[code] = nv;
-      if (!nv.length) delete this.points.canaux[code];
+      const vus = new Set();
+      const sansDoublon = nv.filter(x => { const k = this.cleP(x.point) + "|" + x.action; if (vus.has(k)) return false; vus.add(k); return true; });
+      this.points.canaux[code] = sansDoublon;
+      if (!sansDoublon.length) delete this.points.canaux[code];
       try { await this.ecrirePoints(); } catch (e) { zone.querySelector(".circ-pts-statut").textContent = "Enregistrement impossible : " + e.message; return; }
       this.rendrePoints(c);
     });
@@ -520,7 +527,9 @@ const Circuits = {
       (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${this.pointHtml(x.point)}</strong> <span class="muted">${escapeHtml(x.categorie || "")}</span>${x.action ? " — " + escapeHtml(sansHanzi(x.action)) : ""} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button>` +
         (x.saignee.length ? `<details class="circ-sai"><summary>🩸 saignée</summary>${x.saignee.map(s => `<p>${escapeHtml(sansHanzi(s.texte)).slice(0, 400)} <span class="muted">(${escapeHtml(s.lib)})</span></p>`).join("")}</details>` : "") + `</li>`).join("")}</ul>` : `<p class="muted">Rien à proposer de plus pour ce canal.</p>`);
     zone.querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", async () => {
+      b.disabled = true;                                                     // pas de double clic
       const x = l[+b.dataset.i];
+      if (this.ptsDe(code).some(y => this.cleP(y.point) === this.cleP(x.point))) { this.rendrePoints(c); return; }      // déjà dans la liste
       (this.points.canaux[code] = this.points.canaux[code] || []).push({ point: x.point, action: x.action, statut: x.repli ? "propose" : "base" });
       try { await this.ecrirePoints(); } catch (e) { alert("Enregistrement impossible : " + e.message); return; }
       this.rendrePoints(c);
