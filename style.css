@@ -1131,3 +1131,4 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .tung-tag { font-size: 0.68rem; font-weight: 700; border: 1px solid var(--ink); padding: 0 0.25rem; margin-left: 0.2rem; white-space: nowrap; text-transform: none; letter-spacing: 0; cursor: help; vertical-align: 0.05em; }
 .tung-sources { font-size: 0.8rem; margin: 0.6rem 0; }
 .tung-tag-leg { white-space: nowrap; }
+.tung-enfant { margin-left: 1.1rem; border-left: 3px solid var(--ink); padding-left: 0.5rem !important; font-size: 0.86rem; }

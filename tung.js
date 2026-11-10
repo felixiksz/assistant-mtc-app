@@ -47,6 +47,12 @@ const Tung = {
     });
     const p = (this.perso.fiches || []).map(f => ({ zh: "", trad: "", numeros: [], alias: [], membres: [], images: [], a_verifier: [], canaux: { codes: [], statut: "", source: "" }, ...f, origine: "perso" }));
     this.liste = [...b, ...p];
+    // familles : les points cités avec leur fiche dans « membres » sont rangés sous la fiche du groupe, dans l'ordre du groupe (celui des numéros)
+    this.liste.forEach(f => { f.enfants = []; });
+    this.liste.forEach(f => (f.membres || []).forEach(m => {
+      const id = Array.isArray(m) ? m[1] : null, e = id ? this.liste.find(x => x.id === id) : null;
+      if (e && e !== f && !e.parent && !f.parent) { e.parent = f.id; f.enfants.push(e.id); }
+    }));
     this.protos = [...this.base.protocoles.map(x => ({ ...x, origine: "base" })), ...(this.perso.protocoles || []).map(x => ({ ...x, origine: "perso" }))];
   },
 
@@ -99,11 +105,16 @@ const Tung = {
     const ul = document.getElementById("tung-list"), q = dsNorm(this.recherche.trim()), mots = q ? q.split(/\s+/) : [];
     let html = "", n = 0;
     if (this.vue === "fiches") {
-      const l = this.liste.filter(f => (!this.zone || (this.zone === "?" ? !f.zone : f.zone === this.zone)) && (!this.canal || (this.canal === "?" ? !((f.canaux || {}).codes || []).length : ((f.canaux || {}).codes || []).includes(this.canal))) && mots.every(m => this.texteRecherche(f).includes(m)));
-      n = l.length;
-      html = l.map(f => `<li class="gl-item tung-item${f.id === this.actif ? " selected" : ""}" data-id="${escapeHtml(f.id)}"><strong>${escapeHtml(f.nom)}</strong>` +
-        `<span class="muted">${escapeHtml((f.numeros || []).join(" · ") || "sans numéro")}${((f.canaux || {}).codes || []).length ? " · canal " + f.canaux.codes.join("+") : ""}${f.type === "groupe" ? " · groupe" : ""}${f.origine === "perso" ? " · créé par toi" : f.complete ? " · complété" : ""}</span>` +
-        `<span class="tung-srcs">${[...new Set(f.blocs.map(b => b.source))].map(s => `<span class="sx-code">${escapeHtml(this.srcCourt(s))}</span>`).join("")}</span></li>`).join("");
+      const ok = f => (!this.zone || (this.zone === "?" ? !f.zone : f.zone === this.zone)) && (!this.canal || (this.canal === "?" ? !((f.canaux || {}).codes || []).length : ((f.canaux || {}).codes || []).includes(this.canal))) && mots.every(m => this.texteRecherche(f).includes(m));
+      const ligne = (f, enfant) => `<li class="gl-item tung-item${enfant ? " tung-enfant" : ""}${f.id === this.actif ? " selected" : ""}" data-id="${escapeHtml(f.id)}"><strong>${enfant ? "↳ " : ""}${escapeHtml(f.nom)}</strong>` +
+        `<span class="muted">${escapeHtml((f.numeros || []).join(" · ") || "sans numéro")}${((f.canaux || {}).codes || []).length ? " · canal " + (f.canaux.collectif ? "six fu" + f.canaux.codes.filter(k => !["GI", "E", "IG", "V", "VB", "TF"].includes(k)).map(k => "+" + k).join("") : f.canaux.codes.join("+")) : ""}${f.type === "groupe" ? " · groupe" : ""}${f.origine === "perso" ? " · créé par toi" : f.complete ? " · complété" : ""}</span>` +
+        `<span class="tung-srcs">${[...new Set(f.blocs.map(b => b.source))].map(s => `<span class="sx-code">${escapeHtml(this.srcCourt(s))}</span>`).join("")}</span></li>`;
+      const racines = this.liste.filter(f => !f.parent);
+      racines.forEach(f => {
+        const enf = (f.enfants || []).map(id => this.parId(id)).filter(Boolean);
+        const montre = ok(f) ? enf : enf.filter(ok);
+        if (ok(f) || montre.length) { html += ligne(f, false) + montre.map(e => ligne(e, true)).join(""); n += 1 + montre.length; }
+      });
     } else if (this.vue === "protocoles") {
       const l = this.protos.filter(p => mots.every(m => dsNorm([p.nom, p.mouvement, p.indication].join(" ")).includes(m)));
       n = l.length;
@@ -192,6 +203,7 @@ const Tung = {
       </div>
       <h2>${escapeHtml(f.nom)} ${f.zh ? `<span class="tung-zh">${escapeHtml(f.zh)}</span>` : ""}</h2>
       <p class="tung-ident">${(f.numeros || []).map(n => `<span class="sx-code">${escapeHtml(n)}</span>`).join(" ")} ${f.zone ? `<span class="muted">zone ${escapeHtml(f.zone)} · ${escapeHtml(this.zoneNom(f.zone))}</span>` : `<span class="muted">zone non précisée</span>`}${f.type === "groupe" ? ` <span class="muted">· groupe de points</span>` : ""}</p>
+      ${f.parent && this.parId(f.parent) ? `<p class="muted">Famille : <button type="button" class="tung-lien" data-tung-fiche="${escapeHtml(f.parent)}">${escapeHtml(this.parId(f.parent).nom)}</button></p>` : ""}
       ${this.htmlCanaux(f)}
       ${f.trad ? `<p class="muted">${escapeHtml(f.trad)}</p>` : ""}
       ${(f.alias || []).length ? `<p class="muted">Aussi : ${escapeHtml(f.alias.join(" ; "))}</p>` : ""}
