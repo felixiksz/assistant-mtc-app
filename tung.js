@@ -71,10 +71,16 @@ const Tung = {
     document.getElementById("tung-search").addEventListener("input", e => { this.recherche = e.target.value; this.rendreListe(); });
     document.getElementById("tung-nouveau").addEventListener("click", () => this.nouveau());
     document.querySelector('.tab-btn[data-tab="tung"]').addEventListener("click", () => this.ouvert());
-    document.addEventListener("click", e => {
+    document.addEventListener("click", async e => {
       const b = e.target.closest("[data-tung-fiche]");
       if (b && b.closest("#tab-tung")) this.afficher(b.dataset.tungFiche, "fiches");
-      else if (b) { document.querySelector('.tab-btn[data-tab="tung"]').click(); this.afficher(b.dataset.tungFiche, "fiches"); }
+      else if (b) {
+        const retour = typeof Circuits !== "undefined" && b.closest("#tab-circuits") ? Circuits.actif : null;
+        document.querySelector('.tab-btn[data-tab="tung"]').click();
+        await this.ouvert();
+        this.afficher(b.dataset.tungFiche, "fiches");
+        if (retour) Circuits.ajouterRetour(document.getElementById("tung-detail"), retour);
+      }
     });
   },
 

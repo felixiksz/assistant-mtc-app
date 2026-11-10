@@ -128,9 +128,21 @@ const Circuits = {
   syndromesDuCanal(code) { return (Syndromes.entries || []).filter(e => this.canauxDeSyndrome(e).has(code)); },
   cleSynd(e) { return `${e.domaine}/${e.chemin}`; },
   entreeSynd(cle) { return (Syndromes.entries || []).find(e => this.cleSynd(e) === cle) || null; },
-  ouvrirSyndrome(e) {
+  // bouton « retour au circuit » ajouté en tête d'une fiche ouverte depuis un circuit (syndrome, formule, point Tung)
+  ajouterRetour(zone, id) {
+    const circ = id && this.parId(id);
+    if (!zone || !circ) return;
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "edit-toggle-btn circ-retour";
+    b.textContent = "← Retour au circuit « " + this.nomCourt(circ) + " »";
+    b.addEventListener("click", () => this.ouvrirCircuit(id));
+    zone.prepend(b);
+  },
+  async ouvrirSyndrome(e) {
+    const retour = this.actif;
     document.querySelector('.tab-btn[data-tab="syndromes"]').click();
-    Syndromes.showDetail(e);
+    await Syndromes.showDetail(e);
+    this.ajouterRetour(document.getElementById("syn-detail"), retour);
   },
 
   // ---------- onglet : liste + fiche
@@ -287,11 +299,12 @@ const Circuits = {
     if (!l.length) return "";
     return `<div class="circ-synd-liste">${l.map(id => { const n = this.nomFormule(id); return `<button type="button" class="edit-toggle-btn" data-form="${escapeHtml(id)}">${escapeHtml(n ? n.nom : id)}${n && n.fr ? ` <span class="muted">${escapeHtml(n.fr)}</span>` : ""}</button>`; }).join(" ")}</div>${c.formules_note ? `<p class="muted">${escapeHtml(c.formules_note)}</p>` : ""}`;
   },
-  ouvrirFormule(id) {
-    const f = Formules.byId.get(id), v = Formules.varParId.get(id);
+  async ouvrirFormule(id) {
+    const f = Formules.byId.get(id), v = Formules.varParId.get(id), retour = this.actif;
     if (!f && !v) return;
     document.querySelector('.tab-btn[data-tab="formules"]').click();
-    if (f) Formules.showDetail(f); else Formules.showVariation(v);
+    if (f) await Formules.showDetail(f); else await Formules.showVariation(v);
+    this.ajouterRetour(document.getElementById("formule-detail"), retour);
   },
   async ouvrirCircuit(id) {
     document.querySelector('.tab-btn[data-tab="circuits"]').click();
