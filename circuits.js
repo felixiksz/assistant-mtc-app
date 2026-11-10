@@ -267,6 +267,20 @@ const Circuits = {
   ul(items) { return items && items.length ? `<ul class="tcm-list">${items.map(x => `<li>${escapeHtml(sansHanzi(x))}</li>`).join("")}</ul>` : ""; },
   section(titre, html) { return html ? `<section><h3>${titre}</h3>${html}</section>` : ""; },
 
+  // fiche d'un circuit en onglets (le bandeau reste visible en haut de l'écran)
+  ONGLETS_FICHE: ["Indications", "Points", "Tableaux et réseau", "Syndromes et formules"],
+  get ongletFiche() { if (this._ongletFiche == null) { let v = 0; try { v = +localStorage.getItem("circ-onglet-fiche") || 0; } catch (e) { /* stockage indisponible */ } this._ongletFiche = v >= 0 && v < this.ONGLETS_FICHE.length ? v : 0; } return this._ongletFiche; },
+  onglet(i, html) { return `<div class="circ-onglet" data-o="${i}"${i === this.ongletFiche ? "" : " hidden"}>${html}</div>`; },
+  choisirOnglet(i) {
+    this._ongletFiche = i;
+    try { localStorage.setItem("circ-onglet-fiche", String(i)); } catch (e) { /* stockage indisponible */ }
+    const zone = document.getElementById("circuit-detail");
+    zone.querySelectorAll(".circ-onglet").forEach(d => { d.hidden = +d.dataset.o !== i; });
+    zone.querySelectorAll(".circ-onglet-btn").forEach(b => b.classList.toggle("actif", +b.dataset.o === i));
+    if (i === 2) this.tracerGraphe();                                       // le graphe se trace quand son onglet est visible
+    window.scrollTo({ top: 0 });
+  },
+
   rendreFiche() {
     const zone = document.getElementById("circuit-detail"), c = this.parId(this.actif);
     if (!c) { zone.innerHTML = `<p class="muted">Sélectionne un circuit à gauche pour voir sa fiche.</p>`; return; }
@@ -289,34 +303,36 @@ const Circuits = {
         <button type="button" class="edit-toggle-btn" id="circ-edit" title="Modifier cette fiche" aria-label="Modifier cette fiche">✏️</button>
         ${c.origine === "perso" ? `<button type="button" class="edit-toggle-btn" id="circ-suppr" title="Supprimer ce circuit" aria-label="Supprimer ce circuit">🗑</button>` : c.modifie ? `<button type="button" class="edit-toggle-btn" id="circ-retablir" title="Revenir à la version du cours" aria-label="Revenir à la version du cours">↺</button>` : ""}
       </div>
-      <h2>${escapeHtml(sansHanzi(c.nom))}</h2>
-      <div class="circ-haut">
-        <div class="circ-grand" id="circ-dessin">${this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true })}</div>
-
+      <div class="circ-bandeau">
+        <span class="circ-mini-bandeau" aria-hidden="true">${this.dessin(c, { taille: 44 })}</span>
+        <h2>${escapeHtml(sansHanzi(c.nom))}</h2>
+        <div class="circ-onglets" role="tablist">${this.ONGLETS_FICHE.map((n, i) => `<button type="button" role="tab" class="circ-onglet-btn${i === this.ongletFiche ? " actif" : ""}" data-o="${i}">${n}</button>`).join("")}</div>
       </div>
-      ${this.section("Syndromes du circuit", this.ul((c.syndromes || []).map(s => s.replace(/^syndromes? du /i, "du ").replace(/^du /, "Syndromes du "))))}
-      ${this.section("Syndromes de ta base rattachés à ce circuit", lies ? `<div class="circ-synd-liste">${lies}</div>` : `<p class="muted">Aucun pour l'instant : le crayon ✏️ permet d'en rattacher.</p>`)}
-      ${this.section("Actions / fonctions du circuit", this.ul(c.actions))}
-      ${this.section("Indications", this.indicationsHtml(c))}
-      <section><h3>Points des canaux</h3><div id="circ-pts" class="circ-pts-grille"></div></section>
-      <section><h3>Ajouts possibles</h3>${ajouts ? `<ul class="tcm-list">${ajouts}</ul><p class="muted">Dessinés en pointillé sous le circuit.</p>` : ""}<div class="circ-barre"><button type="button" class="edit-toggle-btn" id="circ-aj-prop">💡 Proposer des canaux à ajouter</button></div><div id="circ-aj-zone"></div></section>
-      ${this.section("Associations de points", ((c.associations || []).length
-        ? `<div class="cat-chip-row circ-assoc-puces">${c.associations.map((a, i) => `<button type="button" class="cat-chip" data-a="${i}">${escapeHtml(sansHanzi(a.tableau))}</button>`).join("")}</div>`
-        : `<p class="muted">Aucun tableau à toi pour l'instant : le crayon ✏️ permet d'en ajouter un avec les points de chaque canal.</p>`) + this.wjyChipsHtml(c) + `<div id="circ-assoc-detail" class="circ-assoc-detail"></div>`)}
-      ${this.section("Comparaison des associations et des ajouts", this.graphe(c))}
-      ${this.section("Formule de pharmacopée équivalente", this.equivalent(c))}
-      <section><h3>Points Tung compatibles</h3><div id="circ-tung" class="circ-tung"><p class="muted">Chargement…</p></div></section>
-      ${(c.notes || []).length ? this.section("Notes", this.ul(c.notes)) : ""}
-      ${niveaux ? this.section("Niveaux", niveaux) : ""}
-      ${astuces ? this.section("Astuces du Dr Tán Té Fū (cours, p. 41)", `<ul class="tcm-list">${astuces}</ul>`) : ""}
-      <section><h3>Syndromes de ta base portant sur ces canaux</h3><p class="muted">Syndromes des organes, des canaux et des six niveaux dont l'organe ou le niveau est un des quatre canaux.</p>${parCanal || `<p class="muted">Aucun.</p>`}</section>
-      <p class="muted">Méthode de l'équilibre global : chaque canal du circuit doit avoir au moins deux connexions (une entrée, une sortie). ${escapeHtml(this.base.regles.changer || "")}</p>`;
+      ${this.onglet(0, this.section("Syndromes du circuit", this.ul((c.syndromes || []).map(s => s.replace(/^syndromes? du /i, "du ").replace(/^du /, "Syndromes du ")))) +
+        this.section("Actions / fonctions du circuit", this.ul(c.actions)) +
+        this.section("Indications", this.indicationsHtml(c)) +
+        ((c.notes || []).length ? this.section("Notes", this.ul(c.notes)) : "") +
+        (niveaux ? this.section("Niveaux", niveaux) : "") +
+        (astuces ? this.section("Astuces du Dr Tán Té Fū (cours, p. 41)", `<ul class="tcm-list">${astuces}</ul>`) : ""))}
+      ${this.onglet(1, `<section><h3>Points des canaux</h3><div id="circ-pts" class="circ-pts-grille"></div></section>
+        <section><h3>Ajouts possibles</h3>${ajouts ? `<ul class="tcm-list">${ajouts}</ul><p class="muted">Dessinés en pointillé sous le circuit.</p>` : ""}<div class="circ-barre"><button type="button" class="edit-toggle-btn" id="circ-aj-prop">💡 Proposer des canaux à ajouter</button></div><div id="circ-aj-zone"></div></section>
+        <section><h3>Points Tung compatibles</h3><div id="circ-tung" class="circ-tung"><p class="muted">Chargement…</p></div></section>`)}
+      ${this.onglet(2, `<div class="circ-haut"><div class="circ-grand" id="circ-dessin">${this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true })}</div></div>` +
+        this.section("Associations de points", ((c.associations || []).length
+          ? `<div class="cat-chip-row circ-assoc-puces">${c.associations.map((a, i) => `<button type="button" class="cat-chip" data-a="${i}">${escapeHtml(sansHanzi(a.tableau))}</button>`).join("")}</div>`
+          : `<p class="muted">Aucun tableau à toi pour l'instant : le crayon ✏️ permet d'en ajouter un avec les points de chaque canal.</p>`) + this.wjyChipsHtml(c) + `<div id="circ-assoc-detail" class="circ-assoc-detail"></div>`) +
+        this.section("Comparaison des associations et des ajouts", this.graphe(c)))}
+      ${this.onglet(3, this.section("Syndromes de ta base rattachés à ce circuit", lies ? `<div class="circ-synd-liste">${lies}</div>` : `<p class="muted">Aucun pour l'instant : le crayon ✏️ permet d'en rattacher.</p>`) +
+        this.section("Formule de pharmacopée équivalente", this.equivalent(c)) +
+        `<section><h3>Syndromes de ta base portant sur ces canaux</h3><p class="muted">Syndromes des organes, des canaux et des six niveaux dont l'organe ou le niveau est un des quatre canaux.</p>${parCanal || `<p class="muted">Aucun.</p>`}</section>` +
+        `<p class="muted">Méthode de l'équilibre global : chaque canal du circuit doit avoir au moins deux connexions (une entrée, une sortie). ${escapeHtml(this.base.regles.changer || "")}</p>`)}`;
+    zone.querySelectorAll(".circ-onglet-btn").forEach(b => b.addEventListener("click", () => this.choisirOnglet(+b.dataset.o)));
     zone.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const e = this.entreeSynd(b.dataset.synd); if (e) this.ouvrirSyndrome(e); }));
     this.assocActive = null;
     zone.querySelectorAll(".circ-assoc-puces [data-a]").forEach(b => b.addEventListener("click", () => { this.assocActive = this.assocActive === +b.dataset.a ? null : +b.dataset.a; this.majAssoc(c); }));
     zone.querySelectorAll(".circ-wjy [data-w]").forEach(b => b.addEventListener("click", () => { const k = "w" + b.dataset.w; this.assocActive = this.assocActive === k ? null : k; this.majAssoc(c); }));
     this.majAssoc(c);
-    this.tracerGraphe();
+    if (this.ongletFiche === 2) this.tracerGraphe();
     this.brancherNotes(zone);
     this.pointsTung(c);
     this.rendrePoints(c);
@@ -440,7 +456,7 @@ const Circuits = {
     if (z.innerHTML) { z.innerHTML = ""; return; }
     const l = this.candidatsAjout(c);
     z.innerHTML = `<p class="muted circ-pts-avert">Seuls sont proposés les canaux qui gardent l'équilibre du circuit : statique (même polarité et même membre qu'un canal du circuit, donc même place) et dynamique (au moins deux connexions avec les canaux du circuit, selon les 6 systèmes). Règles du cours « Méthode de l'équilibre global ».</p>` +
-      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${escapeHtml(x.code)}</strong> <span class="muted">${escapeHtml((this.canaux.get(x.code) || {}).nom || "")}</span> — ${escapeHtml(x.raisons.join(" ; "))} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button></li>`).join("")}</ul>` : `<p class="muted">Aucun autre canal ne garde l'équilibre statique et dynamique de ce circuit.</p>`);
+      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${escapeHtml(x.code)}</strong> <span class="muted">${escapeHtml((this.canaux.get(x.code) || {}).nom || "")}</span> — ${escapeHtml(x.raisons.join(" ; "))} <button type="button" class="edit-toggle-btn" data-i="${i}" title="Ajouter à la liste" aria-label="Ajouter à la liste">+</button></li>`).join("")}</ul>` : `<p class="muted">Aucun autre canal ne garde l'équilibre statique et dynamique de ce circuit.</p>`);
     z.querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", async () => {
       b.disabled = true;                                                     // pas de double clic
       const x = l[+b.dataset.i], nom = ((this.canaux.get(x.code) || {}).nom || x.code).toLowerCase();
@@ -602,7 +618,7 @@ const Circuits = {
       const k = this.canaux.get(code) || { nom: this.NOM_AXE[code] }, l = this.ptsDe(code), axe = this.AXE.includes(code) || code === "VX", ajout = !axe && !c.grille.includes(code);
       const li = l.map(x => `<li><button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: x.canal || code, raison: x.action || "", source: "points du canal " + code, circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ${escapeHtml(x.point)} pour le réseau de la patiente">✓</button> <strong>${this.pointHtml(x.point)}</strong>${x.canal ? ` <span class="sx-code" title="Canal du point">${escapeHtml(x.canal)}</span>` : ""}${x.commentaire ? ` <span class="circ-com" title="Ton commentaire">${escapeHtml(x.commentaire)}</span>` : ""} <button type="button" class="circ-com-btn" data-point="${escapeHtml(x.point)}" title="Ajouter ou modifier un commentaire sur ce point" aria-label="Commentaire sur ${escapeHtml(x.point)}">💬</button>${x.categorie ? ` <span class="circ-cat">${escapeHtml(x.categorie)}</span>` : ""}${x.action || x.statut === "base" ? ` <button type="button" class="circ-info" aria-expanded="false" title="Afficher ou masquer les actions de ce point" aria-label="Afficher ou masquer les actions de ce point">ⓘ</button>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}<span class="circ-act">${x.action ? escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}</span></li>`).join("");
       return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}${axe ? " circ-pts-axe" : ""}${this.actionsVisibles()[code] ? " actions-visibles" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code === "VX" ? "Vaisseaux" : code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
-        `<span class="circ-pts-btns"><button type="button" class="edit-toggle-btn" data-act="actions" title="Afficher ou masquer les actions de tous les points de ce canal">👁 Actions</button> <button type="button" class="edit-toggle-btn" data-act="edit">✏️ Modifier</button> <button type="button" class="edit-toggle-btn" data-act="prop">💡 Proposer</button></span></div>` +
+        `<span class="circ-pts-btns"><button type="button" class="edit-toggle-btn" data-act="actions" title="Afficher ou masquer les actions de tous les points de ce canal" aria-label="Afficher ou masquer les actions de tous les points de ce canal">👁</button> <button type="button" class="edit-toggle-btn" data-act="edit" title="Modifier les points de ce canal" aria-label="Modifier les points de ce canal">✏️</button> <button type="button" class="edit-toggle-btn" data-act="prop" title="Proposer des points" aria-label="Proposer des points">💡</button></span></div>` +
         (li ? `<ul class="circ-pts-liste">${li}</ul>` : `<p class="muted">Aucun point pour l'instant.</p>`) + `<div class="circ-pts-zone"></div></div>`;
     }).join("");
     z.querySelectorAll(".circ-pts-carte").forEach(carte => {
@@ -795,7 +811,7 @@ const Circuits = {
     const l = tous.filter(x => !deja.has(this.cleP(x.point)));
     const repli = tous.some(x => x.repli);
     const INFO = `<button type="button" class="circ-info" aria-expanded="false" title="Afficher ou masquer les actions de ce point" aria-label="Afficher ou masquer les actions de ce point">ⓘ</button>`;
-    const ligne = (x, i) => `<li><strong>${this.pointHtml(x.point)}</strong>${x.canal && code !== x.canal ? ` <span class="sx-code" title="Canal du point">${escapeHtml(x.canal)}</span>` : ""} <span class="muted">${escapeHtml(x.categorie || "")}</span>${x.action ? " " + INFO : ""} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button> <button type="button" class="edit-toggle-btn" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: x.canal || code, raison: x.action || "", source: "proposition", circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente">✓ Réseau</button>${x.action ? ` <span class="circ-act">${escapeHtml(sansHanzi(x.action))}</span>` : ""}` +
+    const ligne = (x, i) => `<li><strong>${this.pointHtml(x.point)}</strong>${x.canal && code !== x.canal ? ` <span class="sx-code" title="Canal du point">${escapeHtml(x.canal)}</span>` : ""} <span class="muted">${escapeHtml(x.categorie || "")}</span>${x.action ? " " + INFO : ""} <button type="button" class="edit-toggle-btn" data-i="${i}" title="Ajouter à la liste" aria-label="Ajouter à la liste">+</button> <button type="button" class="edit-toggle-btn" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: x.canal || code, raison: x.action || "", source: "proposition", circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ce point pour le réseau de la patiente">✓</button>${x.action ? ` <span class="circ-act">${escapeHtml(sansHanzi(x.action))}</span>` : ""}` +
       (x.saignee.length ? `<details class="circ-sai"><summary>🩸 saignée</summary>${x.saignee.map(s => `<p>${escapeHtml(sansHanzi(s.texte)).slice(0, 400)} <span class="muted">(${escapeHtml(s.lib)})</span></p>`).join("")}</details>` : "") + `</li>`;
     const indexes = l.map((x, i) => ({ x, i })), normaux = indexes.filter(o => !o.x.inter), inters = indexes.filter(o => o.x.inter);
     zone.innerHTML = `<p class="muted circ-pts-avert">${code === "VX" ? "Points des vaisseaux ouverts par un point du circuit, sur les autres canaux : il suffit que l'équilibre statique soit respecté." : code === "RM" || code === "DM" ? "Tous les points de la ligne médiane : neutres, ils peuvent entrer dans n'importe quel circuit." : repli ? "Base de points indisponible : propositions par catégorie classique, actions à valider (elles ne viennent pas de tes cours)." : "Points tirés de ta base de points (Points des canaux) : cinq points shu, yuán, luò, xī, hé… et points ayant des indications en saignée. Actions reprises de la base."}</p>` +

@@ -1262,3 +1262,11 @@ li:hover > .circ-com-btn, .circ-com-btn:focus, .circ-com-btn:hover { opacity: 1;
 .circ-inter { margin: 0.4rem 0; font-size: 0.88rem; }
 .circ-inter > summary { cursor: pointer; font-weight: 600; }
 .pm-cond.epingle { outline: 2px solid var(--accent); }
+.circ-bandeau { position: sticky; top: var(--haut-onglets, 0px); z-index: 30; background: var(--bg); display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.7rem; padding: 0.4rem 0 0; margin-bottom: 0.8rem; border-bottom: 2px solid var(--ink); }
+.circ-bandeau h2 { margin: 0; font-size: 1.15rem; flex: 1; min-width: 0; padding-right: 6.4rem; }
+.circ-mini-bandeau { flex: none; line-height: 0; }
+.circ-onglets { flex-basis: 100%; display: flex; gap: 2px; overflow-x: auto; margin-bottom: -2px; }
+.circ-onglet-btn { border: 2px solid var(--ink); border-bottom: none; background: var(--bg); color: var(--ink); padding: 0.3rem 0.7rem; font: inherit; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+.circ-onglet-btn.actif { background: var(--ink); color: var(--bg); }
+.circ-onglet[hidden] { display: none; }
+.barre-flottante + .circ-bandeau h2 { padding-right: 6.4rem; }
