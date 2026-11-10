@@ -1225,3 +1225,4 @@ body:has(.onglets-travail:not([hidden])) .edit-flottante, body:has(.onglets-trav
 .reseau-schema svg { max-width: 100%; height: auto; overflow: visible; }
 .reseau-tung { font-size: 0.85rem; line-height: 1.35; text-align: center; margin: 0.3rem 0; }
 .circ-cat { font-size: 0.8rem; font-style: italic; opacity: 0.85; }
+.circ-croise { font-weight: 600; opacity: 0.9; }

@@ -158,6 +158,7 @@ const Reseau = {
         <p class="muted reseau-confid">Données gardées uniquement dans ce navigateur : jamais envoyées au dépôt ni synchronisées.</p>
       </div>`;
     this.brancher(f);
+    if (typeof Circuits !== "undefined" && Circuits.annoterCroisements) Circuits.annoterCroisements(f);
   },
 
   brancher(f) {

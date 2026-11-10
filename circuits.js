@@ -278,6 +278,7 @@ const Circuits = {
     this.tracerGraphe();
     this.pointsTung(c);
     this.rendrePoints(c);
+    this.annoterCroisements(zone);
     document.getElementById("circ-aj-prop").addEventListener("click", () => this.proposerAjouts(c));
     document.getElementById("circ-edit").addEventListener("click", () => this.modifier(c));
     const s = document.getElementById("circ-suppr"); if (s) s.addEventListener("click", () => this.supprimer(c));
@@ -419,6 +420,46 @@ const Circuits = {
     return `<a href="#" class="circ-ptlien" data-pt-fiche="${escapeHtml(this.pointBase(p))}" title="Ouvrir la fiche du point dans un nouvel onglet">${escapeHtml(p)}</a>` + (o ? ` <span class="circ-ouv" title="Point d'ouverture (confluent) du ${escapeHtml(o[0])} ; couple : ${escapeHtml(o[1])}">ouvre le ${escapeHtml(o[0])}</span>` : "");
   },
 
+  // ---------- intersections avec les huit merveilleux vaisseaux (ta base de points : lignes « jiāo huì-intersection avec … »)
+  VAISSEAUX_INTER: [[/chong\s*mai/, "chōng mài"], [/dai\s*mai/, "dài mài"], [/yin\s*wei\s*mai/, "yīn wéi mài"], [/yang\s*wei\s*mai/, "yáng wéi mài"],
+                    [/yin\s*qiao\s*mai/, "yīn qiāo mài"], [/yang\s*qiao\s*mai/, "yáng qiāo mài"], [/ren\s*mai/, "rèn mài"], [/du\s*mai/, "dū mài"]],
+  chargerInter() {
+    if (!this._inter) {
+      this._inter = (async () => {
+        const m = new Map();
+        await Promise.all(["P", "GI", "E", "Rt", "C", "IG", "V", "Rn", "EC", "TF", "VB", "F", "RM", "DM"].map(async k => {
+          (await this.dbCanal(k)).forEach(p => {
+            const vus = [];
+            String(p.categories_point || "").split(/\n+/).forEach(l => {
+              const n = l.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+              if (!/jiao\s*hui|intersection/.test(n)) return;
+              this.VAISSEAUX_INTER.forEach(([re, nom]) => { if (re.test(n) && !vus.includes(nom)) vus.push(nom); });
+            });
+            if (vus.length) m.set(this.cleP(p.point), vus);
+          });
+        }));
+        return m;
+      })();
+    }
+    return this._inter;
+  },
+  // ajoute « croise le … » après le nom d'un point qui est en intersection avec un merveilleux vaisseau (hors celui qu'il ouvre déjà : « ouvre le … »)
+  async annoterCroisements(racine) {
+    if (!racine) return;
+    const m = await this.chargerInter();
+    racine.querySelectorAll("a.circ-ptlien[data-pt-fiche]").forEach(a => {
+      if (a.dataset.inter) return;
+      a.dataset.inter = "1";
+      const v = m.get(this.cleP(this.pointBase(a.dataset.ptFiche)));
+      if (!v) return;
+      const ouv = this.ouverture(a.dataset.ptFiche), l = v.filter(x => !ouv || x !== ouv[0]);
+      if (!l.length) return;
+      let ref = a;
+      while (ref.nextElementSibling && ref.nextElementSibling.classList.contains("circ-ouv")) ref = ref.nextElementSibling;
+      ref.insertAdjacentHTML("afterend", ` <span class="circ-ouv circ-croise" title="Point d'intersection (jiāo huì) avec ${l.length > 1 ? "ces vaisseaux merveilleux" : "ce vaisseau merveilleux"}, d'après ta base de points">croise le ${l.join(", ")}</span>`);
+    });
+  },
+
   // ---------- points par canal : une liste par canal (la même dans tous les circuits qui contiennent ce canal), avec l'action de chaque point
   ptsDe(code) { return this.points.canaux[code] || []; },
   async ecrirePoints() { await Store.writeJSON(this.CHEMIN_POINTS, { titre: this.points.titre, canaux: this.points.canaux }); },
@@ -552,6 +593,7 @@ const Circuits = {
     zone.innerHTML = `<p class="muted circ-pts-avert">${repli ? "Base de points indisponible : propositions par catégorie classique, actions à valider (elles ne viennent pas de tes cours)." : "Points tirés de ta base de points (Points des canaux) : cinq points shu, yuán, luò, xī, hé… et points ayant des indications en saignée. Actions reprises de la base."}</p>` +
       (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${this.pointHtml(x.point)}</strong> <span class="muted">${escapeHtml(x.categorie || "")}</span>${x.action ? " — " + escapeHtml(sansHanzi(x.action)) : ""} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button> <button type="button" class="edit-toggle-btn" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: code, raison: x.action || "", source: "proposition", circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente">✓ Réseau</button>` +
         (x.saignee.length ? `<details class="circ-sai"><summary>🩸 saignée</summary>${x.saignee.map(s => `<p>${escapeHtml(sansHanzi(s.texte)).slice(0, 400)} <span class="muted">(${escapeHtml(s.lib)})</span></p>`).join("")}</details>` : "") + `</li>`).join("")}</ul>` : `<p class="muted">Rien à proposer de plus pour ce canal.</p>`);
+    this.annoterCroisements(zone);
     zone.querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", async () => {
       b.disabled = true;                                                     // pas de double clic
       const x = l[+b.dataset.i];
@@ -643,11 +685,12 @@ const Circuits = {
     const det = document.getElementById("circ-assoc-detail");
     if (!det) return;
     if (!a) { det.innerHTML = `<p class="muted">Choisis un tableau ou une recette : ses points s'écrivent sur le dessin.</p>`; return; }
-    if (w) { det.innerHTML = this.recetteHtml(w); return; }
+    if (w) { det.innerHTML = this.recetteHtml(w); this.annoterCroisements(det); return; }
     const e = a.synd ? this.entreeSynd(a.synd) : null;
     det.innerHTML = `<p>${e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(a.synd)}">${escapeHtml(sansHanzi(a.tableau))}</button>` : `<strong>${escapeHtml(sansHanzi(a.tableau))}</strong>`}</p>` +
       `<p>${Object.entries(a.points || {}).map(([k, v]) => `<span class="sx-code">${escapeHtml(k)}</span> ${v.map(p => this.pointHtml(p)).join(", ")}`).join(" · ")}</p>` + (a.note ? `<p class="muted">${escapeHtml(sansHanzi(a.note))}</p>` : "");
     det.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const en = this.entreeSynd(b.dataset.synd); if (en) this.ouvrirSyndrome(en); }));
+    this.annoterCroisements(det);
   },
 
   // ---------- création / modification
