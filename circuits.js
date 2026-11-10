@@ -55,7 +55,7 @@ const Circuits = {
   PAIRES: { H: [[0, 1], [2, 3]], V: [[0, 2], [1, 3]], D: [[0, 3], [1, 2]] },
   // RM et DM : l'axe du corps ; ils ne comptent pas parmi les quatre canaux du circuit mais s'associent à n'importe lequel
   AXE: ["RM", "DM"],
-  NOM_AXE: { RM: "Rèn mài (axe antérieur)", DM: "Dū mài (axe postérieur)" },
+  NOM_AXE: { RM: "Rèn mài (axe antérieur)", DM: "Dū mài (axe postérieur)", VX: "Points des vaisseaux ouverts, sur les autres canaux" },
   nomCanalOuAxe(k) { return (this.canaux.get(k) || {}).nom || this.NOM_AXE[k] || ""; },
   // nom d'organe ou de canal (sans accent, en minuscules) -> code du canal
   NOM_CODE: { poumon: "P", "gros intestin": "GI", estomac: "E", rate: "Rt", coeur: "C", "intestin grele": "IG", vessie: "V", rein: "Rn", reins: "Rn",
@@ -317,6 +317,7 @@ const Circuits = {
     zone.querySelectorAll(".circ-wjy [data-w]").forEach(b => b.addEventListener("click", () => { const k = "w" + b.dataset.w; this.assocActive = this.assocActive === k ? null : k; this.majAssoc(c); }));
     this.majAssoc(c);
     this.tracerGraphe();
+    this.brancherNotes(zone);
     this.pointsTung(c);
     this.rendrePoints(c);
     if (!this._mouvPret) this.chargerInter().then(() => { if (this.actif === c.id && document.getElementById("circ-dessin")) this.majAssoc(c); });
@@ -494,22 +495,39 @@ const Circuits = {
     }
     return "";
   },
+  // niveaux (yīn yáng) -> [canal de main, canal de pied] : pour lire « les canaux du zù jué yīn et du zú shào yīn »
+  NIVEAU_CANAL: { "tai yin": ["P", "Rt"], "shao yin": ["C", "Rn"], "jue yin": ["EC", "F"], "yang ming": ["GI", "E"], "tai yang": ["IG", "V"], "shao yang": ["TF", "VB"] },
+  codeDuPoint(pt) { const k = this.cleP(this.pointBase(pt)).match(/^[A-Z]+/); return k ? ({ RT: "Rt", RN: "Rn" }[k[0]] || k[0]) : ""; },
+  // pour chaque point : { v: vaisseaux, c: canaux } avec lesquels il est en intersection (jiāo huì) ; canaux et vaisseaux, c'est la même chose pour l'équilibre
   chargerInter() {
     if (!this._inter) {
       this._inter = (async () => {
         const m = new Map();
         this._mouv = new Map();
+        let cours = {};
+        try { cours = (await Store.readJSON("reference/points_canaux/intersections_cours.json")).points || {}; } catch (e) { /* pas de fichier : la base seule */ }
+        const coursN = Object.fromEntries(Object.entries(cours).map(([k, v]) => [this.cleP(k), v]));
+        const ajoute = (e, liste, x) => { if (x && !liste.includes(x)) liste.push(x); };
         await Promise.all(["P", "GI", "E", "Rt", "C", "IG", "V", "Rn", "EC", "TF", "VB", "F", "RM", "DM"].map(async k => {
           (await this.dbCanal(k)).forEach(p => {
             const mv = this.mouvementDe(p);
             if (mv) this._mouv.set(this.cleP(p.point), mv);
-            const vus = [];
+            const e = { v: [], c: [] };
             String(p.categories_point || "").split(/\n+/).forEach(l => {
               const n = l.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
               if (!/jiao\s*hui|intersection/.test(n)) return;
-              this.VAISSEAUX_INTER.forEach(([re, nom]) => { if (re.test(n) && !vus.includes(nom)) vus.push(nom); });
+              this.VAISSEAUX_INTER.forEach(([re, nom]) => { if (re.test(n)) ajoute(e, e.v, nom); });
+              Object.entries(this.NIVEAU_CANAL).forEach(([niv, [main, pied]]) => {
+                const re = new RegExp("\\b(zu|zou|shou)\\s+" + niv.replace(" ", "\\s+") + "\\b", "g");
+                for (const mm of n.matchAll(re)) ajoute(e, e.c, mm[1] === "shou" ? main : pied);
+              });
+              if (/tous les canaux yang/.test(n)) ["GI", "IG", "TF", "E", "V", "VB"].forEach(x => ajoute(e, e.c, x));
             });
-            if (vus.length) m.set(this.cleP(p.point), vus);
+            const cc = coursN[this.cleP(p.point)];
+            if (cc) { (cc.canaux || []).forEach(x => ajoute(e, e.c, x)); (cc.vaisseaux || []).forEach(x => ajoute(e, e.v, x)); }
+            const own = this.codeDuPoint(p.point);
+            e.c = e.c.filter(x => x !== own);
+            if (e.v.length || e.c.length) m.set(this.cleP(p.point), e);
           });
         }));
         this._mouvPret = true;
@@ -526,14 +544,14 @@ const Circuits = {
       if (a.dataset.inter) return;
       a.dataset.inter = "1";
       const li = a.closest("li");
-      if (li && /ouvert par/.test(li.innerText)) return;                 // la proposition le dit déjà dans sa catégorie
-      const v = m.get(this.cleP(this.pointBase(a.dataset.ptFiche)));
-      if (!v) return;
-      const ouv = this.ouverture(a.dataset.ptFiche), l = v.filter(x => !ouv || x !== ouv[0]);
+      if (li && /ouvert par|intersection|fait aussi partie/.test(li.textContent)) return;                 // la proposition le dit déjà dans sa catégorie
+      const e = m.get(this.cleP(this.pointBase(a.dataset.ptFiche)));
+      if (!e) return;
+      const ouv = this.ouverture(a.dataset.ptFiche), l = [...e.c, ...e.v.filter(x => !ouv || x !== ouv[0])];
       if (!l.length) return;
       let ref = a;
       while (ref.nextElementSibling && ref.nextElementSibling.classList.contains("circ-ouv")) ref = ref.nextElementSibling;
-      ref.insertAdjacentHTML("afterend", ` <span class="circ-ouv circ-croise" title="Point d'intersection (jiāo huì) avec ${l.length > 1 ? "ces vaisseaux merveilleux" : "ce vaisseau merveilleux"}, d'après ta base de points">croise le ${l.join(", ")}</span>`);
+      ref.insertAdjacentHTML("afterend", ` <span class="circ-ouv circ-croise" title="Point d'intersection (jiāo huì) : il fait aussi partie de ces canaux et vaisseaux, d'après ta base de points et tes cours">croise ${escapeHtml(l.join(", "))}</span>`);
     });
   },
 
@@ -580,10 +598,10 @@ const Circuits = {
     if (!z) return;
     const ouvert = this._ptsOuvert || {};
     const supp = [...new Set((c.ajouts || []).flatMap(a => a.canaux || []))].filter(k => !c.grille.includes(k));
-    z.innerHTML = [...c.grille, ...supp, ...this.AXE].map(code => {
-      const k = this.canaux.get(code) || { nom: this.NOM_AXE[code] }, l = this.ptsDe(code), axe = this.AXE.includes(code), ajout = !axe && !c.grille.includes(code);
-      const li = l.map(x => `<li><button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: code, raison: x.action || "", source: "points du canal " + code, circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ${escapeHtml(x.point)} pour le réseau de la patiente">✓</button> <strong>${this.pointHtml(x.point)}</strong>${x.commentaire ? ` <span class="circ-com" title="Ton commentaire">${escapeHtml(x.commentaire)}</span>` : ""} <button type="button" class="circ-com-btn" data-point="${escapeHtml(x.point)}" title="Ajouter ou modifier un commentaire sur ce point" aria-label="Commentaire sur ${escapeHtml(x.point)}">💬</button>${x.categorie ? ` <span class="circ-cat">${escapeHtml(x.categorie)}</span>` : ""}${x.action || x.statut === "base" ? ` <button type="button" class="circ-info" aria-expanded="false" title="Afficher ou masquer les actions de ce point" aria-label="Afficher ou masquer les actions de ce point">ⓘ</button>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}<span class="circ-act">${x.action ? escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}</span></li>`).join("");
-      return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}${axe ? " circ-pts-axe" : ""}${this.actionsVisibles()[code] ? " actions-visibles" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
+    z.innerHTML = [...c.grille, ...supp, ...this.AXE, ...(this.vaisseauxOuverts(c).length || this.ptsDe("VX").length ? ["VX"] : [])].map(code => {
+      const k = this.canaux.get(code) || { nom: this.NOM_AXE[code] }, l = this.ptsDe(code), axe = this.AXE.includes(code) || code === "VX", ajout = !axe && !c.grille.includes(code);
+      const li = l.map(x => `<li><button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: x.canal || code, raison: x.action || "", source: "points du canal " + code, circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ${escapeHtml(x.point)} pour le réseau de la patiente">✓</button> <strong>${this.pointHtml(x.point)}</strong>${x.canal ? ` <span class="sx-code" title="Canal du point">${escapeHtml(x.canal)}</span>` : ""}${x.commentaire ? ` <span class="circ-com" title="Ton commentaire">${escapeHtml(x.commentaire)}</span>` : ""} <button type="button" class="circ-com-btn" data-point="${escapeHtml(x.point)}" title="Ajouter ou modifier un commentaire sur ce point" aria-label="Commentaire sur ${escapeHtml(x.point)}">💬</button>${x.categorie ? ` <span class="circ-cat">${escapeHtml(x.categorie)}</span>` : ""}${x.action || x.statut === "base" ? ` <button type="button" class="circ-info" aria-expanded="false" title="Afficher ou masquer les actions de ce point" aria-label="Afficher ou masquer les actions de ce point">ⓘ</button>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}<span class="circ-act">${x.action ? escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}</span></li>`).join("");
+      return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}${axe ? " circ-pts-axe" : ""}${this.actionsVisibles()[code] ? " actions-visibles" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code === "VX" ? "Vaisseaux" : code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
         `<span class="circ-pts-btns"><button type="button" class="edit-toggle-btn" data-act="actions" title="Afficher ou masquer les actions de tous les points de ce canal">👁 Actions</button> <button type="button" class="edit-toggle-btn" data-act="edit">✏️ Modifier</button> <button type="button" class="edit-toggle-btn" data-act="prop">💡 Proposer</button></span></div>` +
         (li ? `<ul class="circ-pts-liste">${li}</ul>` : `<p class="muted">Aucun point pour l'instant.</p>`) + `<div class="circ-pts-zone"></div></div>`;
     }).join("");
@@ -627,7 +645,7 @@ const Circuits = {
       const nv = this.lignes(zone.querySelector("textarea").value).map(x => this.ligneEnPoint(x)).filter(x => x.point).map(x => {
         const a = anciens.find(y => y.point === x.point && y.action === x.action);      // ligne inchangée : garde son statut (une proposition reste « à valider »)
         const m = anciens.find(y => this.cleP(y.point) === this.cleP(x.point));          // le commentaire et la catégorie suivent le point
-        return { ...x, statut: a ? a.statut : "toi", ...(m && m.commentaire ? { commentaire: m.commentaire } : {}), ...(m && m.categorie ? { categorie: m.categorie } : {}) };
+        return { ...x, statut: a ? a.statut : "toi", ...(m && m.commentaire ? { commentaire: m.commentaire } : {}), ...(m && m.categorie ? { categorie: m.categorie } : {}), ...(m && m.canal ? { canal: m.canal } : {}) };
       });
       const vus = new Set();
       const sansDoublon = nv.filter(x => { const k = this.cleP(x.point) + "|" + x.action; if (vus.has(k)) return false; vus.add(k); return true; });
@@ -681,37 +699,74 @@ const Circuits = {
   },
   // points d'un merveilleux vaisseau, situés sur un canal du circuit, quand le point d'ouverture de ce vaisseau est lui aussi sur un canal du circuit
   // (ex. circuit avec TF et VB : TF5 ouvre le yáng wéi mài, donc VB35, VB20… et TF15 sont proposés avec lui)
-  async pointsVaisseaux(code, c) {
+  vaisseauxOuverts(c) {
     if (!c) return [];
     const canaux = new Set([...c.grille, ...(c.ajouts || []).flatMap(a => a.canaux || [])]);
-    const ouverts = Object.entries(this.OUVERTURES).filter(([pt]) => canaux.has((pt.match(/^[A-Za-z]+/) || [""])[0])).map(([pt, v]) => ({ pt, vaisseau: v[0] }));
+    return Object.entries(this.OUVERTURES).filter(([pt]) => canaux.has((pt.match(/^[A-Za-z]+/) || [""])[0])).map(([pt, v]) => ({ pt, vaisseau: v[0] }));
+  },
+  // équilibre statique : un canal est admis s'il a la polarité et le membre d'un des canaux du circuit
+  staticOk(x, c) {
+    const kx = this.canaux.get(x);
+    if (!kx) return false;
+    return [...c.grille, ...(c.ajouts || []).flatMap(a => a.canaux || [])].some(k => { const kk = this.canaux.get(k) || {}; return kk.polarite === kx.polarite && kk.membre === kx.membre; });
+  },
+  // points d'un vaisseau ouvert, situés sur un canal DU circuit (ils s'ajoutent à la carte de ce canal)
+  async pointsVaisseaux(code, c) {
+    const ouverts = this.vaisseauxOuverts(c);
     if (!ouverts.length) return [];
     const m = await this.chargerInter(), db = await this.dbCanal(code), out = [];
     db.forEach(p => {
-      const vs = m.get(this.cleP(p.point)) || [], lies = ouverts.filter(o => vs.includes(o.vaisseau) && this.cleP(o.pt) !== this.cleP(p.point));     // le point d'ouverture lui-même est déjà proposé comme tel
+      const e = m.get(this.cleP(p.point)), lies = e ? ouverts.filter(o => e.v.includes(o.vaisseau) && this.cleP(o.pt) !== this.cleP(p.point)) : [];     // le point d'ouverture lui-même est déjà proposé comme tel
       if (lies.length) out.push({ p, lies });
     });
     return out;
   },
+  // points d'un vaisseau ouvert, situés sur un canal HORS du circuit : carte « Vaisseaux » (équilibre statique respecté ; pas besoin d'être sur le canal du point d'ouverture)
+  async propositionsVX(c) {
+    const ouverts = this.vaisseauxOuverts(c);
+    if (!ouverts.length) return [];
+    const m = await this.chargerInter(), du = new Set([...c.grille, ...(c.ajouts || []).flatMap(a => a.canaux || [])]), out = [];
+    for (const k of ["P", "GI", "E", "Rt", "C", "IG", "V", "Rn", "EC", "TF", "VB", "F"]) {
+      if (du.has(k) || !this.staticOk(k, c)) continue;
+      (await this.dbCanal(k)).forEach(p => {
+        const e = m.get(this.cleP(p.point)), lies = e ? ouverts.filter(o => e.v.includes(o.vaisseau)) : [];
+        if (lies.length) out.push({ point: String(p.point).replace(/\s+/g, ""), categorie: lies.map(o => `croise le ${o.vaisseau} (ouvert par ${o.pt})`).join(" ; "), action: this.actionsDe(p).slice(0, 2).join(" ; "), saignee: this.saigneeDe(p), indic: p, canal: k });
+      });
+    }
+    return out;
+  },
   async propositionsCanal(code, c) {
-    const db = [...(await this.dbCanal(code)), ...(await this.pointsAxe(code))];
+    if (code === "VX") return this.propositionsVX(c);
+    const axe = this.AXE.includes(code), propre = await this.dbCanal(code), db = propre;
     if (db.length) {
-      const organes = c ? [...c.grille, ...(c.ajouts || []).flatMap(a => a.canaux || [])] : [];
-      const utile = p => {                          // sur l'axe : un mù n'est utile que s'il collecte l'organe d'un canal du circuit
-        if (!this.AXE.includes(code)) return true;
-        const mu = String(p.categories_point || "").split(/\n+/).filter(l => /mù-collecteur/i.test(l));
-        if (!mu.length) return true;
-        const autres = this.categoriesDe(p).filter(x => !/mù-collecteur/i.test(x));
-        return autres.length > 0 || mu.some(l => organes.some(k => this.ORGANE_MU[k] && this.ORGANE_MU[k].test(l)));
-      };
-      const base = db.filter(p => this.pointAdmis(p.point, code) && utile(p)).map(p => ({ point: String(p.point).replace(/\s+/g, ""), categorie: this.categoriesDe(p).join(" ; "), action: this.actionsDe(p).slice(0, 2).join(" ; "), saignee: this.saigneeDe(p), indic: p })).filter(x => x.categorie || x.saignee.length);
+      const fait = p => ({ point: String(p.point).replace(/\s+/g, ""), categorie: this.categoriesDe(p).join(" ; "), action: this.actionsDe(p).slice(0, 2).join(" ; "), saignee: this.saigneeDe(p), indic: p });
+      // RM et DM sont sur la ligne médiane : neutres, tous leurs points peuvent entrer dans n'importe quel circuit
+      const base = db.filter(p => this.pointAdmis(p.point, code)).map(fait).filter(x => axe || x.categorie || x.saignee.length);
       (await this.pointsVaisseaux(code, c)).forEach(({ p, lies }) => {
         const txt = lies.map(o => `croise le ${o.vaisseau} (ouvert par ${o.pt})`).join(" ; "), nom = this.cleP(p.point);
         const ex = base.find(x => this.cleP(x.point) === nom);
         if (ex) ex.categorie = [ex.categorie, txt].filter(Boolean).join(" ; ");
         else base.push({ point: String(p.point).replace(/\s+/g, ""), categorie: txt, action: this.actionsDe(p).slice(0, 2).join(" ; "), saignee: this.saigneeDe(p), indic: p, vaisseau: true });
       });
-      return base;
+      if (axe) return base;
+      // points d'intersection : un point d'intersection fait partie de tous les canaux qu'il croise ; on les regroupe à part (repliés)
+      const m = await this.chargerInter(), vus = new Set(base.map(x => this.cleP(x.point))), inters = [];
+      propre.forEach(p => {
+        const e = m.get(this.cleP(p.point));
+        if (!e || vus.has(this.cleP(p.point))) return;
+        vus.add(this.cleP(p.point));
+        inters.push({ ...fait(p), categorie: "intersection avec " + [...e.c, ...e.v].join(", "), inter: true });
+      });
+      for (const k of ["P", "GI", "E", "Rt", "C", "IG", "V", "Rn", "EC", "TF", "VB", "F"]) {
+        if (k === code) continue;
+        (await this.dbCanal(k)).forEach(p => {
+          const e = m.get(this.cleP(p.point));
+          if (!e || !e.c.includes(code) || vus.has(this.cleP(p.point))) return;
+          vus.add(this.cleP(p.point));
+          inters.push({ ...fait(p), categorie: `point de ${k} qui fait aussi partie de ${code} (intersection)`, inter: true, canal: k });
+        });
+      }
+      return [...base, ...inters];
     }
     if (!this.proposes) { try { this.proposes = await Store.readJSON(this.CHEMIN_PROPOSES); } catch (e) { return []; } }
     return ((this.proposes.canaux || {})[code] || []).map(x => ({ ...x, saignee: [], repli: true })).filter(x => this.pointAdmis(x.point, code));
@@ -719,7 +774,9 @@ const Circuits = {
   // 🩸 à côté des points de la liste qui ont des indications en saignée dans la base
   async marquerSaignees(z) {
     for (const carte of z.querySelectorAll(".circ-pts-carte")) {
-      const code = carte.dataset.k, db = await this.dbCanal(code);
+      const code = carte.dataset.k;
+      if (code === "VX") continue;
+      const db = await this.dbCanal(code);
       if (!db.length) continue;
       carte.querySelectorAll(".circ-pts-liste li").forEach(li => {
         const nom = this.cleP(li.querySelector("strong").childNodes[0].textContent), p = db.find(x => this.cleP(x.point) === nom);
@@ -737,9 +794,13 @@ const Circuits = {
     const tous = await this.propositionsCanal(code, c);
     const l = tous.filter(x => !deja.has(this.cleP(x.point)));
     const repli = tous.some(x => x.repli);
-    zone.innerHTML = `<p class="muted circ-pts-avert">${repli ? "Base de points indisponible : propositions par catégorie classique, actions à valider (elles ne viennent pas de tes cours)." : "Points tirés de ta base de points (Points des canaux) : cinq points shu, yuán, luò, xī, hé… et points ayant des indications en saignée. Actions reprises de la base."}</p>` +
-      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${this.pointHtml(x.point)}</strong> <span class="muted">${escapeHtml(x.categorie || "")}</span>${x.action ? ` <button type="button" class="circ-info" aria-expanded="false" title="Afficher ou masquer les actions de ce point" aria-label="Afficher ou masquer les actions de ce point">ⓘ</button>` : ""} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button> <button type="button" class="edit-toggle-btn" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: code, raison: x.action || "", source: "proposition", circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente">✓ Réseau</button>${x.action ? ` <span class="circ-act">${escapeHtml(sansHanzi(x.action))}</span>` : ""}` +
-        (x.saignee.length ? `<details class="circ-sai"><summary>🩸 saignée</summary>${x.saignee.map(s => `<p>${escapeHtml(sansHanzi(s.texte)).slice(0, 400)} <span class="muted">(${escapeHtml(s.lib)})</span></p>`).join("")}</details>` : "") + `</li>`).join("")}</ul>` : `<p class="muted">Rien à proposer de plus pour ce canal.</p>`);
+    const INFO = `<button type="button" class="circ-info" aria-expanded="false" title="Afficher ou masquer les actions de ce point" aria-label="Afficher ou masquer les actions de ce point">ⓘ</button>`;
+    const ligne = (x, i) => `<li><strong>${this.pointHtml(x.point)}</strong>${x.canal && code !== x.canal ? ` <span class="sx-code" title="Canal du point">${escapeHtml(x.canal)}</span>` : ""} <span class="muted">${escapeHtml(x.categorie || "")}</span>${x.action ? " " + INFO : ""} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button> <button type="button" class="edit-toggle-btn" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: x.canal || code, raison: x.action || "", source: "proposition", circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente">✓ Réseau</button>${x.action ? ` <span class="circ-act">${escapeHtml(sansHanzi(x.action))}</span>` : ""}` +
+      (x.saignee.length ? `<details class="circ-sai"><summary>🩸 saignée</summary>${x.saignee.map(s => `<p>${escapeHtml(sansHanzi(s.texte)).slice(0, 400)} <span class="muted">(${escapeHtml(s.lib)})</span></p>`).join("")}</details>` : "") + `</li>`;
+    const indexes = l.map((x, i) => ({ x, i })), normaux = indexes.filter(o => !o.x.inter), inters = indexes.filter(o => o.x.inter);
+    zone.innerHTML = `<p class="muted circ-pts-avert">${code === "VX" ? "Points des vaisseaux ouverts par un point du circuit, sur les autres canaux : il suffit que l'équilibre statique soit respecté." : code === "RM" || code === "DM" ? "Tous les points de la ligne médiane : neutres, ils peuvent entrer dans n'importe quel circuit." : repli ? "Base de points indisponible : propositions par catégorie classique, actions à valider (elles ne viennent pas de tes cours)." : "Points tirés de ta base de points (Points des canaux) : cinq points shu, yuán, luò, xī, hé… et points ayant des indications en saignée. Actions reprises de la base."}</p>` +
+      (normaux.length ? `<ul class="circ-pts-prop">${normaux.map(o => ligne(o.x, o.i)).join("")}</ul>` : (inters.length ? "" : `<p class="muted">Rien à proposer de plus pour ce canal.</p>`)) +
+      (inters.length ? `<details class="circ-inter"><summary>Points d'intersection (${inters.length}) : ils font partie de tous les canaux qu'ils croisent</summary><ul class="circ-pts-prop">${inters.map(o => ligne(o.x, o.i)).join("")}</ul></details>` : "");
     this.annoterCroisements(zone);
     this.brancherInfos(zone);
     if (this.actionsVisibles()[code]) zone.classList.add("actions-visibles");
@@ -747,7 +808,7 @@ const Circuits = {
       b.disabled = true;                                                     // pas de double clic
       const x = l[+b.dataset.i];
       if (this.ptsDe(code).some(y => this.cleP(y.point) === this.cleP(x.point))) { this.rendrePoints(c); return; }      // déjà dans la liste
-      (this.points.canaux[code] = this.points.canaux[code] || []).push({ point: x.point, action: x.action, categorie: x.categorie || "", statut: x.repli ? "propose" : "base" });
+      (this.points.canaux[code] = this.points.canaux[code] || []).push({ point: x.point, action: x.action, categorie: x.categorie || "", ...(x.canal ? { canal: x.canal } : {}), statut: x.repli ? "propose" : "base" });
       try { await this.ecrirePoints(); } catch (e) { alert("Enregistrement impossible : " + e.message); return; }
       this.rendrePoints(c);
     }));
@@ -787,10 +848,10 @@ const Circuits = {
     assoc.forEach((a, i) => Object.entries(a.points || {}).forEach(([code, l]) => (l || []).forEach(p => {
       const k = this.clePoint(p);
       if (!k) return;
-      if (!points.has(k)) points.set(k, { code, n: new Set(), notes: new Set() });
+      if (!points.has(k)) points.set(k, { code, n: new Set(), notes: new Set(), parTab: new Map() });
       const v = points.get(k);
       v.n.add(i);
-      this.commentairesDe(p).forEach(t => v.notes.add(t));
+      this.commentairesDe(p).forEach(t => { if (!v.parTab.has(i)) v.parTab.set(i, new Set()); v.parTab.get(i).add(t); });
     })));
     points.forEach((v, k) => { const e = this.ptsDe(v.code).find(x => this.clePoint(x.point) === k); if (e && e.commentaire) v.notes.add(e.commentaire); });   // + le commentaire du point dans la liste du canal
     const nomCanal = k => this.nomCanalOuAxe(k);
@@ -801,10 +862,19 @@ const Circuits = {
       return `<div class="pm-cond" data-id="a${i}" data-liens="${escapeHtml(liens)}"><div class="pm-si"><span class="pm-si-t">Tableau</span><span class="pm-cond-t">${escapeHtml(sansHanzi(a.tableau))}</span></div>${a.note ? `<div class="pm-principe">${escapeHtml(sansHanzi(a.note))}</div>` : ""}</div>`;
     }).join("") + ajouts.map((a, j) => `<div class="pm-cond circ-ajout-cond" data-id="j${j}" data-liens="${escapeHtml(a.canaux.map(k => k + ":-").join(","))}"><div class="pm-si"><span class="pm-si-t">Ajout</span><span class="pm-cond-t">${escapeHtml(sansHanzi(a.action || a.texte || ""))}</span></div><div class="pm-principe">${escapeHtml(sansHanzi(a.texte || ""))}</div></div>`).join("");
     const droite = codes.map(k => `<div class="pm-groupe">${escapeHtml(k)} · ${escapeHtml(nomCanal(k))}</div>` +
-      [...points].filter(([, v]) => v.code === k).map(([pt, v]) => `<div class="pm-sub pm-ajout${v.n.size > 1 ? " circ-commun" : ""}" data-id="s${escapeHtml(pt)}:+" data-cle="${escapeHtml(pt)}:+"><strong>${escapeHtml(pt)}</strong>${v.n.size > 1 ? ` <span class="circ-x">× ${v.n.size}</span>` : ""}${v.notes.size ? ` <span class="circ-note-pt">${escapeHtml([...v.notes].join(" · "))}</span>` : ""}</div>`).join("")).join("") +
+      [...points].filter(([, v]) => v.code === k).map(([pt, v]) => `<div class="pm-sub pm-ajout${v.n.size > 1 ? " circ-commun" : ""}" data-id="s${escapeHtml(pt)}:+" data-cle="${escapeHtml(pt)}:+"><strong>${escapeHtml(pt)}</strong>${v.n.size > 1 ? ` <span class="circ-x">× ${v.n.size}</span>` : ""}${[...v.parTab].map(([i, s]) => ` <span class="circ-note-pt" data-t="${i}">${escapeHtml([...s].join(" · "))}</span>`).join("")}${v.notes.size ? ` <span class="circ-note-pt">${escapeHtml([...v.notes].join(" · "))}</span>` : ""}</div>`).join("")).join("") +
       (canauxAj.length ? `<div class="pm-groupe">Canaux ajoutés</div>` + canauxAj.map(k => `<div class="pm-sub circ-ajout-canal" data-id="s${escapeHtml(k)}:-" data-cle="${escapeHtml(k)}:-"><span class="pm-sens">+ ajout</span> <strong>${escapeHtml(k)}</strong> <span class="muted">${escapeHtml(nomCanal(k))}</span></div>`).join("") : "");
     return `<div class="circ-graphe"><p class="muted pf-legende">Trait plein : point de l'association · trait pointillé : canal ajouté · × n : point commun à plusieurs tableaux. Survole un tableau, un ajout ou un point pour voir ses liens.</p>` +
       `<div class="pm-mm"><svg class="pf-traits" aria-hidden="true"></svg><div class="pm-gauche">${gauche}</div><div class="pm-droite">${droite}</div></div></div>`;
+  },
+  // remarque d'un point = visible seulement quand le tableau qui la porte est survolé (ou touché, au doigt)
+  brancherNotes(racine) {
+    racine.querySelectorAll(".circ-graphe .pm-cond[data-id^='a']").forEach(t => {
+      const i = t.dataset.id.slice(1), toggler = on => racine.querySelectorAll(`.circ-graphe .circ-note-pt[data-t="${i}"]`).forEach(s => s.classList.toggle("visible", on));
+      t.addEventListener("mouseenter", () => toggler(true));
+      t.addEventListener("mouseleave", () => { if (!t.classList.contains("epingle")) toggler(false); });
+      t.addEventListener("click", () => { const e = t.classList.toggle("epingle"); toggler(e); });
+    });
   },
   tracerGraphe() {
     const g = document.querySelector(".circ-graphe");
