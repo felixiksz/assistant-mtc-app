@@ -160,6 +160,7 @@ const Reseau = {
       </div>`;
     this.brancher(f);
     if (typeof Circuits !== "undefined" && Circuits.annoterCroisements) Circuits.annoterCroisements(f);
+    if (typeof Circuits !== "undefined" && Circuits.chargerInter && !Circuits._mouvPret) Circuits.chargerInter().then(() => { const z = document.getElementById("reseau-schema"); if (z) z.innerHTML = this.schema(); });
   },
 
   brancher(f) {

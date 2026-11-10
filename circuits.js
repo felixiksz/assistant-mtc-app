@@ -110,22 +110,35 @@ const Circuits = {
 
   dessin(c, o = {}) {
     const taille = o.taille || 120, fig = this.LIENS[c.figure] ? c.figure : 3;
-    const pos = this.POSITIONS, g = c.grille || [], pts = o.points || null, marge = pts ? 27 : 0;
+    const pos = this.POSITIONS, g = c.grille || [], pts = o.points || null, marge = 0;
+    const rayon = pts ? 24 : 16;
     const police = `font-family="var(--font-body, sans-serif)"`;
     const paires = (g.length === 4 && g.every(Boolean)) ? this.liensReels(g) : this.LIENS[fig].flatMap(t => this.PAIRES[t]);
     const traits = paires.map(([a, b]) => `<line x1="${pos[a][0]}" y1="${pos[a][1]}" x2="${pos[b][0]}" y2="${pos[b][1]}" stroke="var(--ink)" stroke-width="3.2" stroke-linecap="round"/>`).join("");
     const rond = (x, y, r, code, o2 = {}) => {
       const yin = this.polarite(code) === "yin";
-      const lib = o2.etiquette && code ? `<text x="${x}" y="${y + (r > 12 ? 4.5 : 3)}" text-anchor="middle" font-size="${r > 12 ? (code.length > 1 ? 12 : 14) : 8}" font-weight="700" ${police} fill="${yin ? "var(--bg)" : "var(--ink)"}">${escapeHtml(code)}</text>` : "";
+      const lib = o2.etiquette && code && !o2.sansNom ? `<text x="${x}" y="${y + (r > 12 ? 4.5 : 3)}" text-anchor="middle" font-size="${r > 12 ? (code.length > 1 ? 12 : 14) : 8}" font-weight="700" ${police} fill="${yin ? "var(--bg)" : "var(--ink)"}">${escapeHtml(code)}</text>` : "";
       return `<circle cx="${x}" cy="${y}" r="${r}" fill="${yin ? "var(--ink)" : "var(--bg)"}" stroke="var(--ink)" stroke-width="${o2.pointille ? 2.5 : 3}"${o2.pointille ? ` stroke-dasharray="3.5 2.5"` : ""}><title>${escapeHtml((this.canaux.get(code) || {}).nom || code)}</title></circle>${lib}`;
     };
     const ronds = pos.map(([x, y], i) => {
       const code = g[i] || "";
       const anneau = o.surligne && o.surligne.has(code) ? `<circle cx="${x}" cy="${y}" r="21.5" fill="none" stroke="var(--accent)" stroke-width="4"/>` : "";
-      return anneau + rond(x, y, 16, code, { etiquette: o.etiquettes });
+      if (!pts) return anneau + rond(x, y, rayon, code, { etiquette: o.etiquettes });
+      // points dans le rond : pastilles empilées (4 au plus ; au-delà, « +n »), colorées selon le mouvement du point
+      const liste = [...new Set((pts[code] || []).map(t => this.clePoint(t)).filter(Boolean))];
+      const aff = liste.length > 4 ? [...liste.slice(0, 3), "+" + (liste.length - 3)] : liste;
+      const hP = 8.4, ec = 1.4, tot = aff.length * hP + Math.max(0, aff.length - 1) * ec, yin = this.polarite(code) === "yin";
+      const code_ = aff.length <= 3 && code ? `<text x="${x}" y="${y - rayon + 8.5}" text-anchor="middle" font-size="6.4" font-weight="700" ${police} fill="${yin ? "var(--bg)" : "var(--ink)"}" opacity="0.85">${escapeHtml(code)}</text>` : "";
+      const y0 = aff.length <= 3 ? y - tot / 2 + 4.5 : y - tot / 2;
+      const pil = aff.map((t, k) => {
+        const mv = this._mouv ? this._mouv.get(this.cleP(t)) : "", fond = mv ? this.COULEUR_MOUV[mv] : "var(--bg)", w = Math.max(14, t.length * 4.2 + 5);
+        return `<g><title>${escapeHtml(t + (mv ? " — " + this.NOM_MOUV[mv] : ""))}</title><rect x="${x - w / 2}" y="${y0 + k * (hP + ec)}" width="${w}" height="${hP}" rx="2.2" fill="${fond}" stroke="#1d1d1b" stroke-width="0.6"/>` +
+          `<text x="${x}" y="${y0 + k * (hP + ec) + 6.4}" text-anchor="middle" font-size="6.6" font-weight="700" ${police} fill="#1d1d1b">${escapeHtml(t)}</text></g>`;
+      }).join("");
+      return anneau + rond(x, y, rayon, code, { etiquette: false, sansNom: true }) + code_ + pil;
     }).join("");
     // points d'acupuncture : au-dessus des ronds du haut, au-dessous de ceux du bas
-    const etiq = pts ? pos.map(([x, y], i) => {
+    const etiq = pts && false ? pos.map(([x, y], i) => {
       const l = this.lignesPoints(pts[g[i]]);
       if (!l.length) return "";
       const y0 = i < 2 ? y - 22 - (l.length - 1) * 8.5 : y + 29;
@@ -150,7 +163,7 @@ const Circuits = {
     }).join("");
     const cote = "";                                   // pas de mention « main » / « pied » : ça va de soi
     const L = 120, H = 120 + marge * 2 + axeH + (groupes.length ? groupes.length * 52 + 6 : 0);
-    const px = pts ? 24 : 0;                                // marge de chaque côté quand des points sont écrits : les noms longs (TF5 TF10 TF23…) ne sont jamais coupés
+    const px = pts ? 4 : 0;                                // marge de chaque côté quand des points sont écrits : les noms longs (TF5 TF10 TF23…) ne sont jamais coupés
     return `<svg class="circ-svg" viewBox="${-px} ${-marge} ${L + 2 * px} ${H}" width="${Math.round(taille * (L + 2 * px) / L)}" height="${Math.round(taille * H / L)}" role="img" aria-label="Circuit ${escapeHtml(g.join(", "))}${this.NOM_SCHEMA[this.figureDe(g)] ? " (schéma " + this.NOM_SCHEMA[this.figureDe(g)] + ")" : ""}">${traits}${ronds}${etiq}${axeSvg}${cote}${aj}</svg>`;
   },
 
@@ -306,6 +319,7 @@ const Circuits = {
     this.tracerGraphe();
     this.pointsTung(c);
     this.rendrePoints(c);
+    if (!this._mouvPret) this.chargerInter().then(() => { if (this.actif === c.id && document.getElementById("circ-dessin")) this.majAssoc(c); });
     this.crayonsChamps(zone, c);
     this.annoterCroisements(zone);
     document.getElementById("circ-aj-prop").addEventListener("click", () => this.proposerAjouts(c));
@@ -466,12 +480,29 @@ const Circuits = {
   // ---------- intersections avec les huit merveilleux vaisseaux (ta base de points : lignes « jiāo huì-intersection avec … »)
   VAISSEAUX_INTER: [[/chong\s*mai/, "chōng mài"], [/dai\s*mai/, "dài mài"], [/yin\s*wei\s*mai/, "yīn wéi mài"], [/yang\s*wei\s*mai/, "yáng wéi mài"],
                     [/yin\s*qiao\s*mai/, "yīn qiāo mài"], [/yang\s*qiao\s*mai/, "yáng qiāo mài"], [/ren\s*mai/, "rèn mài"], [/du\s*mai/, "dū mài"]],
+  // couleurs des cinq mouvements (fond des pastilles de points)
+  COULEUR_MOUV: { bois: "#97C459", feu: "#F09595", terre: "#FAC775", metal: "#D3D1C7", eau: "#85B7EB" },
+  NOM_MOUV: { bois: "bois", feu: "feu", terre: "terre", metal: "métal", eau: "eau" },
+  mouvementDe(p) {
+    for (const l of String(p.categories_point || "").split(/\n+/)) {
+      const n = l.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (/mer de l'eau|des cereales/.test(n)) continue;
+      if (/jing-puits|ying-jaillissement|shu-riviere|jing-fleuve|he-reunion|^\W*point\s+(bois|feu|terre|metal|eau)\b/.test(n)) {
+        const m = n.match(/\b(bois|feu|terre|metal|eau)\b/);
+        if (m) return m[1];
+      }
+    }
+    return "";
+  },
   chargerInter() {
     if (!this._inter) {
       this._inter = (async () => {
         const m = new Map();
+        this._mouv = new Map();
         await Promise.all(["P", "GI", "E", "Rt", "C", "IG", "V", "Rn", "EC", "TF", "VB", "F", "RM", "DM"].map(async k => {
           (await this.dbCanal(k)).forEach(p => {
+            const mv = this.mouvementDe(p);
+            if (mv) this._mouv.set(this.cleP(p.point), mv);
             const vus = [];
             String(p.categories_point || "").split(/\n+/).forEach(l => {
               const n = l.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -481,6 +512,7 @@ const Circuits = {
             if (vus.length) m.set(this.cleP(p.point), vus);
           });
         }));
+        this._mouvPret = true;
         return m;
       })();
     }
