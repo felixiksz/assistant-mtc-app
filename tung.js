@@ -148,7 +148,7 @@ const Tung = {
     if (!f) { z.innerHTML = ""; return; }
     const membres = (f.membres || []).map(m => { const t = Array.isArray(m) ? m[0] : m, id = Array.isArray(m) ? m[1] : null; return id ? `<button type="button" class="cat-chip" data-tung-fiche="${escapeHtml(id)}">${escapeHtml(t)}</button>` : `<span class="cat-chip tung-membre">${escapeHtml(t)}</span>`; }).join("");
     const blocs = f.blocs.map((b, i) => {
-      const src = b.source === "perso" ? "Tes ajouts" + (b.titre ? " — " + escapeHtml(b.titre) : "") : `${escapeHtml((this.base.sources[b.source] || {}).nom || b.source)}${b.page ? " — p. " + escapeHtml(b.page) : ""}`;
+      const src = b.source === "perso" ? "Tes ajouts" + (b.titre ? " — " + escapeHtml(b.titre) : "") : `${escapeHtml((this.base.sources[b.source] || {}).nom || b.source)}${b.page ? " — p. " + escapeHtml(b.page) : ""}${b.url ? ` — <a href="${escapeHtml(b.url)}" target="_blank" rel="noopener">page du site</a>` : ""}`;
       return `<details class="tung-bloc" open><summary><strong>${src}</strong>${b.langue === "en" ? ` <span class="muted">(texte en anglais)</span>` : ""}</summary>${b.champs.map(c => this.champ(c)).join("") || `<p class="muted">Rien d'autre que le nom dans cette source.</p>`}</details>`;
     }).join("");
     const prot = this.protos.filter(p => JSON.stringify(p.etapes).includes('"id":"' + f.id + '"'));
@@ -177,6 +177,14 @@ const Tung = {
     const s = document.getElementById("tung-suppr"); if (s) s.addEventListener("click", () => this.supprimer(f));
     const r = document.getElementById("tung-retablir"); if (r) r.addEventListener("click", () => this.retablir(f));
   },
+
+  // texte d'une rubrique (première source qui la donne)
+  rubrique(f, noms, max) {
+    for (const b of f.blocs) for (const c of b.champs) if (noms.some(n => c.k === n || c.k.startsWith(n))) { const v = Array.isArray(c.v) ? c.v : [c.v]; return (max ? v.slice(0, max) : v).join(" ; "); }
+    return "";
+  },
+  action(f) { const x = this.rubrique(f, ["Action"]) || this.rubrique(f, ["Indications"], 3); return x.length > 170 ? x.slice(0, 167).replace(/\s+\S*$/, "") + "…" : x; },
+  localisation(f) { return this.rubrique(f, ["Localisation"]) || ""; },
 
   htmlCanaux(f) {
     const c = f.canaux || {}, l = c.codes || [];

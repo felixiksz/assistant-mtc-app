@@ -175,8 +175,7 @@ const Circuits = {
     const zone = document.getElementById("circuit-detail"), c = this.parId(this.actif);
     if (!c) { zone.innerHTML = `<p class="muted">Sélectionne un circuit à gauche pour voir sa fiche.</p>`; return; }
     if (this.edition) { this.rendreEdition(c); return; }
-    const sch = (this.base.schemas || []).find(s => s.n === c.figure);
-    const niveaux = (c.niveaux || []).map(x => {
+        const niveaux = (c.niveaux || []).map(x => {
       const n = dsNorm(sansChinois(x));
       const co = (this.base.niveaux || []).find(y => n.includes(dsNorm(y.nom)));
       return co ? `<details class="circ-niveau"><summary>Fonctions de ${escapeHtml(co.nom)} <span class="muted">(cours p. ${co.page})</span></summary>${this.ul(co.fonctions)}</details>` : "";
@@ -197,8 +196,7 @@ const Circuits = {
       <h2>${escapeHtml(c.nom)}</h2>
       <div class="circ-haut">
         <div class="circ-grand" id="circ-dessin">${this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true })}</div>
-        <div class="circ-canaux">
-          ${sch ? `<p class="muted circ-schema"><strong>Schéma ${sch.n}</strong> : ${escapeHtml(sch.texte)}</p>` : `<p class="muted circ-schema">Boucle : liaisons horizontales et verticales (pas de schéma précisé).</p>`}</div>
+
       </div>
       ${this.section("Syndromes du circuit", this.ul((c.syndromes || []).map(s => s.replace(/^syndromes? du /i, "du ").replace(/^du /, "Syndromes du "))))}
       ${this.section("Actions / fonctions du circuit", `${c.actions_exemples ? `<p class="muted">Exemples non exclusifs des fonctions du circuit.</p>` : ""}${this.ul(c.actions)}`)}
@@ -233,9 +231,9 @@ const Circuits = {
     if (!el) return;
     try { await Tung.ensureLoaded(); } catch (e) { el.innerHTML = `<p class="muted">Points Tung indisponibles (${escapeHtml(e.message)}).</p>`; return; }
     const r = Tung.compatibles(c.grille, (c.ajouts || []).map(a => a.canaux || []));
-    const bt = f => `<button type="button" class="edit-toggle-btn" data-tung-fiche="${escapeHtml(f.id)}">${escapeHtml(f.nom)}${(f.numeros || []).length ? " " + escapeHtml(f.numeros.join("/")) : ""} <span class="muted">${f.canaux.codes.join("+")}</span></button>`;
-    el.innerHTML = (r.ok.length ? `<p class="muted">Leurs canaux sont déjà dans le circuit : ils s'y ajoutent sans le déséquilibrer.</p><div class="circ-synd-liste">${r.ok.map(bt).join(" ")}</div>` : `<p class="muted">Aucun point Tung dont le canal soit dans ce circuit pour l'instant (les canaux se renseignent dans l'onglet Points Tung).</p>`) +
-      (r.avec.length ? `<p class="muted">Avec un des ajouts possibles du circuit :</p><div class="circ-synd-liste">${r.avec.map(bt).join(" ")}</div>` : "");
+    const bt = f => `<li class="circ-tung-ligne"><button type="button" class="edit-toggle-btn" data-tung-fiche="${escapeHtml(f.id)}" title="${escapeHtml(Tung.localisation(f) || "Localisation non précisée dans les sources")}">${escapeHtml(f.nom)}${(f.numeros || []).length ? " " + escapeHtml(f.numeros.join("/")) : ""} <span class="muted">${f.canaux.codes.join("+")}</span></button> <span class="circ-tung-action">${escapeHtml(Tung.action(f))}</span></li>`;
+    el.innerHTML = (r.ok.length ? `<p class="muted">Leurs canaux sont déjà dans le circuit : ils s'y ajoutent sans le déséquilibrer. Survole un nom pour voir la localisation.</p><ul class="circ-tung-liste">${r.ok.map(bt).join("")}</ul>` : `<p class="muted">Aucun point Tung dont le canal soit dans ce circuit pour l'instant (les canaux se renseignent dans l'onglet Points Tung).</p>`) +
+      (r.avec.length ? `<p class="muted">Avec un des ajouts possibles du circuit :</p><ul class="circ-tung-liste">${r.avec.map(bt).join("")}</ul>` : "");
   },
 
   // graphe de comparaison (même principe que l'arbre des modifications d'une formule) : à gauche les tableaux et les ajouts,
