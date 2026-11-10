@@ -1132,3 +1132,5 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .tung-sources { font-size: 0.8rem; margin: 0.6rem 0; }
 .tung-tag-leg { white-space: nowrap; }
 .tung-enfant { margin-left: 1.1rem; border-left: 3px solid var(--ink); padding-left: 0.5rem !important; font-size: 0.86rem; }
+.circ-indic-groupe { margin: 0.5rem 0; }
+.circ-indic-titre { margin: 0.6rem 0 0.1rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }

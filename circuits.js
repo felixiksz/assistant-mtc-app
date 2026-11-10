@@ -52,7 +52,7 @@ const Circuits = {
 
   recomposer() {
     const surch = this.perso.surcharges || {};
-    const vide = { ajouts: [], actions: [], indications: [], syndromes: [], alias: [], notes: [], syndromes_lies: [], niveaux: [], associations: [], formules: [], formules_note: "" };
+    const vide = { ajouts: [], actions: [], indications: [], indications_groupes: [], syndromes: [], alias: [], notes: [], syndromes_lies: [], niveaux: [], associations: [], formules: [], formules_note: "" };
     const b = this.base.circuits.map(c => ({ ...vide, ...c, ...(surch[c.id] || {}), origine: "cours", modifie: !!surch[c.id], de_base: c }));
     const p = (this.perso.circuits || []).map(c => ({ ...vide, figure: 1, ...c, origine: "perso", modifie: false }));
     this.liste = [...b, ...p];
@@ -62,7 +62,7 @@ const Circuits = {
   nomCourt(c) { return sansChinois(c.nom).replace(/\s+/g, " ").trim() || c.nom; },
   polarite(code) { const k = this.canaux.get(code); return k ? k.polarite : "yin"; },
   texteRecherche(c) {
-    return dsNorm([c.nom, ...(c.alias || []), ...c.grille, ...c.grille.map(k => (this.canaux.get(k) || {}).nom), ...c.actions, ...c.indications, ...(c.notes || []), ...(c.associations || []).map(a => a.tableau + " " + Object.values(a.points || {}).flat().join(" "))].join(" "));
+    return dsNorm([c.nom, ...(c.alias || []), ...c.grille, ...c.grille.map(k => (this.canaux.get(k) || {}).nom), ...c.actions, ...c.indications, ...(c.indications_groupes || []).map(g => g.titre), ...(c.notes || []), ...(c.associations || []).map(a => a.tableau + " " + Object.values(a.points || {}).flat().join(" "))].join(" "));
   },
 
   // ---------- dessin : 4 ronds (noir = yīn, blanc = yáng), traits selon le schéma ;
@@ -185,6 +185,37 @@ const Circuits = {
 
   afficher(id) { this.actif = id; this.edition = null; this.rendreListe(); this.rendreFiche(); },
 
+  // ---------- indications rangées par catégories (les notes gardent leur découpage ; la liste à plat sert à la recherche et à la proposition)
+  indicationsEnTexte(c) {
+    const g = c.indications_groupes || [];
+    if (!g.length) return (c.indications || []).join("\n");
+    return g.map(x => (x.titre ? x.titre.toUpperCase() + " :\n" : "") + x.items.join("\n")).join("\n\n");
+  },
+  // texte -> { indications (liste à plat), indications_groupes } ; sans aucun titre, pas de groupes (liste simple)
+  texteEnIndications(t) {
+    const groupes = []; let cur = null, titres = 0;
+    String(t || "").split(/\r?\n/).forEach(brut => {
+      const l = brut.trim();
+      if (!l) { cur = null; return; }
+      const maj = l.length <= 40 && /^[A-ZÀ-ÖØ-ÞŒ][A-ZÀ-ÖØ-ÞŒ0-9 '’\-\/]*$/.test(l);
+      if (/^[^:]{1,60}:$/.test(l) || maj) {
+        let titre = l.replace(/\s*:$/, "").trim();
+        if (titre === titre.toUpperCase()) titre = titre.charAt(0) + titre.slice(1).toLowerCase();
+        cur = { titre, items: [] }; groupes.push(cur); titres++;
+      } else {
+        if (!cur) { cur = { titre: "", items: [] }; groupes.push(cur); }
+        cur.items.push(l.replace(/[,;]+$/, "").trim());
+      }
+    });
+    const pleins = groupes.filter(g => g.items.length);
+    return { indications: pleins.flatMap(g => g.items), indications_groupes: titres ? pleins : [] };
+  },
+  indicationsHtml(c) {
+    const g = c.indications_groupes || [];
+    if (!g.length) return this.ul(c.indications);
+    return g.map(x => `<div class="circ-indic-groupe">${x.titre ? `<h4 class="circ-indic-titre">${escapeHtml(sansHanzi(x.titre))}</h4>` : ""}${this.ul(x.items)}</div>`).join("");
+  },
+
   ul(items) { return items && items.length ? `<ul class="tcm-list">${items.map(x => `<li>${escapeHtml(sansHanzi(x))}</li>`).join("")}</ul>` : ""; },
   section(titre, html) { return html ? `<section><h3>${titre}</h3>${html}</section>` : ""; },
 
@@ -218,7 +249,7 @@ const Circuits = {
       ${this.section("Syndromes du circuit", this.ul((c.syndromes || []).map(s => s.replace(/^syndromes? du /i, "du ").replace(/^du /, "Syndromes du "))))}
       ${this.section("Syndromes de ta base rattachés à ce circuit", lies ? `<div class="circ-synd-liste">${lies}</div>` : `<p class="muted">Aucun pour l'instant : « Modifier cette fiche » permet d'en rattacher.</p>`)}
       ${this.section("Actions / fonctions du circuit", this.ul(c.actions))}
-      ${this.section("Indications", this.ul(c.indications))}
+      ${this.section("Indications", this.indicationsHtml(c))}
       ${this.section("Ajouts possibles", ajouts ? `<ul class="tcm-list">${ajouts}</ul><p class="muted">Dessinés en pointillé sous le circuit.</p>` : "")}
       ${this.section("Associations de points", (c.associations || []).length
         ? `<div class="cat-chip-row circ-assoc-puces">${c.associations.map((a, i) => `<button type="button" class="cat-chip" data-a="${i}">${escapeHtml(sansHanzi(a.tableau))}</button>`).join("")}</div><div id="circ-assoc-detail" class="circ-assoc-detail"></div>`
@@ -360,7 +391,7 @@ const Circuits = {
   modifier(c) {
     this.actif = c.id;
     this.edition = { nouveau: false, nom: c.nom, alias: (c.alias || []).join("\n"), grille: [...c.grille], figure: c.figure, syndromes: (c.syndromes || []).join("\n"),
-                     actions: (c.actions || []).join("\n"), indications: (c.indications || []).join("\n"), ajouts: this.ajoutsEnTexte(c.ajouts),
+                     actions: (c.actions || []).join("\n"), indications: this.indicationsEnTexte(c), ajouts: this.ajoutsEnTexte(c.ajouts),
                      notes: (c.notes || []).join("\n"), syndromes_lies: [...(c.syndromes_lies || [])], niveaux: (c.niveaux || []).join("\n"),
                      associations: (c.associations || []).map(a => ({ tableau: a.tableau, synd: a.synd, note: a.note || "", points: Object.fromEntries(Object.entries(a.points || {}).map(([k, v]) => [k, (v || []).join(", ")])) })),
                      formules: [...(c.formules || [])], formules_note: c.formules_note || "" };
@@ -384,7 +415,7 @@ const Circuits = {
         <div class="circ-apercu" id="ce-apercu"></div>
         <label>Syndromes du circuit (un par ligne)<textarea id="ce-syndromes" rows="3">${escapeHtml(d.syndromes)}</textarea></label>
         <label>Actions / fonctions (une par ligne)<textarea id="ce-actions" rows="5">${escapeHtml(d.actions)}</textarea></label>
-        <label>Indications (une par ligne)<textarea id="ce-indications" rows="4">${escapeHtml(d.indications)}</textarea></label>
+        <label>Indications (une par ligne ; pour les ranger par catégories, écris le titre sur une ligne seule, terminé par « : » ou en majuscules, puis les indications dessous ; une ligne vide referme la catégorie)<textarea id="ce-indications" rows="12">${escapeHtml(d.indications)}</textarea></label>
         <label>Ajouts possibles (un par ligne, « action : texte »)<textarea id="ce-ajouts" rows="2">${escapeHtml(d.ajouts)}</textarea></label>
         <label>Notes (une par ligne)<textarea id="ce-notes" rows="2">${escapeHtml(d.notes)}</textarea></label>
         <fieldset class="circ-assoc-form"><legend>Associations de points (un tableau = une association, à l'intérieur de ce circuit)</legend>
@@ -483,7 +514,7 @@ const Circuits = {
     if (!d.nom.trim()) { statut.textContent = "Le nom du circuit est obligatoire."; return; }
     if (!g.every(Boolean) || new Set(g).size !== 4) { statut.textContent = "Choisis 4 canaux différents."; return; }
     const champs = { nom: d.nom.trim(), alias: this.lignes(d.alias), grille: [...g], figure: +d.figure, syndromes: this.lignes(d.syndromes), actions: this.lignes(d.actions),
-                     indications: this.lignes(d.indications), ajouts: this.texteEnAjouts(d.ajouts, c.ajouts), notes: this.lignes(d.notes), syndromes_lies: [...d.syndromes_lies], niveaux: this.lignes(d.niveaux),
+                     ...this.texteEnIndications(d.indications), ajouts: this.texteEnAjouts(d.ajouts, c.ajouts), notes: this.lignes(d.notes), syndromes_lies: [...d.syndromes_lies], niveaux: this.lignes(d.niveaux),
                      associations: (d.associations || []).map(a => {
                        const nom = dsNorm((a.tableau || "").trim()), e = (Syndromes.entries || []).find(x => dsNorm(x.nom) === nom);
                        const o = { tableau: (a.tableau || "").trim(), points: Object.fromEntries(Object.entries(a.points || {}).map(([k, v]) => [k, String(v).split(/[,;]\s*/).map(x => x.trim()).filter(Boolean)]).filter(([, v]) => v.length)), note: (a.note || "").trim() };
@@ -499,7 +530,7 @@ const Circuits = {
       const i = this.perso.circuits.findIndex(x => x.id === c.id);
       this.perso.circuits[i] = { id: c.id, ...champs };
     } else {
-      const defaut = { alias: [], syndromes: [], actions: [], indications: [], ajouts: [], notes: [], syndromes_lies: [], niveaux: [], associations: [], formules: [], formules_note: "" };
+      const defaut = { alias: [], syndromes: [], actions: [], indications: [], indications_groupes: [], ajouts: [], notes: [], syndromes_lies: [], niveaux: [], associations: [], formules: [], formules_note: "" };
       const diff = {};
       Object.keys(champs).forEach(k => { const ref = c.de_base[k] !== undefined ? c.de_base[k] : defaut[k]; if (JSON.stringify(champs[k]) !== JSON.stringify(ref)) diff[k] = champs[k]; });
       if (Object.keys(diff).length) this.perso.surcharges[c.id] = diff; else delete this.perso.surcharges[c.id];
