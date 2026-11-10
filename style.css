@@ -1157,7 +1157,7 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .circ-sai p { margin: 0.2rem 0 0.2rem 0.8rem; }
 
 /* Onglets de travail (comme dans un navigateur) */
-.onglets-travail { display: flex; gap: 2px; align-items: flex-end; overflow-x: auto; border-bottom: 2px solid var(--ink); margin: 0 0 0.8rem; padding-top: 0.3rem; position: sticky; top: 0; z-index: 40; background: var(--bg); }
+.onglets-travail { display: flex; gap: 2px; align-items: flex-end; overflow-x: auto; border-bottom: 2px solid var(--ink); margin: 0; padding: 0.3rem 0.75rem 0; position: fixed; top: 0; left: 0; right: 0; z-index: 50; background: var(--bg); box-sizing: border-box; }
 .onglets-travail[hidden] { display: none; }
 .onglet-t { display: inline-flex; align-items: center; border: 2px solid var(--ink); border-bottom: 0; background: var(--bg); color: var(--ink); font: inherit; font-size: 0.85rem; padding: 0.3rem 0.2rem 0.3rem 0.6rem; max-width: 18rem; white-space: nowrap; cursor: pointer; flex: none; }
 .onglet-t.actif { background: var(--ink); color: var(--bg); font-weight: 700; }
@@ -1177,14 +1177,14 @@ body.vue-doc .tab-panel { display: none !important; }
 .circ-wjy-citees { margin: 0.4rem 0; font-size: 0.88rem; }
 .circ-wjy-citees summary { cursor: pointer; }
 .circ-wjy-citees details { margin: 0.2rem 0 0.2rem 1rem; }
-body:has(.onglets-travail:not([hidden])) .formules-sidebar { top: 3.4rem; max-height: calc(100vh - 4.4rem); }
+.formules-sidebar { top: calc(var(--haut-onglets, 0px) + 1rem); max-height: calc(100vh - var(--haut-onglets, 0px) - 2rem); }
 .onglet-sync { align-self: center; margin-left: auto; padding: 0 0.4rem; font-size: 0.8rem; opacity: 0.7; cursor: help; flex: none; }
 
 /* Crayon de modification : une pastille flottante en haut à droite de la fiche, accessible quel que soit le défilement */
 .edit-flottante, .barre-flottante { position: sticky; top: 0.6rem; height: 0; z-index: 35; display: flex; justify-content: flex-end; gap: 0.4rem; margin: 0 !important; overflow: visible; pointer-events: none; }
 .edit-flottante > *, .barre-flottante > * { pointer-events: auto; }
 .edit-flottante .edit-toggle-btn, .barre-flottante .edit-toggle-btn { width: 2.6rem; height: 2.6rem; padding: 0; border-radius: 50%; font-size: 1.15rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center; background: var(--bg); box-shadow: 3px 3px 0 var(--ink); text-transform: none; }
-body:has(.onglets-travail:not([hidden])) .edit-flottante, body:has(.onglets-travail:not([hidden])) .barre-flottante { top: 3.4rem; }
+.edit-flottante, .barre-flottante { top: calc(var(--haut-onglets, 0px) + 0.6rem); }
 .edit-flottante + h2, .edit-flottante + * > h2:first-child { padding-right: 3.4rem; }
 .barre-flottante + h2 { padding-right: 6.4rem; }
 

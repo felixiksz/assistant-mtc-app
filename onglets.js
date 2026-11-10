@@ -16,6 +16,7 @@ const Onglets = {
   init() {
     this.barre = document.getElementById("onglets-travail");
     this.vues = document.getElementById("vues-travail");
+    window.addEventListener("resize", () => this.ajusterBarre());
     // un clic sur le menu des modules revient à la vue du module (les onglets restent ouverts)
     document.addEventListener("click", e => { if (e.target.closest(".menu-onglets .tab-btn")) this.voirModule(true); });
     document.addEventListener("click", e => {
@@ -34,14 +35,22 @@ const Onglets = {
     return t;
   },
 
+  // la barre est fixée en haut de l'écran : on décale la page de sa hauteur, et les éléments flottants (crayon, liste latérale) se placent dessous
+  ajusterBarre() {
+    const h = this.barre && !this.barre.hidden ? Math.ceil(this.barre.getBoundingClientRect().height) : 0;
+    document.documentElement.style.setProperty("--haut-onglets", h + "px");
+    document.body.style.paddingTop = h ? h + "px" : "";
+  },
+
   rendreBarre() {
     if (!this.barre) return;
     this.barre.hidden = !this.liste.length;
-    if (!this.liste.length) return;
+    if (!this.liste.length) { this.ajusterBarre(); return; }
     this.barre.innerHTML = `<button type="button" class="onglet-t${this.actif === null ? " actif" : ""}" data-o="" title="Retour à la vue du module">${escapeHtml(this.etiquetteModule())}</button>` +
       this.liste.map(o => `<span class="onglet-t${this.actif === o.id ? " actif" : ""}" data-o="${escapeHtml(o.id)}"><button type="button" class="onglet-nom" data-o="${escapeHtml(o.id)}" title="${escapeHtml(o.titre)}">${escapeHtml(o.genre)} ${escapeHtml(o.titre)}</button><button type="button" class="onglet-x" data-x="${escapeHtml(o.id)}" aria-label="Fermer l'onglet">✕</button></span>`).join("") + (this.enLigne() ? `<span class="onglet-sync" title="Onglets synchronisés avec tes autres appareils (via ton dépôt GitHub)">🔄</span>` : "");
     this.barre.querySelectorAll("[data-o]").forEach(b => b.addEventListener("click", () => { const id = b.dataset.o; if (!id) this.voirModule(); else this.activer(id); }));
     this.barre.querySelectorAll("[data-x]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); this.fermer(b.dataset.x); }));
+    this.ajusterBarre();
   },
 
   memoriserDefilement() { this._y[this.actif === null ? "module" : this.actif] = window.scrollY; },
