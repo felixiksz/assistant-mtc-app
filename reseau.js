@@ -31,6 +31,25 @@ const Reseau = {
     return sigles[k] || k;
   },
 
+  // ---------- ordre d'affichage : par canal (ceux du circuit d'abord, dans l'ordre du schéma), puis par numéro ; les points Tung à la fin, par numéro
+  ORDRE_CANAUX: ["P", "GI", "E", "Rt", "C", "IG", "V", "Rn", "EC", "TF", "VB", "F", "RM", "DM"],
+  numeroDe(point) {
+    const d = String(point).match(/(\d+)\.(\d+)/);                 // numéro Tung : 22.06
+    if (d) return parseFloat(d[1] + "." + d[2].padStart(2, "0"));
+    const n = String(point).match(/(\d+)\s*$/) || String(point).match(/(\d+)/);
+    return n ? parseInt(n[1], 10) : 1e9;
+  },
+  ordonne() {
+    const c = this.etat.circuit && typeof Circuits !== "undefined" ? Circuits.parId(this.etat.circuit) : null;
+    const grille = c ? c.grille : [];
+    const rang = k => { const i = grille.indexOf(k); if (i >= 0) return i; const j = this.ORDRE_CANAUX.indexOf(k); return j >= 0 ? 100 + j : 999; };
+    return [...this.etat.points].sort((a, b) =>
+      (a.tung ? 1 : 0) - (b.tung ? 1 : 0) ||
+      (a.tung ? 0 : rang(a.canal) - rang(b.canal)) ||
+      this.numeroDe(a.point) - this.numeroDe(b.point) ||
+      String(a.point).localeCompare(String(b.point), "fr"));
+  },
+
   // ---------- ajouter / retirer
   ajouter(p) {
     if (this.etat.verrou) { this.ouvrir(); this.avertir("Le réseau est arrêté : déverrouille-le pour ajouter un point."); return; }
@@ -80,7 +99,7 @@ const Reseau = {
     const c = this.etat.circuit && typeof Circuits !== "undefined" ? Circuits.parId(this.etat.circuit) : null;
     const d = new Date().toLocaleDateString("fr-FR");
     const l = ["Réseau — " + (this.etat.patiente || "patiente") + " — " + d + (this.etat.verrou ? " (arrêté)" : ""), c ? "Circuit : " + Circuits.nomCourt(c) + " (" + c.grille.join(", ") + ")" : "Circuit : non choisi", ""];
-    this.etat.points.forEach(p => l.push("• " + p.point + (p.cote ? " (" + p.cote + ")" : "") + (p.raison ? " : " + p.raison : "")));
+    this.ordonne().forEach(p => l.push("• " + p.point + (p.cote ? " (" + p.cote + ")" : "") + (p.raison ? " : " + p.raison : "")));
     return l.join("\n");
   },
 
@@ -88,8 +107,9 @@ const Reseau = {
   schema() {
     const c = this.etat.circuit && typeof Circuits !== "undefined" ? Circuits.parId(this.etat.circuit) : null;
     if (!c) return `<p class="muted">Choisis un circuit pour voir le schéma.</p>`;
-    const pts = {}, horsGrille = {};
-    this.etat.points.forEach(p => {
+    const pts = {}, horsGrille = {}, tung = [];
+    this.ordonne().forEach(p => {
+      if (p.tung) { tung.push(p.point); return; }                       // les points Tung ne s'écrivent pas près des canaux : ils sont listés à la fin
       const k = p.canal;
       if (!k) return;
       if (c.grille.includes(k)) (pts[k] = pts[k] || []).push(p.point.replace(/\s+/g, ""));
@@ -99,7 +119,7 @@ const Reseau = {
     const pseudo = { grille: c.grille, figure: c.figure, ajouts: extras.map(k => ({ canaux: [k], action: "" })) };
     const svg = Circuits.dessin(pseudo, { taille: 230, etiquettes: true, points: pts, ajouts: !!extras.length });
     const hors = Object.entries(horsGrille).map(([k, l]) => `<span class="sx-code">${escapeHtml(k)}</span> ${escapeHtml(l.join(", "))}`).join(" · ");
-    return `<div class="reseau-schema">${svg}</div>` + (hors ? `<p class="muted reseau-hors">Hors des quatre canaux : ${hors}</p>` : "");
+    return `<div class="reseau-schema">${svg}</div>` + (hors ? `<p class="muted reseau-hors">Hors des quatre canaux : ${hors}</p>` : "") + (tung.length ? `<p class="muted reseau-hors">Points Tung : ${escapeHtml(tung.join(" · "))}</p>` : "");
   },
 
   rendre() {
@@ -111,7 +131,7 @@ const Reseau = {
     if (this.fenetre.x != null) { f.style.left = this.fenetre.x + "px"; f.style.top = this.fenetre.y + "px"; f.style.right = "auto"; f.style.bottom = "auto"; }
     const e = this.etat, verrou = e.verrou, dis = verrou ? " disabled" : "";
     const circuits = typeof Circuits !== "undefined" && Circuits.liste ? Circuits.liste : [];
-    const lignes = e.points.map(p => `<li class="reseau-ligne" data-id="${escapeHtml(p.id)}">
+    const lignes = this.ordonne().map(p => `<li class="reseau-ligne" data-id="${escapeHtml(p.id)}">
         <div class="reseau-ligne-tete"><span class="sx-code">${escapeHtml(p.canal || "?")}</span> ${p.tung ? `<strong>${escapeHtml(p.point)}</strong>` : `<a href="#" class="circ-ptlien" data-pt-fiche="${escapeHtml(p.point)}" title="Ouvrir la fiche du point dans un nouvel onglet"><strong>${escapeHtml(p.point)}</strong></a>`}
           <select class="reseau-cote" aria-label="Côté"${dis}>${["", "D", "G", "D + G"].map(v => `<option value="${v}"${p.cote === v ? " selected" : ""}>${v || "côté ?"}</option>`).join("")}</select>
           ${verrou ? "" : `<button type="button" class="reseau-x" data-x="${escapeHtml(p.id)}" title="Retirer du réseau" aria-label="Retirer ${escapeHtml(p.point)} du réseau">✕</button>`}</div>
