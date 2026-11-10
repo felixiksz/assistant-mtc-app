@@ -1224,3 +1224,4 @@ body:has(.onglets-travail:not([hidden])) .edit-flottante, body:has(.onglets-trav
 @media print { .reseau-lanceur, .reseau-fenetre { display: none !important; } }
 .reseau-schema svg { max-width: 100%; height: auto; overflow: visible; }
 .reseau-tung { font-size: 0.85rem; line-height: 1.35; text-align: center; margin: 0.3rem 0; }
+.circ-cat { font-size: 0.8rem; font-style: italic; opacity: 0.85; }

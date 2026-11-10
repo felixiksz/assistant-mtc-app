@@ -407,15 +407,16 @@ const Circuits = {
     P7: ["rèn mài", "yīn qiāo mài (Rn 6)"], Rn6: ["yīn qiāo mài", "rèn mài (P 7)"],
     IG3: ["dū mài", "yáng qiāo mài (V 62)"], V62: ["yáng qiāo mài", "dū mài (IG 3)"],
   },
+  pointBase(p) { return String(p || "").replace(/\s*\(.*$/, "").trim(); },        // « TF 5 (yang WM) » -> « TF 5 »
   ouverture(point) {
-    const k = String(point || "").toUpperCase().replace(/[\s.\-]/g, "").replace(/^SI/, "IG").replace(/^LI/, "GI").replace(/^SP/, "RT").replace(/^UB/, "V").replace(/^BL/, "V").replace(/^KI/, "RN").replace(/^LU/, "P").replace(/^HT/, "C");
+    const k = this.pointBase(point).toUpperCase().replace(/[\s.\-]/g, "").replace(/^SI/, "IG").replace(/^LI/, "GI").replace(/^SP/, "RT").replace(/^UB/, "V").replace(/^BL/, "V").replace(/^KI/, "RN").replace(/^LU/, "P").replace(/^HT/, "C");
     const cle = Object.keys(this.OUVERTURES).find(x => x.toUpperCase() === k);
     return cle ? this.OUVERTURES[cle] : null;
   },
   // nom du point suivi, s'il y a lieu, de « ouvre le … » (couple en infobulle)
   pointHtml(p) {
     const o = this.ouverture(p);
-    return `<a href="#" class="circ-ptlien" data-pt-fiche="${escapeHtml(p)}" title="Ouvrir la fiche du point dans un nouvel onglet">${escapeHtml(p)}</a>` + (o ? ` <span class="circ-ouv" title="Point d'ouverture (confluent) du ${escapeHtml(o[0])} ; couple : ${escapeHtml(o[1])}">ouvre le ${escapeHtml(o[0])}</span>` : "");
+    return `<a href="#" class="circ-ptlien" data-pt-fiche="${escapeHtml(this.pointBase(p))}" title="Ouvrir la fiche du point dans un nouvel onglet">${escapeHtml(p)}</a>` + (o ? ` <span class="circ-ouv" title="Point d'ouverture (confluent) du ${escapeHtml(o[0])} ; couple : ${escapeHtml(o[1])}">ouvre le ${escapeHtml(o[0])}</span>` : "");
   },
 
   // ---------- points par canal : une liste par canal (la même dans tous les circuits qui contiennent ce canal), avec l'action de chaque point
@@ -432,7 +433,7 @@ const Circuits = {
     const supp = [...new Set((c.ajouts || []).flatMap(a => a.canaux || []))].filter(k => !c.grille.includes(k));
     z.innerHTML = [...c.grille, ...supp].map(code => {
       const k = this.canaux.get(code) || {}, l = this.ptsDe(code), ajout = !c.grille.includes(code);
-      const li = l.map(x => `<li><button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: code, raison: x.action || "", source: "points du canal " + code, circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ${escapeHtml(x.point)} pour le réseau de la patiente">✓</button> <strong>${this.pointHtml(x.point)}</strong>${x.action ? " " + escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}</li>`).join("");
+      const li = l.map(x => `<li><button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: code, raison: x.action || "", source: "points du canal " + code, circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ${escapeHtml(x.point)} pour le réseau de la patiente">✓</button> <strong>${this.pointHtml(x.point)}</strong>${x.categorie ? ` <span class="circ-cat">${escapeHtml(x.categorie)}</span>` : ""}${x.action ? " " + escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}</li>`).join("");
       return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
         `<span class="circ-pts-btns"><button type="button" class="edit-toggle-btn" data-act="edit">✏️ Modifier</button> <button type="button" class="edit-toggle-btn" data-act="prop">💡 Proposer</button></span></div>` +
         (li ? `<ul class="circ-pts-liste">${li}</ul>` : `<p class="muted">Aucun point pour l'instant.</p>`) + `<div class="circ-pts-zone"></div></div>`;
@@ -444,6 +445,21 @@ const Circuits = {
       if (ouvert[code]) this.proposerPoints(c, code, zone, true);
     });
     this.marquerSaignees(z);
+    this.marquerCategories(z);
+  },
+  // catégorie des points de la liste qui n'en ont pas encore (ajoutés avant, ou saisis à la main) : lue dans ta base de points
+  async marquerCategories(z) {
+    for (const carte of z.querySelectorAll(".circ-pts-carte")) {
+      for (const li of carte.querySelectorAll(".circ-pts-liste li")) {
+        if (li.querySelector(".circ-cat")) continue;
+        const st = li.querySelector("strong"), nom = this.cleP(this.pointBase(st.innerText));
+        const pref = (nom.match(/^[A-Z]+/) || [""])[0], fichier = { RT: "Rt", RN: "Rn" }[pref] || pref;
+        const db = await this.dbCanal(fichier);
+        const p = db.find(x => this.cleP(x.point) === nom);
+        const cats = p ? this.categoriesDe(p) : [];
+        if (cats.length && !li.querySelector(".circ-cat")) st.insertAdjacentHTML("afterend", ` <span class="circ-cat">${escapeHtml(cats.join(" ; "))}</span>`);
+      }
+    }
   },
   editerPoints(c, code, carte, zone) {
     const l = this.ptsDe(code);
@@ -540,7 +556,7 @@ const Circuits = {
       b.disabled = true;                                                     // pas de double clic
       const x = l[+b.dataset.i];
       if (this.ptsDe(code).some(y => this.cleP(y.point) === this.cleP(x.point))) { this.rendrePoints(c); return; }      // déjà dans la liste
-      (this.points.canaux[code] = this.points.canaux[code] || []).push({ point: x.point, action: x.action, statut: x.repli ? "propose" : "base" });
+      (this.points.canaux[code] = this.points.canaux[code] || []).push({ point: x.point, action: x.action, categorie: x.categorie || "", statut: x.repli ? "propose" : "base" });
       try { await this.ecrirePoints(); } catch (e) { alert("Enregistrement impossible : " + e.message); return; }
       this.rendrePoints(c);
     }));
