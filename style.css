@@ -1226,3 +1226,16 @@ body:has(.onglets-travail:not([hidden])) .edit-flottante, body:has(.onglets-trav
 .reseau-tung { font-size: 0.85rem; line-height: 1.35; text-align: center; margin: 0.3rem 0; }
 .circ-cat { font-size: 0.8rem; font-style: italic; opacity: 0.85; }
 .circ-croise { font-weight: 600; opacity: 0.9; }
+
+/* Points d'un canal : nomenclature et catégorie d'abord, actions au survol (ordinateur) ou avec ⓘ / « Actions » (téléphone, tablette) */
+.circ-pts-liste li, .circ-pts-prop li { position: relative; }
+.circ-act { display: none; font-size: 0.88rem; }
+.circ-info { font: inherit; font-size: 0.78rem; font-weight: 700; width: 1.45rem; height: 1.45rem; padding: 0; line-height: 1; border: 1px solid var(--ink); border-radius: 50%; background: var(--bg); color: var(--ink); cursor: pointer; vertical-align: middle; }
+.circ-info:hover, .circ-info[aria-expanded="true"] { background: var(--ink); color: var(--bg); }
+@media (hover: hover) {
+  .circ-pts-liste li:hover > .circ-act, .circ-pts-prop li:hover > .circ-act { display: block; position: absolute; left: 2.4rem; top: 100%; z-index: 45; max-width: min(30rem, 88vw); background: var(--bg); border: 2px solid var(--ink); padding: 0.4rem 0.6rem; box-shadow: 4px 4px 0 var(--ink); }
+}
+.circ-pts-liste li.act-ouvert > .circ-act, .circ-pts-prop li.act-ouvert > .circ-act,
+.actions-visibles .circ-pts-liste li > .circ-act, .actions-visibles .circ-pts-prop li > .circ-act, .actions-visibles.circ-pts-zone .circ-pts-prop li > .circ-act {
+  display: block !important; position: static !important; margin: 0.1rem 0 0.25rem 2.4rem; border: 0 !important; padding: 0 !important; box-shadow: none !important; background: none !important; max-width: none !important; }
+.circ-act:empty { display: none !important; }

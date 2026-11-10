@@ -469,6 +469,12 @@ const Circuits = {
     const m = String(l).match(/^\s*([^:：]{1,14}?)\s*[:：]\s*(.*)$/);
     return m ? { point: m[1].trim(), action: m[2].trim() } : { point: String(l).trim(), action: "" };
   },
+  // préférence « actions affichées » par canal (mémorisée dans ce navigateur)
+  actionsVisibles() { try { return JSON.parse(localStorage.getItem("circ_actions_visibles") || "{}") || {}; } catch (e) { return {}; } },
+  // ⓘ : affiche ou masque les actions d'un seul point (utile au toucher, où il n'y a pas de survol)
+  brancherInfos(racine) {
+    racine.querySelectorAll(".circ-info").forEach(b => { if (b.dataset.branche) return; b.dataset.branche = "1"; b.addEventListener("click", ev => { ev.stopPropagation(); const li = b.closest("li"), o = li.classList.toggle("act-ouvert"); b.setAttribute("aria-expanded", String(o)); }); });
+  },
   rendrePoints(c) {
     const z = document.getElementById("circ-pts");
     if (!z) return;
@@ -476,15 +482,21 @@ const Circuits = {
     const supp = [...new Set((c.ajouts || []).flatMap(a => a.canaux || []))].filter(k => !c.grille.includes(k));
     z.innerHTML = [...c.grille, ...supp].map(code => {
       const k = this.canaux.get(code) || {}, l = this.ptsDe(code), ajout = !c.grille.includes(code);
-      const li = l.map(x => `<li><button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: code, raison: x.action || "", source: "points du canal " + code, circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ${escapeHtml(x.point)} pour le réseau de la patiente">✓</button> <strong>${this.pointHtml(x.point)}</strong>${x.categorie ? ` <span class="circ-cat">${escapeHtml(x.categorie)}</span>` : ""}${x.action ? " " + escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}</li>`).join("");
-      return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
-        `<span class="circ-pts-btns"><button type="button" class="edit-toggle-btn" data-act="edit">✏️ Modifier</button> <button type="button" class="edit-toggle-btn" data-act="prop">💡 Proposer</button></span></div>` +
+      const li = l.map(x => `<li><button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: code, raison: x.action || "", source: "points du canal " + code, circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ${escapeHtml(x.point)} pour le réseau de la patiente">✓</button> <strong>${this.pointHtml(x.point)}</strong>${x.categorie ? ` <span class="circ-cat">${escapeHtml(x.categorie)}</span>` : ""}${x.action || x.statut === "base" ? ` <button type="button" class="circ-info" aria-expanded="false" title="Afficher ou masquer les actions de ce point" aria-label="Afficher ou masquer les actions de ce point">ⓘ</button>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}<span class="circ-act">${x.action ? escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}</span></li>`).join("");
+      return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}${this.actionsVisibles()[code] ? " actions-visibles" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
+        `<span class="circ-pts-btns"><button type="button" class="edit-toggle-btn" data-act="actions" title="Afficher ou masquer les actions de tous les points de ce canal">👁 Actions</button> <button type="button" class="edit-toggle-btn" data-act="edit">✏️ Modifier</button> <button type="button" class="edit-toggle-btn" data-act="prop">💡 Proposer</button></span></div>` +
         (li ? `<ul class="circ-pts-liste">${li}</ul>` : `<p class="muted">Aucun point pour l'instant.</p>`) + `<div class="circ-pts-zone"></div></div>`;
     }).join("");
     z.querySelectorAll(".circ-pts-carte").forEach(carte => {
       const code = carte.dataset.k, zone = carte.querySelector(".circ-pts-zone");
       carte.querySelector('[data-act="edit"]').addEventListener("click", () => this.editerPoints(c, code, carte, zone));
       carte.querySelector('[data-act="prop"]').addEventListener("click", () => this.proposerPoints(c, code, zone));
+      carte.querySelector('[data-act="actions"]').addEventListener("click", () => {
+        const v = this.actionsVisibles(), on = carte.classList.toggle("actions-visibles");
+        v[code] = on; try { localStorage.setItem("circ_actions_visibles", JSON.stringify(v)); } catch (e) { /* stockage indisponible */ }
+        carte.querySelectorAll(".circ-info").forEach(b => b.setAttribute("aria-expanded", String(on)));
+      });
+      this.brancherInfos(carte);
       if (ouvert[code]) this.proposerPoints(c, code, zone, true);
     });
     this.marquerSaignees(z);
@@ -616,9 +628,11 @@ const Circuits = {
     const l = tous.filter(x => !deja.has(this.cleP(x.point)));
     const repli = tous.some(x => x.repli);
     zone.innerHTML = `<p class="muted circ-pts-avert">${repli ? "Base de points indisponible : propositions par catégorie classique, actions à valider (elles ne viennent pas de tes cours)." : "Points tirés de ta base de points (Points des canaux) : cinq points shu, yuán, luò, xī, hé… et points ayant des indications en saignée. Actions reprises de la base."}</p>` +
-      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${this.pointHtml(x.point)}</strong> <span class="muted">${escapeHtml(x.categorie || "")}</span>${x.action ? " — " + escapeHtml(sansHanzi(x.action)) : ""} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button> <button type="button" class="edit-toggle-btn" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: code, raison: x.action || "", source: "proposition", circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente">✓ Réseau</button>` +
+      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${this.pointHtml(x.point)}</strong> <span class="muted">${escapeHtml(x.categorie || "")}</span>${x.action ? ` <button type="button" class="circ-info" aria-expanded="false" title="Afficher ou masquer les actions de ce point" aria-label="Afficher ou masquer les actions de ce point">ⓘ</button>` : ""} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button> <button type="button" class="edit-toggle-btn" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: code, raison: x.action || "", source: "proposition", circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente">✓ Réseau</button>${x.action ? ` <span class="circ-act">${escapeHtml(sansHanzi(x.action))}</span>` : ""}` +
         (x.saignee.length ? `<details class="circ-sai"><summary>🩸 saignée</summary>${x.saignee.map(s => `<p>${escapeHtml(sansHanzi(s.texte)).slice(0, 400)} <span class="muted">(${escapeHtml(s.lib)})</span></p>`).join("")}</details>` : "") + `</li>`).join("")}</ul>` : `<p class="muted">Rien à proposer de plus pour ce canal.</p>`);
     this.annoterCroisements(zone);
+    this.brancherInfos(zone);
+    if (this.actionsVisibles()[code]) zone.classList.add("actions-visibles");
     zone.querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", async () => {
       b.disabled = true;                                                     // pas de double clic
       const x = l[+b.dataset.i];
