@@ -218,6 +218,7 @@ const Tung = {
   htmlCanaux(f) {
     const c = f.canaux || {}, l = c.codes || [];
     if (!l.length) return `<p class="muted tung-canal">Canal : non renseigné — « ${f.origine === "perso" ? "Modifier" : "Compléter"} cette fiche » permet de le choisir.</p>`;
+    if (c.collectif) return `<p class="tung-canal"><strong>Canal :</strong> ${l.map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")} <span class="muted">(les six fu ensemble — ${c.statut === "toi" ? "précision donnée par toi" : "d'après la source"})</span></p>`;
     const st = c.statut === "deduit" ? "déduit, à valider" : c.statut === "toi" ? "choisi par toi" : "d'après la source";
     return `<p class="tung-canal"><strong>Canal :</strong> ${l.map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")} <span class="muted">(${st}${c.source ? " — " + escapeHtml(c.source) : ""})</span></p>`;
   },
@@ -225,13 +226,14 @@ const Tung = {
   // points Tung compatibles avec un circuit : tous leurs canaux sont dans le circuit (le réseau reste équilibré) ; « avec ajout » si un canal d'ajout possible est nécessaire
   compatibles(grille, ajouts) {
     const g = new Set(grille), a = new Set((ajouts || []).flat());
-    const ok = [], avec = [];
+    const ok = [], avec = [], collectifs = [];
     (this.liste || []).forEach(f => {
       const l = (f.canaux || {}).codes || [];
       if (!l.length) return;
+      if (f.canaux.collectif) { if (l.some(k => g.has(k))) collectifs.push(f); return; }
       if (l.every(k => g.has(k))) ok.push(f); else if (l.every(k => g.has(k) || a.has(k))) avec.push(f);
     });
-    return { ok, avec };
+    return { ok, avec, collectifs };
   },
 
   cellule(c) { return !c ? "" : typeof c === "string" ? escapeHtml(c) : `<button type="button" class="tung-lien" data-tung-fiche="${escapeHtml(c.id)}">${escapeHtml(c.t)}</button>`; },

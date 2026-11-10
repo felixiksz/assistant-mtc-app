@@ -233,7 +233,8 @@ const Circuits = {
     const r = Tung.compatibles(c.grille, (c.ajouts || []).map(a => a.canaux || []));
     const bt = f => `<li class="circ-tung-ligne"><button type="button" class="edit-toggle-btn" data-tung-fiche="${escapeHtml(f.id)}" title="${escapeHtml(Tung.localisation(f) || "Localisation non précisée dans les sources")}">${escapeHtml(f.nom)}${(f.numeros || []).length ? " " + escapeHtml(f.numeros.join("/")) : ""} <span class="muted">${f.canaux.codes.join("+")}</span></button> <span class="circ-tung-action">${escapeHtml(Tung.action(f))}</span></li>`;
     el.innerHTML = (r.ok.length ? `<p class="muted">Leurs canaux sont déjà dans le circuit : ils s'y ajoutent sans le déséquilibrer. Survole un nom pour voir la localisation.</p><ul class="circ-tung-liste">${r.ok.map(bt).join("")}</ul>` : `<p class="muted">Aucun point Tung dont le canal soit dans ce circuit pour l'instant (les canaux se renseignent dans l'onglet Points Tung).</p>`) +
-      (r.avec.length ? `<p class="muted">Avec un des ajouts possibles du circuit :</p><ul class="circ-tung-liste">${r.avec.map(bt).join("")}</ul>` : "");
+      (r.avec.length ? `<p class="muted">Avec un des ajouts possibles du circuit :</p><ul class="circ-tung-liste">${r.avec.map(bt).join("")}</ul>` : "") +
+      (r.collectifs.length ? `<p class="muted">Points qui agissent sur un ensemble de canaux à la fois (ici, les six fu) : à juger selon l'équilibre voulu, car ils touchent aussi les canaux absents du circuit.</p><div class="circ-synd-liste">${r.collectifs.map(f => `<button type="button" class="edit-toggle-btn" data-tung-fiche="${escapeHtml(f.id)}" title="${escapeHtml(Tung.localisation(f) || "Voir la fiche et le schéma")}">${escapeHtml(f.nom)}${(f.numeros || []).length ? " " + escapeHtml(f.numeros.join("/")) : ""}</button>`).join(" ")}</div>` : "");
   },
 
   // graphe de comparaison (même principe que l'arbre des modifications d'une formule) : à gauche les tableaux et les ajouts,
