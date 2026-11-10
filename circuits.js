@@ -432,7 +432,7 @@ const Circuits = {
     const supp = [...new Set((c.ajouts || []).flatMap(a => a.canaux || []))].filter(k => !c.grille.includes(k));
     z.innerHTML = [...c.grille, ...supp].map(code => {
       const k = this.canaux.get(code) || {}, l = this.ptsDe(code), ajout = !c.grille.includes(code);
-      const li = l.map(x => `<li><button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: code, raison: x.action || "", source: "points du canal " + code, circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ${escapeHtml(x.point)} pour le réseau de la patiente">✓</button> <button type="button" class="circ-pt-assoc" data-pt="${escapeHtml(x.point)}" title="Ajouter ce point à une association de points du circuit">⊕</button> <strong>${this.pointHtml(x.point)}</strong>${x.action ? " " + escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}</li>`).join("");
+      const li = l.map(x => `<li><button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: code, raison: x.action || "", source: "points du canal " + code, circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ${escapeHtml(x.point)} pour le réseau de la patiente">✓</button> <strong>${this.pointHtml(x.point)}</strong>${x.action ? " " + escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}</li>`).join("");
       return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
         `<span class="circ-pts-btns"><button type="button" class="edit-toggle-btn" data-act="edit">✏️ Modifier</button> <button type="button" class="edit-toggle-btn" data-act="prop">💡 Proposer</button></span></div>` +
         (li ? `<ul class="circ-pts-liste">${li}</ul>` : `<p class="muted">Aucun point pour l'instant.</p>`) + `<div class="circ-pts-zone"></div></div>`;
@@ -441,7 +441,6 @@ const Circuits = {
       const code = carte.dataset.k, zone = carte.querySelector(".circ-pts-zone");
       carte.querySelector('[data-act="edit"]').addEventListener("click", () => this.editerPoints(c, code, carte, zone));
       carte.querySelector('[data-act="prop"]').addEventListener("click", () => this.proposerPoints(c, code, zone));
-      carte.querySelectorAll(".circ-pt-assoc").forEach(b => b.addEventListener("click", () => this.menuAssoc(c, code, b.dataset.pt, b)));
       if (ouvert[code]) this.proposerPoints(c, code, zone, true);
     });
     this.marquerSaignees(z);
