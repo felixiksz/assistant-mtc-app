@@ -3869,10 +3869,7 @@ const Points = {
     document.getElementById("pts-count").textContent = list.length + " point(s)" + (list.length > 300 ? " (300 affichés, affine ta recherche)" : "");
   },
 
-  showDetail(entry, liEl) {
-    this.lastShown = entry;
-    document.querySelectorAll("#pts-list li").forEach(li => li.classList.remove("selected"));
-    if (liEl) liEl.classList.add("selected");
+  htmlDetail(entry) {
     const d = entry.data;
     const imgs = (d.images || []).map(img => `<img src="${LocalImages.urlFor(img) || "data/reference/points_canaux/images/" + img}" alt="${escapeHtml(entry.id)}" style="max-width:280px;border:2px solid var(--ink);margin:0 0.5rem 0.5rem 0;">`).join("");
     const indications = (d.indications || []).length
@@ -3894,7 +3891,7 @@ const Points = {
       : (d.associations ? `<div class="tcm-text">${formatTcmText(d.associations)}</div>` : "");
     const correspondances = (d.correspondances || []).length
       ? `<ul class="tcm-list">${d.correspondances.map(c => `<li>${tcmHighlightInline(escapeHtml(c))}</li>`).join("")}</ul>` : "";
-    document.getElementById("pts-detail").innerHTML = `
+    return `
       <h2>${escapeHtml(entry.id)} <span class="hanzi">${escapeHtml(d.hanzi || "")}</span></h2>
       <p class="muted">${escapeHtml(d.pinyin || "")}${d.nom_fr ? " — " + escapeHtml(d.nom_fr) : ""} · ${escapeHtml(entry.canalNom)}${d.canal_indicatif ? " (canal indicatif : " + escapeHtml(d.canal_indicatif) + ")" : ""}</p>
       ${imgs ? `<section><h3>Localisation (images)</h3>${imgs}</section>` : ""}
@@ -3911,6 +3908,14 @@ const Points = {
       ${d.note ? `<section><h3>Note</h3><div class="tcm-text">${formatTcmText(d.note)}</div></section>` : ""}
       <p class="muted">Source : base Jeu (Points des canaux.xlsx) + images localisation.jpg (Bibliothèque MTC)</p>
     `;
+  },
+
+  showDetail(entry, liEl) {
+    this.lastShown = entry;
+    const d = entry.data;
+    document.querySelectorAll("#pts-list li").forEach(li => li.classList.remove("selected"));
+    if (liEl) liEl.classList.add("selected");
+    document.getElementById("pts-detail").innerHTML = this.htmlDetail(entry);
     addEditControls(document.getElementById("pts-detail"), "reference/points_canaux/" + entry.canal + ".json", d, { arrayItem: true, matchField: "point", matchValue: entry.id, editorFn: openPointEditor });
   }
 };

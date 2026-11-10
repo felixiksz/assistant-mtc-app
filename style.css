@@ -1155,3 +1155,17 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .circ-sai { margin: 0.2rem 0; font-size: 0.82rem; display: block; }
 .circ-sai summary { cursor: pointer; font-weight: 700; }
 .circ-sai p { margin: 0.2rem 0 0.2rem 0.8rem; }
+
+/* Onglets de travail (comme dans un navigateur) */
+.onglets-travail { display: flex; gap: 2px; align-items: flex-end; overflow-x: auto; border-bottom: 2px solid var(--ink); margin: 0 0 0.8rem; padding-top: 0.2rem; }
+.onglet-t { display: inline-flex; align-items: center; border: 2px solid var(--ink); border-bottom: 0; background: var(--bg); color: var(--ink); font: inherit; font-size: 0.85rem; padding: 0.3rem 0.2rem 0.3rem 0.6rem; max-width: 18rem; white-space: nowrap; cursor: pointer; flex: none; }
+.onglet-t.actif { background: var(--ink); color: var(--bg); font-weight: 700; }
+.onglet-t > button, button.onglet-t { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+.onglet-nom { overflow: hidden; text-overflow: ellipsis; max-width: 15rem; text-align: left; }
+.onglet-x { margin-left: 0.4rem; padding: 0 0.35rem !important; opacity: 0.8; }
+.onglet-x:hover { opacity: 1; }
+button.onglet-t { padding: 0.3rem 0.6rem; }
+body.vue-doc .tab-panel { display: none !important; }
+.vue-travail[hidden] { display: none; }
+.circ-ptlien { color: inherit; text-decoration: none; border-bottom: 2px solid var(--accent); cursor: pointer; }
+.circ-ptlien:hover { background: var(--ink); color: var(--bg); }

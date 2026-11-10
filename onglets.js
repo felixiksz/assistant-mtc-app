@@ -1,0 +1,145 @@
+"use strict";
+
+/* ============================= Onglets de travail =============================
+   Comme dans un navigateur : ouvrir un syndrome, un point, une formule ou un point Tung depuis un circuit (ou ailleurs) l'ouvre dans un NOUVEL onglet,
+   au même niveau que la vue d'où l'on vient, qui reste intacte (circuit, position de défilement, brouillon en cours).
+   Le premier onglet est toujours la vue du module en cours ; les onglets ouverts restent quand on change de module et se ferment avec ✕.
+   Les fiches ouvertes ici sont en lecture seule (la modification se fait dans leur module).
+   Dépend de app.js : Store, escapeHtml, Syndromes, Points, Formules, SubstanceNature, Sinolux, Animaux, ProchesFormules ; de tung.js : Tung ; de circuits.js : Circuits. */
+
+const Onglets = {
+  liste: [],        // { id, titre, genre, zone, charge }
+  actif: null,      // null = vue du module ; sinon id d'un onglet de travail
+  _y: {},           // position de défilement mémorisée par vue
+
+  init() {
+    this.barre = document.getElementById("onglets-travail");
+    this.vues = document.getElementById("vues-travail");
+    // un clic sur le menu des modules revient à la vue du module (les onglets restent ouverts)
+    document.addEventListener("click", e => { if (e.target.closest(".menu-onglets .tab-btn")) this.voirModule(true); });
+    document.addEventListener("click", e => {
+      const p = e.target.closest("[data-pt-fiche]");
+      if (p) { e.preventDefault(); this.ouvrirPoint(p.dataset.ptFiche); }
+    });
+  },
+
+  // nom de la vue du module (premier onglet)
+  etiquetteModule() {
+    let t = (document.getElementById("menu-courant") || {}).textContent || "Module";
+    if (typeof Circuits !== "undefined" && document.getElementById("tab-circuits").classList.contains("active") && Circuits.actif) {
+      const c = Circuits.parId(Circuits.actif);
+      if (c) t += " — " + Circuits.nomCourt(c);
+    }
+    return t;
+  },
+
+  rendreBarre() {
+    if (!this.barre) return;
+    this.barre.hidden = !this.liste.length;
+    if (!this.liste.length) return;
+    this.barre.innerHTML = `<button type="button" class="onglet-t${this.actif === null ? " actif" : ""}" data-o="" title="Retour à la vue du module">${escapeHtml(this.etiquetteModule())}</button>` +
+      this.liste.map(o => `<span class="onglet-t${this.actif === o.id ? " actif" : ""}" data-o="${escapeHtml(o.id)}"><button type="button" class="onglet-nom" data-o="${escapeHtml(o.id)}" title="${escapeHtml(o.titre)}">${escapeHtml(o.genre)} ${escapeHtml(o.titre)}</button><button type="button" class="onglet-x" data-x="${escapeHtml(o.id)}" aria-label="Fermer l'onglet">✕</button></span>`).join("");
+    this.barre.querySelectorAll("[data-o]").forEach(b => b.addEventListener("click", () => { const id = b.dataset.o; if (!id) this.voirModule(); else this.activer(id); }));
+    this.barre.querySelectorAll("[data-x]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); this.fermer(b.dataset.x); }));
+  },
+
+  memoriserDefilement() { this._y[this.actif === null ? "module" : this.actif] = window.scrollY; },
+
+  voirModule(sansBarre) {
+    if (this.actif !== null) this.memoriserDefilement();
+    this.actif = null;
+    document.body.classList.remove("vue-doc");
+    if (this.vues) { this.vues.hidden = true; this.vues.querySelectorAll(".vue-travail").forEach(z => { z.hidden = true; }); }
+    this.rendreBarre();
+    if (!sansBarre) window.scrollTo(0, this._y.module || 0);
+  },
+
+  activer(id) {
+    const o = this.liste.find(x => x.id === id);
+    if (!o) return;
+    this.memoriserDefilement();
+    this.actif = id;
+    document.body.classList.add("vue-doc");
+    this.vues.hidden = false;
+    this.vues.querySelectorAll(".vue-travail").forEach(z => { z.hidden = z !== o.zone; });
+    this.rendreBarre();
+    window.scrollTo(0, this._y[id] || 0);
+  },
+
+  fermer(id) {
+    const i = this.liste.findIndex(x => x.id === id);
+    if (i < 0) return;
+    this.liste[i].zone.remove();
+    this.liste.splice(i, 1);
+    delete this._y[id];
+    if (this.actif === id) {
+      const voisin = this.liste[i] || this.liste[i - 1];
+      if (voisin) this.activer(voisin.id); else this.voirModule();
+    } else this.rendreBarre();
+  },
+
+  // ouvre (ou réactive) un onglet ; charge(zone) remplit la zone, en lecture seule
+  async ouvrir(id, titre, genre, charge) {
+    const deja = this.liste.find(x => x.id === id);
+    if (deja) { this.activer(id); return; }
+    const zone = document.createElement("article");
+    zone.className = "vue-travail formule-detail";
+    zone.innerHTML = `<p class="muted">Chargement…</p>`;
+    this.vues.appendChild(zone);
+    const o = { id, titre, genre, zone, charge };
+    this.liste.push(o);
+    this.activer(id);
+    try { await charge(zone); } catch (e) { zone.innerHTML = `<p class="muted">Impossible d'afficher cette fiche (${escapeHtml(e.message)}).</p>`; }
+  },
+
+  // ---------- les différents types de fiches
+  ouvrirSyndrome(entry) {
+    return this.ouvrir("synd:" + entry.domaine + "/" + entry.chemin, entry.nom, "🩺", async zone => {
+      const d = await Store.readJSON(`syndromes/${entry.domaine}/${entry.chemin}`);
+      zone.innerHTML = Syndromes.renderSyndrome(d, entry.domaine);
+    });
+  },
+
+  ouvrirPoint(texte) {
+    const cle = String(texte || "").toUpperCase().replace(/[\s.\-]/g, "");
+    const norm = k => String(k).toUpperCase().replace(/[\s.\-]/g, "");
+    const alias = { SI: "IG", LI: "GI", SP: "RT", UB: "V", BL: "V", KI: "RN", LU: "P", HT: "C", ST: "E", GB: "VB", LR: "F", LV: "F", CV: "RM", GV: "DM", PC: "EC", SJ: "TF" };
+    const m = cle.match(/^([A-Z]+)(\d+)$/);
+    const cherche = m ? (alias[m[1]] || m[1]) + m[2] : cle;
+    const entry = (Points.entries || []).find(e => norm(e.id) === cherche);
+    if (!entry) { alert("Point " + texte + " : pas de fiche dans ta base de points."); return; }
+    return this.ouvrir("pt:" + norm(entry.id), entry.id + (entry.data.pinyin ? " " + entry.data.pinyin : ""), "📍", async zone => {
+      zone.innerHTML = Points.htmlDetail(entry);
+      Store.hydrateImages(zone);
+    });
+  },
+
+  ouvrirTung(id) {
+    return this.ouvrir("tung:" + id, (Tung.parId(id) || {}).nom || id, "☯", async zone => {
+      await Tung.ensureLoaded();
+      Tung.rendreFicheDans(zone, id);
+      Store.hydrateImages(zone);
+    });
+  },
+
+  ouvrirFormule(id) {
+    const f = Formules.byId.get(id), v = Formules.varParId.get(id);
+    if (!f && !v) return;
+    const nom = f ? (f.pinyin || f.nom || id) : v.nom;
+    return this.ouvrir("form:" + id, nom, "🌿", async zone => {
+      await SubstanceNature.ensureLoaded(); await Sinolux.ensureLoaded(); await Animaux.ensureLoaded();
+      if (f) {
+        const d = await Store.readJSON("formules/" + f.chemin);
+        zone.innerHTML = Formules.renderFormule(d);
+        Store.hydrateImages(zone);
+        ProchesFormules.remplir(zone, d);
+      } else {
+        const parent = Formules.byId.get(v.parent), fp = await Store.readJSON("formules/" + parent.chemin);
+        zone.innerHTML = Formules.renderVariation(v, parent, fp);
+        zone.querySelectorAll("[data-parent]").forEach(b => b.addEventListener("click", () => this.ouvrirFormule(parent.id)));
+      }
+    });
+  }
+};
+
+Onglets.init();

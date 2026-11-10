@@ -74,13 +74,7 @@ const Tung = {
     document.addEventListener("click", async e => {
       const b = e.target.closest("[data-tung-fiche]");
       if (b && b.closest("#tab-tung")) this.afficher(b.dataset.tungFiche, "fiches");
-      else if (b) {
-        const retour = typeof Circuits !== "undefined" && b.closest("#tab-circuits") ? Circuits.actif : null;
-        document.querySelector('.tab-btn[data-tab="tung"]').click();
-        await this.ouvert();
-        this.afficher(b.dataset.tungFiche, "fiches");
-        if (retour) Circuits.ajouterRetour(document.getElementById("tung-detail"), retour);
-      }
+      else if (b) { if (typeof Onglets !== "undefined") Onglets.ouvrirTung(b.dataset.tungFiche); }
     });
   },
 
@@ -192,7 +186,7 @@ const Tung = {
     return `<div class="tung-champ"><h4>${escapeHtml(c.k)}</h4>${v.length > 1 ? this.ul(v) : `<p>${escapeHtml(v[0])}</p>`}</div>`;
   },
 
-  rendreFiche(z) {
+  rendreFiche(z, lecture) {
     const f = this.parId(this.actif);
     if (!f) { z.innerHTML = ""; return; }
     const membres = (f.membres || []).map(m => { const t = Array.isArray(m) ? m[0] : m, id = Array.isArray(m) ? m[1] : null; return id ? `<button type="button" class="cat-chip" data-tung-fiche="${escapeHtml(id)}">${escapeHtml(t)}</button>` : `<span class="cat-chip tung-membre">${escapeHtml(t)}</span>`; }).join("");
@@ -220,9 +214,13 @@ const Tung = {
       ${casHtml ? `<section><h3>Cas cliniques du livre de Tan</h3><p class="muted">Résumés traduits en français, pas le texte du livre.</p>${casHtml}</section>` : ""}
       ${(f.a_verifier || []).length ? `<section><h3>À vérifier</h3>${this.ul(f.a_verifier)}</section>` : ""}`;
     z.querySelectorAll("[data-tung-proto]").forEach(b => b.addEventListener("click", () => this.afficher(b.dataset.tungProto, "protocoles")));
-    document.getElementById("tung-edit").addEventListener("click", () => this.modifier(f));
-    const s = document.getElementById("tung-suppr"); if (s) s.addEventListener("click", () => this.supprimer(f));
-    const r = document.getElementById("tung-retablir"); if (r) r.addEventListener("click", () => this.retablir(f));
+    if (lecture) {
+      z.querySelectorAll(".circ-barre, [data-tung-proto]").forEach(x => { const sec = x.closest("section"); (sec || x).remove(); });
+      return;
+    }
+    z.querySelector("#tung-edit").addEventListener("click", () => this.modifier(f));
+    const s = z.querySelector("#tung-suppr"); if (s) s.addEventListener("click", () => this.supprimer(f));
+    const r = z.querySelector("#tung-retablir"); if (r) r.addEventListener("click", () => this.retablir(f));
   },
 
   // texte d'une rubrique (première source qui la donne)
@@ -252,6 +250,13 @@ const Tung = {
       if (l.every(k => g.has(k))) ok.push(f); else if (l.every(k => g.has(k) || a.has(k))) avec.push(f);
     });
     return { ok, avec, collectifs };
+  },
+
+  // fiche en lecture seule dans une zone à part (onglet de travail)
+  rendreFicheDans(zone, id) {
+    const sauve = this.actif;
+    this.actif = id;
+    try { this.rendreFiche(zone, true); } finally { this.actif = sauve; }
   },
 
   cellule(c) { return !c ? "" : typeof c === "string" ? escapeHtml(c) : `<button type="button" class="tung-lien" data-tung-fiche="${escapeHtml(c.id)}">${escapeHtml(c.t)}</button>`; },

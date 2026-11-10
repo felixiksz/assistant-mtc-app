@@ -146,12 +146,7 @@ const Circuits = {
     b.addEventListener("click", () => this.ouvrirCircuit(id));
     zone.prepend(b);
   },
-  async ouvrirSyndrome(e) {
-    const retour = this.actif;
-    document.querySelector('.tab-btn[data-tab="syndromes"]').click();
-    await Syndromes.showDetail(e);
-    this.ajouterRetour(document.getElementById("syn-detail"), retour);
-  },
+  ouvrirSyndrome(e) { return Onglets.ouvrirSyndrome(e); },          // s'ouvre dans un nouvel onglet : le circuit reste en place
 
   // ---------- onglet : liste + fiche
   init() {
@@ -367,7 +362,7 @@ const Circuits = {
   // nom du point suivi, s'il y a lieu, de « ouvre le … » (couple en infobulle)
   pointHtml(p) {
     const o = this.ouverture(p);
-    return escapeHtml(p) + (o ? ` <span class="circ-ouv" title="Point d'ouverture (confluent) du ${escapeHtml(o[0])} ; couple : ${escapeHtml(o[1])}">ouvre le ${escapeHtml(o[0])}</span>` : "");
+    return `<a href="#" class="circ-ptlien" data-pt-fiche="${escapeHtml(p)}" title="Ouvrir la fiche du point dans un nouvel onglet">${escapeHtml(p)}</a>` + (o ? ` <span class="circ-ouv" title="Point d'ouverture (confluent) du ${escapeHtml(o[0])} ; couple : ${escapeHtml(o[1])}">ouvre le ${escapeHtml(o[0])}</span>` : "");
   },
 
   // ---------- points par canal : une liste par canal (la même dans tous les circuits qui contiennent ce canal), avec l'action de chaque point
@@ -421,6 +416,11 @@ const Circuits = {
     if (!this._db[code]) this._db[code] = Store.readJSON("reference/points_canaux/" + code + ".json").then(d => Array.isArray(d) ? d : []).catch(() => []);
     return this._db[code];
   },
+  // pas de points shù dorsaux (vessie) ni de mù d'un autre canal : seuls les points du canal lui-même, de RM ou de DM sont proposés
+  pointAdmis(point, code) {
+    const pref = (String(point).toUpperCase().replace(/\s+/g, "").match(/^[A-Z]+/) || [""])[0];
+    return pref === code.toUpperCase() || pref === "RM" || pref === "DM";
+  },
   cleP(s) { return String(s || "").toUpperCase().replace(/\s+/g, ""); },
   enListe(v) { return Array.isArray(v) ? v : (v ? [v] : []); },
   texteItem(x) { return typeof x === "string" ? x : (x && (x.indication || x.texte || x.note)) || ""; },
@@ -445,9 +445,9 @@ const Circuits = {
   },
   async propositionsCanal(code) {
     const db = await this.dbCanal(code);
-    if (db.length) return db.map(p => ({ point: String(p.point).replace(/\s+/g, ""), categorie: this.categoriesDe(p).join(" ; "), action: this.actionsDe(p).slice(0, 2).join(" ; "), saignee: this.saigneeDe(p), indic: p })).filter(x => x.categorie || x.saignee.length);
+    if (db.length) return db.filter(p => this.pointAdmis(p.point, code)).map(p => ({ point: String(p.point).replace(/\s+/g, ""), categorie: this.categoriesDe(p).join(" ; "), action: this.actionsDe(p).slice(0, 2).join(" ; "), saignee: this.saigneeDe(p), indic: p })).filter(x => x.categorie || x.saignee.length);
     if (!this.proposes) { try { this.proposes = await Store.readJSON(this.CHEMIN_PROPOSES); } catch (e) { return []; } }
-    return ((this.proposes.canaux || {})[code] || []).map(x => ({ ...x, saignee: [], repli: true }));
+    return ((this.proposes.canaux || {})[code] || []).map(x => ({ ...x, saignee: [], repli: true })).filter(x => this.pointAdmis(x.point, code));
   },
   // 🩸 à côté des points de la liste qui ont des indications en saignée dans la base
   async marquerSaignees(z) {
@@ -538,13 +538,7 @@ const Circuits = {
     if (!l.length) return "";
     return `<div class="circ-synd-liste">${l.map(id => { const n = this.nomFormule(id); return `<button type="button" class="edit-toggle-btn" data-form="${escapeHtml(id)}">${escapeHtml(n ? n.nom : id)}${n && n.fr ? ` <span class="muted">${escapeHtml(n.fr)}</span>` : ""}</button>`; }).join(" ")}</div>${c.formules_note ? `<p class="muted">${escapeHtml(c.formules_note)}</p>` : ""}`;
   },
-  async ouvrirFormule(id) {
-    const f = Formules.byId.get(id), v = Formules.varParId.get(id), retour = this.actif;
-    if (!f && !v) return;
-    document.querySelector('.tab-btn[data-tab="formules"]').click();
-    if (f) await Formules.showDetail(f); else await Formules.showVariation(v);
-    this.ajouterRetour(document.getElementById("formule-detail"), retour);
-  },
+  ouvrirFormule(id) { return Onglets.ouvrirFormule(id); },
   async ouvrirCircuit(id) {
     document.querySelector('.tab-btn[data-tab="circuits"]').click();
     await this.ouvert();
