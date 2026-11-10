@@ -4,7 +4,7 @@
    Comme dans un navigateur : ouvrir un syndrome, un point, une formule ou un point Tung depuis un circuit (ou ailleurs) l'ouvre dans un NOUVEL onglet,
    au même niveau que la vue d'où l'on vient, qui reste intacte (circuit, position de défilement, brouillon en cours).
    Le premier onglet est toujours la vue du module en cours ; les onglets ouverts restent quand on change de module et se ferment avec ✕.
-   Les fiches ouvertes ici sont en lecture seule (la modification se fait dans leur module).
+   Les fiches ouvertes ici se modifient sur place (« ✏️ Modifier cette fiche »), comme dans leur module.
    Dépend de app.js : Store, escapeHtml, Syndromes, Points, Formules, SubstanceNature, Sinolux, Animaux, ProchesFormules ; de tung.js : Tung ; de circuits.js : Circuits. */
 
 const Onglets = {
@@ -87,16 +87,18 @@ const Onglets = {
     zone.innerHTML = `<p class="muted">Chargement…</p>`;
     this.vues.appendChild(zone);
     const o = { id, titre, genre, zone, charge };
+    o.recharger = async () => { zone.innerHTML = `<p class="muted">Chargement…</p>`; await charge(zone, o.recharger); };
     this.liste.push(o);
     this.activer(id);
-    try { await charge(zone); } catch (e) { zone.innerHTML = `<p class="muted">Impossible d'afficher cette fiche (${escapeHtml(e.message)}).</p>`; }
+    try { await charge(zone, o.recharger); } catch (e) { zone.innerHTML = `<p class="muted">Impossible d'afficher cette fiche (${escapeHtml(e.message)}).</p>`; }
   },
 
   // ---------- les différents types de fiches
   ouvrirSyndrome(entry) {
-    return this.ouvrir("synd:" + entry.domaine + "/" + entry.chemin, entry.nom, "🩺", async zone => {
+    return this.ouvrir("synd:" + entry.domaine + "/" + entry.chemin, entry.nom, "🩺", async (zone, recharger) => {
       const d = await Store.readJSON(`syndromes/${entry.domaine}/${entry.chemin}`);
       zone.innerHTML = Syndromes.renderSyndrome(d, entry.domaine);
+      addEditControls(zone, "syndromes/" + entry.domaine + "/" + entry.chemin, d, { onSaved: async parsed => { await Syndromes.apresSauvegarde(entry, parsed); await recharger(); } });
     });
   },
 
@@ -108,16 +110,17 @@ const Onglets = {
     const cherche = m ? (alias[m[1]] || m[1]) + m[2] : cle;
     const entry = (Points.entries || []).find(e => norm(e.id) === cherche);
     if (!entry) { alert("Point " + texte + " : pas de fiche dans ta base de points."); return; }
-    return this.ouvrir("pt:" + norm(entry.id), entry.id + (entry.data.pinyin ? " " + entry.data.pinyin : ""), "📍", async zone => {
+    return this.ouvrir("pt:" + norm(entry.id), entry.id + (entry.data.pinyin ? " " + entry.data.pinyin : ""), "📍", async (zone, recharger) => {
       zone.innerHTML = Points.htmlDetail(entry);
       Store.hydrateImages(zone);
+      addEditControls(zone, "reference/points_canaux/" + entry.canal + ".json", entry.data, { arrayItem: true, matchField: "point", matchValue: entry.id, editorFn: openPointEditor, onSaved: async () => { await recharger(); } });
     });
   },
 
   ouvrirTung(id) {
     return this.ouvrir("tung:" + id, (Tung.parId(id) || {}).nom || id, "☯", async zone => {
       await Tung.ensureLoaded();
-      Tung.rendreFicheDans(zone, id);
+      Tung.rendreFicheDans(zone, id, false);       // avec les boutons de modification : ils écrivent dans cet onglet
       Store.hydrateImages(zone);
     });
   },
@@ -126,13 +129,15 @@ const Onglets = {
     const f = Formules.byId.get(id), v = Formules.varParId.get(id);
     if (!f && !v) return;
     const nom = f ? (f.pinyin || f.nom || id) : v.nom;
-    return this.ouvrir("form:" + id, nom, "🌿", async zone => {
+    return this.ouvrir("form:" + id, nom, "🌿", async (zone, recharger) => {
       await SubstanceNature.ensureLoaded(); await Sinolux.ensureLoaded(); await Animaux.ensureLoaded();
       if (f) {
         const d = await Store.readJSON("formules/" + f.chemin);
         zone.innerHTML = Formules.renderFormule(d);
         Store.hydrateImages(zone);
         ProchesFormules.remplir(zone, d);
+        ModifArbre.remplir(zone, d);
+        addEditControls(zone, "formules/" + f.chemin, d, { onSaved: async parsed => { await Formules.apresSauvegarde(f, parsed); await recharger(); } });
       } else {
         const parent = Formules.byId.get(v.parent), fp = await Store.readJSON("formules/" + parent.chemin);
         zone.innerHTML = Formules.renderVariation(v, parent, fp);

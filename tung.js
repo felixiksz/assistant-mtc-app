@@ -134,8 +134,18 @@ const Tung = {
     this.actif = id; this.edition = null; this.rendreListe(); this.rendreDetail();
   },
 
+  // zone où s'affichent la fiche et son formulaire : le panneau Tung, ou l'onglet de travail dans lequel on modifie la fiche
+  zoneDetail() { return this._ctx ? this._ctx.zone : document.getElementById("tung-detail"); },
+
   rendreDetail() {
-    const z = document.getElementById("tung-detail");
+    if (this._ctx && !this.edition) {          // fin d'une modification faite dans un onglet : on réaffiche la fiche dans cet onglet
+      const { zone, id } = this._ctx;
+      this._ctx = null;
+      this.rendreFicheDans(zone, id, false);
+      Store.hydrateImages(zone);
+      return;
+    }
+    const z = this.zoneDetail();
     if (this.edition) return;
     if (!this.actif) { z.innerHTML = `<p class="muted">Sélectionne une fiche à gauche, ou crée la tienne avec « + Nouveau ».</p>`; return; }
     if (this.vue === "fiches") this.rendreFiche(z);
@@ -218,9 +228,11 @@ const Tung = {
       z.querySelectorAll(".circ-barre, [data-tung-proto]").forEach(x => { const sec = x.closest("section"); (sec || x).remove(); });
       return;
     }
-    z.querySelector("#tung-edit").addEventListener("click", () => this.modifier(f));
-    const s = z.querySelector("#tung-suppr"); if (s) s.addEventListener("click", () => this.supprimer(f));
-    const r = z.querySelector("#tung-retablir"); if (r) r.addEventListener("click", () => this.retablir(f));
+    const dansOnglet = z !== document.getElementById("tung-detail");
+    const ctx = () => { this._ctx = dansOnglet ? { zone: z, id: f.id } : null; };
+    z.querySelector("#tung-edit").addEventListener("click", () => { ctx(); this.modifier(f); });
+    const s = z.querySelector("#tung-suppr"); if (s) s.addEventListener("click", () => { ctx(); this.supprimer(f); });
+    const r = z.querySelector("#tung-retablir"); if (r) r.addEventListener("click", () => { ctx(); this.retablir(f); });
   },
 
   // texte d'une rubrique (première source qui la donne)
@@ -253,10 +265,10 @@ const Tung = {
   },
 
   // fiche en lecture seule dans une zone à part (onglet de travail)
-  rendreFicheDans(zone, id) {
+  rendreFicheDans(zone, id, lecture) {
     const sauve = this.actif;
     this.actif = id;
-    try { this.rendreFiche(zone, true); } finally { this.actif = sauve; }
+    try { this.rendreFiche(zone, !!lecture); } finally { this.actif = sauve; }
   },
 
   cellule(c) { return !c ? "" : typeof c === "string" ? escapeHtml(c) : `<button type="button" class="tung-lien" data-tung-fiche="${escapeHtml(c.id)}">${escapeHtml(c.t)}</button>`; },
@@ -316,7 +328,7 @@ const Tung = {
   },
 
   rendreEdition(f) {
-    const d = this.edition, z = document.getElementById("tung-detail"), complet = f.origine === "perso";
+    const d = this.edition, z = this.zoneDetail(), complet = f.origine === "perso";
     const T = (id, lib, rows, val, ph = "") => `<label>${lib}<textarea id="te-${id}" rows="${rows}" placeholder="${escapeHtml(ph)}">${escapeHtml(val)}</textarea></label>`;
     z.innerHTML = `<h2>${d.nouveau ? "Nouvelle fiche Tung" : (complet ? "Modifier : " : "Compléter : ") + escapeHtml(f.nom)}</h2>
       ${complet ? "" : `<p class="muted">Les informations des livres ne sont pas modifiées : ce que tu écris ici s'ajoute dans un bloc « Tes ajouts ».</p>`}
@@ -397,7 +409,7 @@ const Tung = {
   },
 
   rendreEditionProto(p) {
-    const d = this.edition, z = document.getElementById("tung-detail");
+    const d = this.edition, z = this.zoneDetail();
     z.innerHTML = `<h2>${d.nouveau ? "Nouveau protocole" : "Modifier : " + escapeHtml(d.nom)}</h2>
       <form class="circ-form" id="tung-pform">
         <label>Nom<input type="text" id="tp-nom" value="${escapeHtml(d.nom)}"></label>

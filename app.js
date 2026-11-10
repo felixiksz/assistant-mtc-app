@@ -663,6 +663,20 @@ const Formules = {
     return fs.length + fs.reduce((n, f) => n + this.nbVariations(f.id), 0);
   },
 
+  // après l'enregistrement d'une formule : met à jour l'index et les listes (appelé aussi depuis les onglets de travail)
+  async apresSauvegarde(entry, parsed) {
+    const i = this.index.findIndex(e => e.id === entry.id);
+    const summary = {
+      id: parsed.id || entry.id, pinyin: parsed.pinyin, nom_fr: parsed.nom_fr,
+      categorie_id: parsed.categorie_id || entry.categorie_id, categorie_nom: parsed.categorie_nom || entry.categorie_nom,
+      indications_syndrome: parsed.indications_syndrome, chemin: entry.chemin
+    };
+    if (i >= 0) Object.assign(this.index[i], summary); else this.index.push(summary);
+    await Store.writeJSON("formules/index.json", this.index);
+    this.renderCategories();
+    this.applyFilters();
+  },
+
   async showDetail(entry, liEl) {
     document.querySelectorAll("#formule-list li").forEach(li => li.classList.remove("selected"));
     if (liEl) liEl.classList.add("selected");
@@ -679,19 +693,7 @@ const Formules = {
       ModifArbre.remplir(detail, f);
       detail.prepend(Comparateur.bouton("", () => Comparateur.ajouterFormule(entry.id)));
       addEditControls(detail, "formules/" + entry.chemin, f, {
-        onSaved: async (parsed) => {
-          const i = this.index.findIndex(e => e.id === entry.id);
-          const summary = {
-            id: parsed.id || entry.id, pinyin: parsed.pinyin, nom_fr: parsed.nom_fr,
-            categorie_id: parsed.categorie_id || entry.categorie_id, categorie_nom: parsed.categorie_nom || entry.categorie_nom,
-            indications_syndrome: parsed.indications_syndrome, chemin: entry.chemin
-          };
-          if (i >= 0) Object.assign(this.index[i], summary); else this.index.push(summary);
-          await Store.writeJSON("formules/index.json", this.index);
-          this.renderCategories();
-          this.applyFilters();
-          await this.showDetail(entry, liEl);
-        }
+        onSaved: async (parsed) => { await this.apresSauvegarde(entry, parsed); await this.showDetail(entry, liEl); }
       });
     } catch (e) {
       detail.innerHTML = `<p class="muted">Impossible de charger la fiche (${e.message}).</p>`;
@@ -2087,6 +2089,19 @@ const Syndromes = {
     document.getElementById("syn-count").textContent = list.length + " syndrome(s)";
   },
 
+  // après l'enregistrement d'un syndrome : met à jour l'index de recherche et les listes (appelé aussi depuis les onglets de travail)
+  async apresSauvegarde(entry, parsed) {
+    const arr = this.rawIndexByDomaine[entry.domaine] || (this.rawIndexByDomaine[entry.domaine] = []);
+    const i = arr.findIndex(x => x.id === entry.id);
+    const patch = { nom_syndrome: parsed.nom_syndrome, organe: parsed.organe, niveau_ou_couche: parsed.niveau_ou_couche, sous_categorie: parsed.sous_categorie };
+    if (i >= 0) Object.assign(arr[i], patch); else arr.push({ id: parsed.id || entry.id, chemin: entry.chemin, ...patch });
+    await Store.writeJSON(`syndromes/${entry.domaine}/index.json`, arr);
+    const eIdx = this.entries.findIndex(e => e.id === entry.id && e.domaine === entry.domaine);
+    if (eIdx >= 0) Object.assign(this.entries[eIdx], { nom: parsed.nom_syndrome || entry.nom, sousLabel: parsed.organe || parsed.niveau_ou_couche || parsed.sous_categorie || "" });
+    this.renderGroups();
+    this.applyFilters();
+  },
+
   async showDetail(entry, liEl) {
     document.querySelectorAll("#syn-list li").forEach(li => li.classList.remove("selected"));
     if (liEl) liEl.classList.add("selected");
@@ -2098,18 +2113,7 @@ const Syndromes = {
       detail.prepend(Comparateur.bouton("", () => Comparateur.ajouterSyndrome(entry)));
       this.surligner(detail, document.getElementById("syn-search").value);
       addEditControls(detail, "syndromes/" + entry.domaine + "/" + entry.chemin, d, {
-        onSaved: async (parsed) => {
-          const arr = this.rawIndexByDomaine[entry.domaine] || (this.rawIndexByDomaine[entry.domaine] = []);
-          const i = arr.findIndex(x => x.id === entry.id);
-          const patch = { nom_syndrome: parsed.nom_syndrome, organe: parsed.organe, niveau_ou_couche: parsed.niveau_ou_couche, sous_categorie: parsed.sous_categorie };
-          if (i >= 0) Object.assign(arr[i], patch); else arr.push({ id: parsed.id || entry.id, chemin: entry.chemin, ...patch });
-          await Store.writeJSON(`syndromes/${entry.domaine}/index.json`, arr);
-          const eIdx = this.entries.findIndex(e => e.id === entry.id && e.domaine === entry.domaine);
-          if (eIdx >= 0) Object.assign(this.entries[eIdx], { nom: parsed.nom_syndrome || entry.nom, sousLabel: parsed.organe || parsed.niveau_ou_couche || parsed.sous_categorie || "" });
-          this.renderGroups();
-          this.applyFilters();
-          await this.showDetail(entry, liEl);
-        }
+        onSaved: async (parsed) => { await this.apresSauvegarde(entry, parsed); await this.showDetail(entry, liEl); }
       });
     } catch (e) {
       detail.innerHTML = `<p class="muted">Impossible de charger la fiche (${e.message}).</p>`;
