@@ -1145,3 +1145,8 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .circ-pts-edit { display: block; font-weight: 600; margin: 0.4rem 0; }
 .circ-pts-edit textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 0.2rem; font: inherit; }
 .circ-pts-avert { font-size: 0.8rem; margin: 0.4rem 0 0.2rem; }
+.circ-pt-assoc { font: inherit; font-weight: 700; border: 1px solid var(--ink); background: var(--bg); color: var(--ink); cursor: pointer; padding: 0 0.3rem; line-height: 1.3; }
+.circ-pt-assoc:hover { background: var(--ink); color: var(--bg); }
+.circ-pt-menu { margin: 0.3rem 0; padding: 0.4rem 0.5rem; border: 2px solid var(--ink); display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+.circ-pt-menu p { margin: 0 0.3rem 0 0; }
+.circ-ouv { font-size: 0.72rem; font-weight: 700; font-style: italic; margin-left: 0.2rem; white-space: nowrap; cursor: help; }

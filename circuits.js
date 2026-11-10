@@ -237,7 +237,7 @@ const Circuits = {
       return co ? `<details class="circ-niveau"><summary>Fonctions de ${escapeHtml(co.nom)} <span class="muted">(cours p. ${co.page})</span></summary>${this.ul(co.fonctions)}</details>` : "";
     }).join("");
     const astuces = (this.base.astuces || []).filter(a => a.paires.some(p => p.every(k => c.grille.includes(k)))).map(a => `<li>${escapeHtml(sansHanzi(a.texte))}</li>`).join("");
-    const ajouts = (c.ajouts || []).map(a => `<li>${a.action ? escapeHtml(sansHanzi(a.action)) + " : " : ""}${escapeHtml(sansHanzi(a.texte || ""))} ${(a.canaux || []).map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")}${a.source && /correction/.test(a.source) ? ` <span class="muted">(selon ta correction)</span>` : ""}</li>`).join("");
+    const ajouts = (c.ajouts || []).map(a => `<li>${a.action ? escapeHtml(sansHanzi(a.action)) + " : " : ""}${escapeHtml(sansHanzi(a.texte || ""))} ${(a.canaux || []).map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")}${a.source && /^proposition/.test(a.source) ? ` <span class="circ-pt-tag" title="Proposition de Claude (couple biǎo-lǐ ou même niveau) : à confirmer ou supprimer">à valider</span>` : a.source && /correction/.test(a.source) ? ` <span class="muted">(selon ta correction)</span>` : ""}</li>`).join("");
     const lies = (c.syndromes_lies || []).map(k => { const e = this.entreeSynd(k); return e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(k)}">${escapeHtml(sansHanzi(e.nom))}</button>` : `<span class="muted">${escapeHtml(k)} (introuvable)</span>`; }).join(" ");
     const parCanal = c.grille.map(code => {
       const l = this.syndromesDuCanal(code);
@@ -259,7 +259,7 @@ const Circuits = {
       ${this.section("Actions / fonctions du circuit", this.ul(c.actions))}
       ${this.section("Indications", this.indicationsHtml(c))}
       <section><h3>Points des canaux</h3><div id="circ-pts" class="circ-pts-grille"></div></section>
-      ${this.section("Ajouts possibles", ajouts ? `<ul class="tcm-list">${ajouts}</ul><p class="muted">Dessinés en pointillé sous le circuit.</p>` : "")}
+      <section><h3>Ajouts possibles</h3>${ajouts ? `<ul class="tcm-list">${ajouts}</ul><p class="muted">Dessinés en pointillé sous le circuit.</p>` : ""}<div class="circ-barre"><button type="button" class="edit-toggle-btn" id="circ-aj-prop">💡 Proposer des canaux à ajouter</button></div><div id="circ-aj-zone"></div></section>
       ${this.section("Associations de points", (c.associations || []).length
         ? `<div class="cat-chip-row circ-assoc-puces">${c.associations.map((a, i) => `<button type="button" class="cat-chip" data-a="${i}">${escapeHtml(sansHanzi(a.tableau))}</button>`).join("")}</div><div id="circ-assoc-detail" class="circ-assoc-detail"></div>`
         : `<p class="muted">Aucune pour l'instant : « Modifier cette fiche » permet d'ajouter un tableau avec les points de chaque canal.</p>`)}
@@ -278,9 +278,96 @@ const Circuits = {
     this.tracerGraphe();
     this.pointsTung(c);
     this.rendrePoints(c);
+    document.getElementById("circ-aj-prop").addEventListener("click", () => this.proposerAjouts(c));
     document.getElementById("circ-edit").addEventListener("click", () => this.modifier(c));
     const s = document.getElementById("circ-suppr"); if (s) s.addEventListener("click", () => this.supprimer(c));
     const r = document.getElementById("circ-retablir"); if (r) r.addEventListener("click", () => this.retablir(c));
+  },
+
+  // enregistre des champs du circuit (surcharge d'un circuit du cours, ou le circuit créé par toi) puis réaffiche la fiche
+  async enregistrerChamps(c, champs) {
+    if (c.origine === "perso") { const i = this.perso.circuits.findIndex(x => x.id === c.id); this.perso.circuits[i] = { ...this.perso.circuits[i], ...champs }; }
+    else this.perso.surcharges[c.id] = { ...(this.perso.surcharges[c.id] || {}), ...champs };
+    try { await Store.writeJSON(this.CHEMIN_PERSO, { titre: this.perso.titre, circuits: this.perso.circuits, surcharges: this.perso.surcharges }); }
+    catch (e) { alert("Enregistrement impossible : " + e.message); return; }
+    this.recomposer(); this.rendreListe(); this.rendreFiche();
+  },
+  // ⊕ : ajoute un point d'un canal à un tableau d'association de points du circuit (ou crée un tableau)
+  menuAssoc(c, code, point, bouton) {
+    const ancien = document.querySelector(".circ-pt-menu");
+    if (ancien) { const memeBouton = ancien.previousElementSibling === bouton; ancien.remove(); if (memeBouton) return; }
+    const m = document.createElement("div");
+    m.className = "circ-pt-menu";
+    const ass = c.associations || [];
+    m.innerHTML = `<p class="muted">Ajouter ${escapeHtml(point)} à :</p>` + ass.map((a, i) => `<button type="button" class="edit-toggle-btn" data-i="${i}">${escapeHtml(sansHanzi(a.tableau))}</button>`).join(" ") + ` <button type="button" class="edit-toggle-btn" data-i="new">+ Nouveau tableau</button>`;
+    bouton.insertAdjacentElement("afterend", m);
+    m.querySelectorAll("button").forEach(b => b.addEventListener("click", async () => {
+      const copie = JSON.parse(JSON.stringify(ass));
+      let cible;
+      if (b.dataset.i === "new") {
+        const nom = (prompt("Nom du tableau (syndrome ou intitulé) :") || "").trim();
+        if (!nom) { m.remove(); return; }
+        cible = { tableau: nom, points: {}, note: "" }; copie.push(cible);
+      } else cible = copie[+b.dataset.i];
+      cible.points = cible.points || {};
+      const l = cible.points[code] || (cible.points[code] = []);
+      if (!l.includes(point)) l.push(point);
+      await this.enregistrerChamps(c, { associations: copie });
+    }));
+  },
+
+  // ---------- canaux à ajouter : propositions mécaniques à valider (couple biǎo-lǐ et même niveau de chaque canal du circuit)
+  BIAOLI: { P: "GI", GI: "P", E: "Rt", Rt: "E", C: "IG", IG: "C", V: "Rn", Rn: "V", EC: "TF", TF: "EC", VB: "F", F: "VB" },
+  MEME_NIVEAU: { P: "Rt", Rt: "P", GI: "E", E: "GI", C: "Rn", Rn: "C", IG: "V", V: "IG", EC: "F", F: "EC", TF: "VB", VB: "TF" },
+  LIB_NIVEAU: { P: "tài yīn", Rt: "tài yīn", GI: "yáng míng", E: "yáng míng", C: "shào yīn", Rn: "shào yīn", IG: "tài yáng", V: "tài yáng", EC: "jué yīn", F: "jué yīn", TF: "shào yáng", VB: "shào yáng" },
+  candidatsAjout(c) {
+    const dans = new Set(c.grille), deja = new Set((c.ajouts || []).flatMap(a => a.canaux || [])), out = new Map();
+    c.grille.forEach(k => {
+      [[this.BIAOLI[k], `couple biǎo-lǐ de ${k}`], [this.MEME_NIVEAU[k], `même niveau que ${k} (${this.LIB_NIVEAU[k]})`]].forEach(([x, raison]) => {
+        if (!x || dans.has(x) || deja.has(x)) return;
+        if (!out.has(x)) out.set(x, []);
+        out.get(x).push(raison);
+      });
+    });
+    return [...out.entries()].map(([code, raisons]) => ({ code, raisons }));
+  },
+  proposerAjouts(c) {
+    const z = document.getElementById("circ-aj-zone");
+    if (z.innerHTML) { z.innerHTML = ""; return; }
+    const l = this.candidatsAjout(c);
+    z.innerHTML = `<p class="muted circ-pts-avert">Propositions mécaniques : le canal couplé (biǎo-lǐ) ou du même niveau qu'un canal du circuit. Elles ne viennent pas de tes cours : à valider.</p>` +
+      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${escapeHtml(x.code)}</strong> <span class="muted">${escapeHtml((this.canaux.get(x.code) || {}).nom || "")}</span> — ${escapeHtml(x.raisons.join(" ; "))} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button></li>`).join("")}</ul>` : `<p class="muted">Rien à proposer de plus.</p>`);
+    z.querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", async () => {
+      const x = l[+b.dataset.i], nom = ((this.canaux.get(x.code) || {}).nom || x.code).toLowerCase();
+      const a = { action: "", texte: `canal ${nom} (${x.code}) — ${x.raisons.join(" ; ")}`, canaux: [x.code], ensemble: false, source: "proposition (à valider)" };
+      await this.ajouterAjout(c, a);
+    }));
+  },
+  async ajouterAjout(c, a) {
+    const nouveaux = [...(c.ajouts || []), a];
+    if (c.origine === "perso") { const i = this.perso.circuits.findIndex(x => x.id === c.id); this.perso.circuits[i] = { ...this.perso.circuits[i], ajouts: nouveaux }; }
+    else this.perso.surcharges[c.id] = { ...(this.perso.surcharges[c.id] || {}), ajouts: nouveaux };
+    try { await Store.writeJSON(this.CHEMIN_PERSO, { titre: this.perso.titre, circuits: this.perso.circuits, surcharges: this.perso.surcharges }); }
+    catch (e) { alert("Enregistrement impossible : " + e.message); return; }
+    this.recomposer(); this.rendreListe(); this.rendreFiche();
+  },
+
+  // points d'ouverture (confluents) des huit merveilleux vaisseaux, avec leur couple : signalés partout où le point s'affiche
+  OUVERTURES: {
+    TF5: ["yáng wéi mài", "dài mài (VB 41)"], VB41: ["dài mài", "yáng wéi mài (TF 5)"],
+    Rt4: ["chōng mài", "yīn wéi mài (EC 6)"], EC6: ["yīn wéi mài", "chōng mài (Rt 4)"],
+    P7: ["rèn mài", "yīn qiāo mài (Rn 6)"], Rn6: ["yīn qiāo mài", "rèn mài (P 7)"],
+    IG3: ["dū mài", "yáng qiāo mài (V 62)"], V62: ["yáng qiāo mài", "dū mài (IG 3)"],
+  },
+  ouverture(point) {
+    const k = String(point || "").toUpperCase().replace(/[\s.\-]/g, "").replace(/^SI/, "IG").replace(/^LI/, "GI").replace(/^SP/, "RT").replace(/^UB/, "V").replace(/^BL/, "V").replace(/^KI/, "RN").replace(/^LU/, "P").replace(/^HT/, "C");
+    const cle = Object.keys(this.OUVERTURES).find(x => x.toUpperCase() === k);
+    return cle ? this.OUVERTURES[cle] : null;
+  },
+  // nom du point suivi, s'il y a lieu, de « ouvre le … » (couple en infobulle)
+  pointHtml(p) {
+    const o = this.ouverture(p);
+    return escapeHtml(p) + (o ? ` <span class="circ-ouv" title="Point d'ouverture (confluent) du ${escapeHtml(o[0])} ; couple : ${escapeHtml(o[1])}">ouvre le ${escapeHtml(o[0])}</span>` : "");
   },
 
   // ---------- points par canal : une liste par canal (la même dans tous les circuits qui contiennent ce canal), avec l'action de chaque point
@@ -296,7 +383,7 @@ const Circuits = {
     const ouvert = this._ptsOuvert || {};
     z.innerHTML = c.grille.map(code => {
       const k = this.canaux.get(code) || {}, l = this.ptsDe(code);
-      const li = l.map(x => `<li><strong>${escapeHtml(x.point)}</strong>${x.action ? " " + escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}</li>`).join("");
+      const li = l.map(x => `<li><button type="button" class="circ-pt-assoc" data-pt="${escapeHtml(x.point)}" title="Ajouter ce point à une association de points du circuit">⊕</button> <strong>${this.pointHtml(x.point)}</strong>${x.action ? " " + escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}</li>`).join("");
       return `<div class="circ-pts-carte" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}</span></span>` +
         `<span class="circ-pts-btns"><button type="button" class="edit-toggle-btn" data-act="edit">✏️ Modifier</button> <button type="button" class="edit-toggle-btn" data-act="prop">💡 Proposer</button></span></div>` +
         (li ? `<ul class="circ-pts-liste">${li}</ul>` : `<p class="muted">Aucun point pour l'instant.</p>`) + `<div class="circ-pts-zone"></div></div>`;
@@ -305,6 +392,7 @@ const Circuits = {
       const code = carte.dataset.k, zone = carte.querySelector(".circ-pts-zone");
       carte.querySelector('[data-act="edit"]').addEventListener("click", () => this.editerPoints(c, code, carte, zone));
       carte.querySelector('[data-act="prop"]').addEventListener("click", () => this.proposerPoints(c, code, zone));
+      carte.querySelectorAll(".circ-pt-assoc").forEach(b => b.addEventListener("click", () => this.menuAssoc(c, code, b.dataset.pt, b)));
       if (ouvert[code]) this.proposerPoints(c, code, zone, true);
     });
   },
@@ -335,7 +423,7 @@ const Circuits = {
     const deja = new Set(this.ptsDe(code).map(x => x.point));
     const l = ((this.proposes.canaux || {})[code] || []).filter(x => !deja.has(x.point));
     zone.innerHTML = `<p class="muted circ-pts-avert">Propositions par catégorie classique ; les actions sont à valider (elles ne viennent pas de tes cours).</p>` +
-      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${escapeHtml(x.point)}</strong> <span class="muted">${escapeHtml(x.categorie)}</span>${x.action ? " — " + escapeHtml(x.action) : ""} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button></li>`).join("")}</ul>` : `<p class="muted">Rien à proposer de plus pour ce canal (ou pas encore de propositions).</p>`);
+      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${this.pointHtml(x.point)}</strong> <span class="muted">${escapeHtml(x.categorie)}</span>${x.action ? " — " + escapeHtml(x.action) : ""} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button></li>`).join("")}</ul>` : `<p class="muted">Rien à proposer de plus pour ce canal (ou pas encore de propositions).</p>`);
     zone.querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", async () => {
       const x = l[+b.dataset.i];
       (this.points.canaux[code] = this.points.canaux[code] || []).push({ point: x.point, action: x.action, statut: "propose" });
@@ -431,7 +519,7 @@ const Circuits = {
     if (!a) { det.innerHTML = `<p class="muted">Choisis un tableau : ses points s'écrivent sur le dessin.</p>`; return; }
     const e = a.synd ? this.entreeSynd(a.synd) : null;
     det.innerHTML = `<p>${e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(a.synd)}">${escapeHtml(sansHanzi(a.tableau))}</button>` : `<strong>${escapeHtml(sansHanzi(a.tableau))}</strong>`}</p>` +
-      `<p>${Object.entries(a.points || {}).map(([k, v]) => `<span class="sx-code">${escapeHtml(k)}</span> ${escapeHtml(v.join(", "))}`).join(" · ")}</p>` + (a.note ? `<p class="muted">${escapeHtml(sansHanzi(a.note))}</p>` : "");
+      `<p>${Object.entries(a.points || {}).map(([k, v]) => `<span class="sx-code">${escapeHtml(k)}</span> ${v.map(p => this.pointHtml(p)).join(", ")}`).join(" · ")}</p>` + (a.note ? `<p class="muted">${escapeHtml(sansHanzi(a.note))}</p>` : "");
     det.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const en = this.entreeSynd(b.dataset.synd); if (en) this.ouvrirSyndrome(en); }));
   },
 
