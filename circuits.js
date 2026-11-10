@@ -381,10 +381,11 @@ const Circuits = {
     const z = document.getElementById("circ-pts");
     if (!z) return;
     const ouvert = this._ptsOuvert || {};
-    z.innerHTML = c.grille.map(code => {
-      const k = this.canaux.get(code) || {}, l = this.ptsDe(code);
-      const li = l.map(x => `<li><button type="button" class="circ-pt-assoc" data-pt="${escapeHtml(x.point)}" title="Ajouter ce point à une association de points du circuit">⊕</button> <strong>${this.pointHtml(x.point)}</strong>${x.action ? " " + escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}</li>`).join("");
-      return `<div class="circ-pts-carte" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}</span></span>` +
+    const supp = [...new Set((c.ajouts || []).flatMap(a => a.canaux || []))].filter(k => !c.grille.includes(k));
+    z.innerHTML = [...c.grille, ...supp].map(code => {
+      const k = this.canaux.get(code) || {}, l = this.ptsDe(code), ajout = !c.grille.includes(code);
+      const li = l.map(x => `<li><button type="button" class="circ-pt-assoc" data-pt="${escapeHtml(x.point)}" title="Ajouter ce point à une association de points du circuit">⊕</button> <strong>${this.pointHtml(x.point)}</strong>${x.action ? " " + escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}</li>`).join("");
+      return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
         `<span class="circ-pts-btns"><button type="button" class="edit-toggle-btn" data-act="edit">✏️ Modifier</button> <button type="button" class="edit-toggle-btn" data-act="prop">💡 Proposer</button></span></div>` +
         (li ? `<ul class="circ-pts-liste">${li}</ul>` : `<p class="muted">Aucun point pour l'instant.</p>`) + `<div class="circ-pts-zone"></div></div>`;
     }).join("");
@@ -395,6 +396,7 @@ const Circuits = {
       carte.querySelectorAll(".circ-pt-assoc").forEach(b => b.addEventListener("click", () => this.menuAssoc(c, code, b.dataset.pt, b)));
       if (ouvert[code]) this.proposerPoints(c, code, zone, true);
     });
+    this.marquerSaignees(z);
   },
   editerPoints(c, code, carte, zone) {
     const l = this.ptsDe(code);
@@ -413,20 +415,67 @@ const Circuits = {
       this.rendrePoints(c);
     });
   },
+  // ---------- base de points du jeu (reference/points_canaux/<canal>.json) : propositions, actions et indications en saignée
+  async dbCanal(code) {
+    this._db = this._db || {};
+    if (!this._db[code]) this._db[code] = Store.readJSON("reference/points_canaux/" + code + ".json").then(d => Array.isArray(d) ? d : []).catch(() => []);
+    return this._db[code];
+  },
+  cleP(s) { return String(s || "").toUpperCase().replace(/\s+/g, ""); },
+  enListe(v) { return Array.isArray(v) ? v : (v ? [v] : []); },
+  texteItem(x) { return typeof x === "string" ? x : (x && (x.indication || x.texte || x.note)) || ""; },
+  // passages de la fiche du point qui parlent de saignée (technique, notes, associations, indications contemporaines, actions, indications psycho-émotionnelles)
+  saigneeDe(p) {
+    const re = /saign(ée|ées|er|ez)\b|saignement d['’]/i, out = [];
+    const decoupe = t => String(t || "").split(/\n+|(?<=[.!?])\s+(?=[A-ZÉÈÀ])/).map(s => s.trim()).filter(Boolean);
+    const ajoute = (t, lib) => decoupe(t).filter(s => re.test(s) && !/^\[Jeu\]/.test(s)).forEach(s => { const v = s.replace(/^\[Jeu\]\s*/, ""); if (!out.some(o => o.texte === v)) out.push({ texte: v, lib }); });
+    ajoute(p.methode_travail, "technique");
+    ajoute(p.note, "note");
+    this.enListe(p.associations).forEach(x => ajoute(this.texteItem(x), "association"));
+    this.enListe(p.indications_contemporaines).forEach(x => ajoute(this.texteItem(x), "indication"));
+    this.enListe(p.actions).forEach(x => ajoute(this.texteItem(x), "action"));
+    this.enListe(p.indications_psycho_emotionnelles).forEach(x => ajoute(this.texteItem(x), "psycho-émotionnel"));
+    return out;
+  },
+  actionsDe(p) { return this.enListe(p.actions).map(a => this.texteItem(a).replace(/^[➢•\-\s]+/, "").replace(/\.$/, "").trim()).filter(Boolean); },
+  // catégories « utiles » d'un point de la base (cinq points shu, yuán, luò, xī, hé…)
+  categoriesDe(p) {
+    const lib = String(p.categories_point || "").split(/\n+/).map(s => s.replace(/^[\s\-•🖇️⊞]*Point\s*/u, "").trim()).filter(s => /jǐng|yíng|shū-rivière|jīng-fleuve|hé-réunion|yuán|luò|xì|mù|bèi|ouverture|mer d/i.test(s) && !/jiāo huì/i.test(s));
+    return lib;
+  },
+  async propositionsCanal(code) {
+    const db = await this.dbCanal(code);
+    if (db.length) return db.map(p => ({ point: String(p.point).replace(/\s+/g, ""), categorie: this.categoriesDe(p).join(" ; "), action: this.actionsDe(p).slice(0, 2).join(" ; "), saignee: this.saigneeDe(p), indic: p })).filter(x => x.categorie || x.saignee.length);
+    if (!this.proposes) { try { this.proposes = await Store.readJSON(this.CHEMIN_PROPOSES); } catch (e) { return []; } }
+    return ((this.proposes.canaux || {})[code] || []).map(x => ({ ...x, saignee: [], repli: true }));
+  },
+  // 🩸 à côté des points de la liste qui ont des indications en saignée dans la base
+  async marquerSaignees(z) {
+    for (const carte of z.querySelectorAll(".circ-pts-carte")) {
+      const code = carte.dataset.k, db = await this.dbCanal(code);
+      if (!db.length) continue;
+      carte.querySelectorAll(".circ-pts-liste li").forEach(li => {
+        const nom = this.cleP(li.querySelector("strong").childNodes[0].textContent), p = db.find(x => this.cleP(x.point) === nom);
+        const s = p ? this.saigneeDe(p) : [];
+        if (s.length && !li.querySelector(".circ-sai")) li.insertAdjacentHTML("beforeend", ` <details class="circ-sai"><summary title="Indications en saignée de ta base">🩸 saignée</summary>${s.map(x => `<p>${escapeHtml(sansHanzi(x.texte)).slice(0, 400)} <span class="muted">(${escapeHtml(x.lib)})</span></p>`).join("")}</details>`);
+      });
+    }
+  },
   async proposerPoints(c, code, zone, sansBascule) {
     this._ptsOuvert = this._ptsOuvert || {};
     if (!sansBascule && this._ptsOuvert[code]) { this._ptsOuvert[code] = false; zone.innerHTML = ""; return; }
     this._ptsOuvert[code] = true;
-    if (!this.proposes) {
-      try { this.proposes = await Store.readJSON(this.CHEMIN_PROPOSES); } catch (e) { zone.innerHTML = `<p class="muted">Propositions indisponibles (${escapeHtml(e.message)}).</p>`; return; }
-    }
-    const deja = new Set(this.ptsDe(code).map(x => x.point));
-    const l = ((this.proposes.canaux || {})[code] || []).filter(x => !deja.has(x.point));
-    zone.innerHTML = `<p class="muted circ-pts-avert">Propositions par catégorie classique ; les actions sont à valider (elles ne viennent pas de tes cours).</p>` +
-      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${this.pointHtml(x.point)}</strong> <span class="muted">${escapeHtml(x.categorie)}</span>${x.action ? " — " + escapeHtml(x.action) : ""} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button></li>`).join("")}</ul>` : `<p class="muted">Rien à proposer de plus pour ce canal (ou pas encore de propositions).</p>`);
+    zone.innerHTML = `<p class="muted">Chargement…</p>`;
+    const deja = new Set(this.ptsDe(code).map(x => this.cleP(x.point)));
+    const tous = await this.propositionsCanal(code);
+    const l = tous.filter(x => !deja.has(this.cleP(x.point)));
+    const repli = tous.some(x => x.repli);
+    zone.innerHTML = `<p class="muted circ-pts-avert">${repli ? "Base de points indisponible : propositions par catégorie classique, actions à valider (elles ne viennent pas de tes cours)." : "Points tirés de ta base de points (Points des canaux) : cinq points shu, yuán, luò, xī, hé… et points ayant des indications en saignée. Actions reprises de la base."}</p>` +
+      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${this.pointHtml(x.point)}</strong> <span class="muted">${escapeHtml(x.categorie || "")}</span>${x.action ? " — " + escapeHtml(sansHanzi(x.action)) : ""} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button>` +
+        (x.saignee.length ? `<details class="circ-sai"><summary>🩸 saignée</summary>${x.saignee.map(s => `<p>${escapeHtml(sansHanzi(s.texte)).slice(0, 400)} <span class="muted">(${escapeHtml(s.lib)})</span></p>`).join("")}</details>` : "") + `</li>`).join("")}</ul>` : `<p class="muted">Rien à proposer de plus pour ce canal.</p>`);
     zone.querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", async () => {
       const x = l[+b.dataset.i];
-      (this.points.canaux[code] = this.points.canaux[code] || []).push({ point: x.point, action: x.action, statut: "propose" });
+      (this.points.canaux[code] = this.points.canaux[code] || []).push({ point: x.point, action: x.action, statut: x.repli ? "propose" : "base" });
       try { await this.ecrirePoints(); } catch (e) { alert("Enregistrement impossible : " + e.message); return; }
       this.rendrePoints(c);
     }));

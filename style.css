@@ -1150,3 +1150,8 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .circ-pt-menu { margin: 0.3rem 0; padding: 0.4rem 0.5rem; border: 2px solid var(--ink); display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
 .circ-pt-menu p { margin: 0 0.3rem 0 0; }
 .circ-ouv { font-size: 0.72rem; font-weight: 700; font-style: italic; margin-left: 0.2rem; white-space: nowrap; cursor: help; }
+.circ-pts-ajout { border-style: dashed; }
+.circ-pt-base { border-style: solid; font-weight: 600; text-transform: none; }
+.circ-sai { margin: 0.2rem 0; font-size: 0.82rem; display: block; }
+.circ-sai summary { cursor: pointer; font-weight: 700; }
+.circ-sai p { margin: 0.2rem 0 0.2rem 0.8rem; }
