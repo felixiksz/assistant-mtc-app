@@ -1169,3 +1169,10 @@ body.vue-doc .tab-panel { display: none !important; }
 .vue-travail[hidden] { display: none; }
 .circ-ptlien { color: inherit; text-decoration: none; border-bottom: 2px solid var(--accent); cursor: pointer; }
 .circ-ptlien:hover { background: var(--ink); color: var(--bg); }
+.circ-wjy { margin: 0.6rem 0; }
+.circ-wjy-groupe { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; margin: 0.25rem 0; }
+.circ-wjy-groupe > .muted { min-width: 9rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.circ-wjy-chip { text-transform: none; }
+.circ-wjy-citees { margin: 0.4rem 0; font-size: 0.88rem; }
+.circ-wjy-citees summary { cursor: pointer; }
+.circ-wjy-citees details { margin: 0.2rem 0 0.2rem 1rem; }

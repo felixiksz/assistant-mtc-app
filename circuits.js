@@ -16,6 +16,8 @@ function sansHanzi(t) {
 const Circuits = {
   CHEMIN_BASE: "acupuncture/circuits/circuits.json",
   CHEMIN_PERSO: "acupuncture/circuits/circuits_perso.json",
+  CHEMIN_WJY: "acupuncture/circuits/wang_ju_yi.json",                   // tes notes « Recettes de Wang Ju Yi »
+  wjy: null,
   CHEMIN_POINTS: "acupuncture/circuits/points_canaux_perso.json",       // points ajoutés par canal (toi)
   CHEMIN_PROPOSES: "acupuncture/circuits/points_proposes.json",         // points proposés par catégorie classique (actions à valider)
   points: { titre: "Points par canal, ajoutés dans l'application", canaux: {} },
@@ -47,6 +49,7 @@ const Circuits = {
           const p = await Store.readJSON(this.CHEMIN_PERSO);
           this.perso = { titre: p.titre || this.perso.titre, circuits: p.circuits || [], surcharges: p.surcharges || {} };
         } catch (e) { /* pas encore de fichier personnel : rien n'a été créé */ }
+        try { this.wjy = await Store.readJSON(this.CHEMIN_WJY); } catch (e) { /* pas de recettes */ }
         try {
           const q = await Store.readJSON(this.CHEMIN_POINTS);
           this.points = { titre: q.titre || this.points.titre, canaux: q.canaux || {} };
@@ -232,7 +235,7 @@ const Circuits = {
       return co ? `<details class="circ-niveau"><summary>Fonctions de ${escapeHtml(co.nom)} <span class="muted">(cours p. ${co.page})</span></summary>${this.ul(co.fonctions)}</details>` : "";
     }).join("");
     const astuces = (this.base.astuces || []).filter(a => a.paires.some(p => p.every(k => c.grille.includes(k)))).map(a => `<li>${escapeHtml(sansHanzi(a.texte))}</li>`).join("");
-    const ajouts = (c.ajouts || []).map(a => `<li>${a.action ? escapeHtml(sansHanzi(a.action)) + " : " : ""}${escapeHtml(sansHanzi(a.texte || ""))} ${(a.canaux || []).map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")}${a.source && /^proposition/.test(a.source) ? ` <span class="circ-pt-tag" title="Proposition de Claude (couple biǎo-lǐ ou même niveau) : à confirmer ou supprimer">à valider</span>` : a.source && /correction/.test(a.source) ? ` <span class="muted">(selon ta correction)</span>` : ""}</li>`).join("");
+    const ajouts = (c.ajouts || []).map(a => `<li>${a.action ? escapeHtml(sansHanzi(a.action)) + " : " : ""}${escapeHtml(sansHanzi(a.texte || ""))} ${(a.canaux || []).map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")}${a.source && /^proposition/.test(a.source) ? (/vérifié/.test(a.source) ? ` <span class="circ-pt-tag circ-pt-base" title="Même place statique (polarité et membre) que le canal du circuit, et au moins deux connexions dynamiques (6 systèmes) avec les canaux du circuit : le circuit reste équilibré">équilibre vérifié</span>` : ` <span class="circ-pt-tag" title="Proposition à confirmer ou supprimer">à valider</span>`) : a.source && /correction/.test(a.source) ? ` <span class="muted">(selon ta correction)</span>` : ""}</li>`).join("");
     const lies = (c.syndromes_lies || []).map(k => { const e = this.entreeSynd(k); return e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(k)}">${escapeHtml(sansHanzi(e.nom))}</button>` : `<span class="muted">${escapeHtml(k)} (introuvable)</span>`; }).join(" ");
     const parCanal = c.grille.map(code => {
       const l = this.syndromesDuCanal(code);
@@ -255,9 +258,9 @@ const Circuits = {
       ${this.section("Indications", this.indicationsHtml(c))}
       <section><h3>Points des canaux</h3><div id="circ-pts" class="circ-pts-grille"></div></section>
       <section><h3>Ajouts possibles</h3>${ajouts ? `<ul class="tcm-list">${ajouts}</ul><p class="muted">Dessinés en pointillé sous le circuit.</p>` : ""}<div class="circ-barre"><button type="button" class="edit-toggle-btn" id="circ-aj-prop">💡 Proposer des canaux à ajouter</button></div><div id="circ-aj-zone"></div></section>
-      ${this.section("Associations de points", (c.associations || []).length
-        ? `<div class="cat-chip-row circ-assoc-puces">${c.associations.map((a, i) => `<button type="button" class="cat-chip" data-a="${i}">${escapeHtml(sansHanzi(a.tableau))}</button>`).join("")}</div><div id="circ-assoc-detail" class="circ-assoc-detail"></div>`
-        : `<p class="muted">Aucune pour l'instant : « Modifier cette fiche » permet d'ajouter un tableau avec les points de chaque canal.</p>`)}
+      ${this.section("Associations de points", ((c.associations || []).length
+        ? `<div class="cat-chip-row circ-assoc-puces">${c.associations.map((a, i) => `<button type="button" class="cat-chip" data-a="${i}">${escapeHtml(sansHanzi(a.tableau))}</button>`).join("")}</div>`
+        : `<p class="muted">Aucun tableau à toi pour l'instant : « Modifier cette fiche » permet d'en ajouter un avec les points de chaque canal.</p>`) + this.wjyChipsHtml(c) + `<div id="circ-assoc-detail" class="circ-assoc-detail"></div>`)}
       ${this.section("Comparaison des associations et des ajouts", this.graphe(c))}
       ${this.section("Formule de pharmacopée équivalente", this.equivalent(c))}
       <section><h3>Points Tung compatibles</h3><div id="circ-tung" class="circ-tung"><p class="muted">Chargement…</p></div></section>
@@ -269,6 +272,7 @@ const Circuits = {
     zone.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const e = this.entreeSynd(b.dataset.synd); if (e) this.ouvrirSyndrome(e); }));
     this.assocActive = null;
     zone.querySelectorAll(".circ-assoc-puces [data-a]").forEach(b => b.addEventListener("click", () => { this.assocActive = this.assocActive === +b.dataset.a ? null : +b.dataset.a; this.majAssoc(c); }));
+    zone.querySelectorAll(".circ-wjy [data-w]").forEach(b => b.addEventListener("click", () => { const k = "w" + b.dataset.w; this.assocActive = this.assocActive === k ? null : k; this.majAssoc(c); }));
     this.majAssoc(c);
     this.tracerGraphe();
     this.pointsTung(c);
@@ -311,30 +315,72 @@ const Circuits = {
     }));
   },
 
-  // ---------- canaux à ajouter : propositions mécaniques à valider (couple biǎo-lǐ et même niveau de chaque canal du circuit)
-  BIAOLI: { P: "GI", GI: "P", E: "Rt", Rt: "E", C: "IG", IG: "C", V: "Rn", Rn: "V", EC: "TF", TF: "EC", VB: "F", F: "VB" },
-  MEME_NIVEAU: { P: "Rt", Rt: "P", GI: "E", E: "GI", C: "Rn", Rn: "C", IG: "V", V: "IG", EC: "F", F: "EC", TF: "VB", VB: "TF" },
-  LIB_NIVEAU: { P: "tài yīn", Rt: "tài yīn", GI: "yáng míng", E: "yáng míng", C: "shào yīn", Rn: "shào yīn", IG: "tài yáng", V: "tài yáng", EC: "jué yīn", F: "jué yīn", TF: "shào yáng", VB: "shào yáng" },
-  candidatsAjout(c) {
-    const dans = new Set(c.grille), deja = new Set((c.ajouts || []).flatMap(a => a.canaux || [])), out = new Map();
-    c.grille.forEach(k => {
-      [[this.BIAOLI[k], `couple biǎo-lǐ de ${k}`], [this.MEME_NIVEAU[k], `même niveau que ${k} (${this.LIB_NIVEAU[k]})`]].forEach(([x, raison]) => {
-        if (!x || dans.has(x) || deja.has(x)) return;
-        if (!out.has(x)) out.set(x, []);
-        out.get(x).push(raison);
-      });
+  // ---------- recettes de Wang Ju Yi (tes notes) : intégrées là où les canaux des points sont déjà dans le circuit (RM et DM = axe du corps, sans effet sur l'équilibre)
+  recettesWjy(c) {
+    const res = { liste: [], citees: [] };
+    if (!this.wjy) return res;
+    const g = new Set(c.grille), aj = new Set((c.ajouts || []).flatMap(a => a.canaux || []));
+    this.wjy.recettes.forEach(r => {
+      const ks = Object.keys(r.canaux);
+      if (ks.every(k => g.has(k))) res.liste.push({ r, ajout: [] });
+      else if (ks.every(k => g.has(k) || aj.has(k))) res.liste.push({ r, ajout: ks.filter(k => !g.has(k)) });
+      else if ((r.circuits_cites || []).includes(c.id)) res.citees.push({ r, manque: ks.filter(k => !g.has(k)) });
     });
-    return [...out.entries()].map(([code, raisons]) => ({ code, raisons }));
+    return res;
+  },
+  nomRecette(r) { return r.points.join(" – "); },
+  recetteHtml(w) {
+    const r = w.r;
+    const notes = (this.wjy.notes_groupes || {})[r.groupe] || [];
+    return `<p><strong>${r.points.map(p => this.pointHtml(p)).join(" – ")}</strong> <span class="circ-pt-tag circ-pt-base" title="${escapeHtml(this.wjy.source || "")}">Wang Ju Yi</span> <span class="muted">${escapeHtml(r.groupe)}</span>${r.vaisseaux ? ` <span class="muted">(${escapeHtml(r.vaisseaux)})</span>` : ""}</p>` +
+      (w.ajout && w.ajout.length ? `<p class="muted">Utilise ${escapeHtml(w.ajout.join(", "))} : un des ajouts possibles de ce circuit.</p>` : "") +
+      (w.manque && w.manque.length ? `<p class="muted">${escapeHtml(w.manque.join(", "))} n'est pas dans ce circuit : non intégrée, à toi de juger.</p>` : "") +
+      this.ul(r.puces) + (notes.length ? `<p class="muted">${notes.map(escapeHtml).join(" · ")}</p>` : "");
+  },
+  wjyChipsHtml(c) {
+    const res = this.recettesWjy(c);
+    this._wjyListe = res.liste;
+    if (!res.liste.length && !res.citees.length) return "";
+    const groupes = [...new Set(res.liste.map(w => w.r.groupe))];
+    const chips = groupes.map(gr => `<div class="circ-wjy-groupe"><span class="muted">${escapeHtml(gr)}</span> ${res.liste.map((w, i) => w.r.groupe === gr ? `<button type="button" class="cat-chip circ-wjy-chip" data-w="${i}" title="${escapeHtml(w.r.puces[0] || "")}">${escapeHtml(this.nomRecette(w.r))}${w.ajout.length ? " +" + escapeHtml(w.ajout.join("+")) : ""}</button>` : "").join("")}</div>`).join("");
+    const citees = res.citees.length ? `<details class="circ-wjy-citees"><summary>Citées dans tes notes pour ce circuit mais non intégrées (un canal du couple n'y est pas) — ${res.citees.length}</summary>${res.citees.map(w => `<details><summary>${escapeHtml(this.nomRecette(w.r))}</summary>${this.recetteHtml(w)}</details>`).join("")}</details>` : "";
+    const regles = (this.wjy.regles_generales || []).length ? `<details class="circ-wjy-citees"><summary>Règles de Wang Ju Yi (tes notes)</summary>${this.ul(this.wjy.regles_generales)}</details>` : "";
+    return `<div class="circ-wjy"><h4 class="circ-indic-titre">Wang Ju Yi (tes notes) — ${res.liste.length} recette(s) qui gardent l'équilibre du circuit</h4>${chips}${citees}${regles}</div>`;
+  },
+
+  // ---------- canaux à ajouter : le circuit doit garder son équilibre statique ET dynamique (cours « Méthode de l'équilibre global »)
+  // statique : le canal ajouté a la même polarité (yīn / yáng) et le même membre (main / pied) qu'un canal du circuit : il se range sur la même place des quatre
+  // dynamique : le canal ajouté a au moins deux connexions (une entrée, une sortie) avec les canaux du circuit, selon le tableau des 6 systèmes
+  SYSTEMES: {
+    P: ["Rt", "V", "GI", "F"], GI: ["E", "F", "P", "Rn"], E: ["GI", "EC", "Rt"], Rt: ["P", "IG", "E", "TF", "C"], C: ["Rn", "VB", "IG", "Rt"], IG: ["V", "Rt", "C", "F"],
+    V: ["IG", "P", "Rn"], Rn: ["C", "TF", "V", "GI", "EC"], EC: ["F", "E", "TF", "Rn"], TF: ["VB", "Rn", "EC", "Rt"], VB: ["TF", "C", "F"], F: ["EC", "GI", "VB", "IG", "P"],
+  },
+  placeStatique(code) {
+    const k = this.canaux.get(code) || {};
+    return (k.polarite === "yang" ? "yáng" : "yīn") + " de " + (k.membre === "pied" ? "pied" : "main");
+  },
+  candidatsAjout(c) {
+    const g = c.grille, deja = new Set((c.ajouts || []).flatMap(a => a.canaux || [])), out = [];
+    Object.keys(this.SYSTEMES).forEach(x => {
+      if (g.includes(x) || deja.has(x)) return;
+      const kx = this.canaux.get(x) || {};
+      const memePlace = g.filter(k => { const kk = this.canaux.get(k) || {}; return kk.polarite === kx.polarite && kk.membre === kx.membre; });
+      if (!memePlace.length) return;                                                    // équilibre statique
+      const liens = g.filter(k => this.SYSTEMES[x].includes(k));
+      if (liens.length < 2) return;                                                    // équilibre dynamique
+      out.push({ code: x, memePlace, liens, raisons: [`même place que ${memePlace.join(", ")} (${this.placeStatique(x)})`, `relié à ${liens.join(" et ")} (6 systèmes)`] });
+    });
+    return out;
   },
   proposerAjouts(c) {
     const z = document.getElementById("circ-aj-zone");
     if (z.innerHTML) { z.innerHTML = ""; return; }
     const l = this.candidatsAjout(c);
-    z.innerHTML = `<p class="muted circ-pts-avert">Propositions mécaniques : le canal couplé (biǎo-lǐ) ou du même niveau qu'un canal du circuit. Elles ne viennent pas de tes cours : à valider.</p>` +
-      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${escapeHtml(x.code)}</strong> <span class="muted">${escapeHtml((this.canaux.get(x.code) || {}).nom || "")}</span> — ${escapeHtml(x.raisons.join(" ; "))} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button></li>`).join("")}</ul>` : `<p class="muted">Rien à proposer de plus.</p>`);
+    z.innerHTML = `<p class="muted circ-pts-avert">Seuls sont proposés les canaux qui gardent l'équilibre du circuit : statique (même polarité et même membre qu'un canal du circuit, donc même place) et dynamique (au moins deux connexions avec les canaux du circuit, selon les 6 systèmes). Règles du cours « Méthode de l'équilibre global ».</p>` +
+      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${escapeHtml(x.code)}</strong> <span class="muted">${escapeHtml((this.canaux.get(x.code) || {}).nom || "")}</span> — ${escapeHtml(x.raisons.join(" ; "))} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button></li>`).join("")}</ul>` : `<p class="muted">Aucun autre canal ne garde l'équilibre statique et dynamique de ce circuit.</p>`);
     z.querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", async () => {
       const x = l[+b.dataset.i], nom = ((this.canaux.get(x.code) || {}).nom || x.code).toLowerCase();
-      const a = { action: "", texte: `canal ${nom} (${x.code}) — ${x.raisons.join(" ; ")}`, canaux: [x.code], ensemble: false, source: "proposition (à valider)" };
+      const a = { action: "", texte: `canal ${nom} (${x.code}) — ${x.raisons.join(" ; ")}`, canaux: [x.code], ensemble: false, source: "proposition (équilibre statique et dynamique vérifié)" };
       await this.ajouterAjout(c, a);
     }));
   },
@@ -554,12 +600,15 @@ const Circuits = {
 
   // une association = un tableau (syndrome) et les points de chaque canal du circuit ; un seul tableau est affiché à la fois, sur le dessin
   majAssoc(c) {
-    const a = this.assocActive != null ? (c.associations || [])[this.assocActive] : null;
+    const w = typeof this.assocActive === "string" ? (this._wjyListe || [])[+this.assocActive.slice(1)] : null;
+    const a = w ? { tableau: this.nomRecette(w.r), points: { ...w.r.canaux } } : (this.assocActive != null ? (c.associations || [])[this.assocActive] : null);
     document.getElementById("circ-dessin").innerHTML = this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true, points: a ? a.points : null });
-    document.querySelectorAll(".circ-assoc-puces [data-a]").forEach(b => b.classList.toggle("active", a && +b.dataset.a === this.assocActive));
+    document.querySelectorAll(".circ-assoc-puces [data-a]").forEach(b => b.classList.toggle("active", !w && a && +b.dataset.a === this.assocActive));
+    document.querySelectorAll(".circ-wjy [data-w]").forEach(b => b.classList.toggle("active", !!w && this.assocActive === "w" + b.dataset.w));
     const det = document.getElementById("circ-assoc-detail");
     if (!det) return;
-    if (!a) { det.innerHTML = `<p class="muted">Choisis un tableau : ses points s'écrivent sur le dessin.</p>`; return; }
+    if (!a) { det.innerHTML = `<p class="muted">Choisis un tableau ou une recette : ses points s'écrivent sur le dessin.</p>`; return; }
+    if (w) { det.innerHTML = this.recetteHtml(w); return; }
     const e = a.synd ? this.entreeSynd(a.synd) : null;
     det.innerHTML = `<p>${e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(a.synd)}">${escapeHtml(sansHanzi(a.tableau))}</button>` : `<strong>${escapeHtml(sansHanzi(a.tableau))}</strong>`}</p>` +
       `<p>${Object.entries(a.points || {}).map(([k, v]) => `<span class="sx-code">${escapeHtml(k)}</span> ${v.map(p => this.pointHtml(p)).join(", ")}`).join(" · ")}</p>` + (a.note ? `<p class="muted">${escapeHtml(sansHanzi(a.note))}</p>` : "");
