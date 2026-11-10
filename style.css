@@ -1099,3 +1099,24 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .menu-titre { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 2px solid var(--ink); padding-bottom: 0.15rem; margin-bottom: 0.25rem; }
 .menu-panneau .tab-btn { display: block; width: 100%; text-align: left; border-color: transparent; padding: 0.55rem 0.7rem; white-space: normal; }
 .menu-panneau .tab-btn:hover { border-color: var(--accent); }
+
+/* Points Tung */
+#tung-list { list-style: none; margin: 0; padding: 0; }
+.tung-item { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.4rem 0.6rem; cursor: pointer; font-size: 0.9rem; line-height: 1.25; }
+.tung-srcs { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+.tung-zh { font-weight: 400; font-size: 0.8em; margin-left: 0.4rem; }
+.tung-ident { margin: 0.2rem 0; }
+.tung-membre { cursor: default; }
+.tung-imgs { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.6rem 0; }
+.tung-img { display: block; border: 2px solid var(--ink); background: #fff; line-height: 0; }
+.tung-img img { display: block; max-height: 260px; max-width: 100%; width: auto; height: auto; }
+.tung-bloc { border: 2px solid var(--ink); padding: 0.4rem 0.7rem; margin: 0.6rem 0; }
+.tung-bloc summary { cursor: pointer; }
+.tung-champ h4 { margin: 0.5rem 0 0.1rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.tung-champ p { margin: 0.1rem 0; }
+.tung-cas { margin: 0.3rem 0; border-bottom: 1px solid var(--line); padding-bottom: 0.3rem; }
+.tung-dg { border-collapse: collapse; margin: 0.6rem 0; width: min(34rem, 100%); }
+.tung-dg th, .tung-dg td { border: 2px solid var(--ink); padding: 0.35rem 0.6rem; width: 50%; vertical-align: top; }
+.tung-dg th { background: var(--ink); color: var(--bg); text-align: center; }
+.tung-dg .tung-centre td { text-align: center; font-weight: 700; background: var(--panel); }
+.tung-lien { font: inherit; background: none; border: 0; border-bottom: 2px solid var(--accent); padding: 0; cursor: pointer; color: inherit; text-align: left; }
