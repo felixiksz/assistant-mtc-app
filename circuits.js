@@ -278,6 +278,7 @@ const Circuits = {
     this.tracerGraphe();
     this.pointsTung(c);
     this.rendrePoints(c);
+    this.crayonsChamps(zone, c);
     this.annoterCroisements(zone);
     document.getElementById("circ-aj-prop").addEventListener("click", () => this.proposerAjouts(c));
     document.getElementById("circ-edit").addEventListener("click", () => this.modifier(c));
@@ -351,6 +352,20 @@ const Circuits = {
     const citees = res.citees.length ? `<details class="circ-wjy-citees"><summary>Citées dans tes notes pour ce circuit mais non intégrées (un canal du couple n'y est pas) — ${res.citees.length}</summary>${res.citees.map(w => `<details><summary>${escapeHtml(this.nomRecette(w.r))}</summary>${this.recetteHtml(w)}</details>`).join("")}</details>` : "";
     const regles = (this.wjy.regles_generales || []).length ? `<details class="circ-wjy-citees"><summary>Règles de Wang Ju Yi (tes notes)</summary>${this.ul(this.wjy.regles_generales)}</details>` : "";
     return `<div class="circ-wjy"><h4 class="circ-indic-titre">Wang Ju Yi (tes notes) — ${res.liste.length} recette(s) qui gardent l'équilibre du circuit</h4>${chips}${citees}${regles}</div>`;
+  },
+
+  // petit crayon près du titre d'une rubrique : ouvre le formulaire de modification limité à ce seul champ
+  CHAMPS_CIRCUIT: { "syndromes du circuit": "ce-syndromes", "actions / fonctions du circuit": "ce-actions", "indications": "ce-indications", "ajouts possibles": "ce-ajouts",
+                    "associations de points": "ce-assoc", "formule de pharmacopee equivalente": "ce-form-lies", "syndromes de ta base rattaches a ce circuit": "ce-lies", "notes": "ce-notes" },
+  crayonsChamps(zone, c) {
+    zone.querySelectorAll("section > h3").forEach(h => {
+      const id = this.CHAMPS_CIRCUIT[dsNorm(h.textContent.replace(/\s*✏️\s*$/, "")).trim()];
+      if (!id || h.querySelector(".edit-champ")) return;
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "edit-champ"; b.textContent = "✏️"; b.title = "Modifier ce champ seul"; b.setAttribute("aria-label", "Modifier ce champ seul");
+      b.addEventListener("click", () => { this.modifier(c); this.edition.champ = id; this.rendreFiche(); });
+      h.appendChild(b);
+    });
   },
 
   // ---------- canaux à ajouter : le circuit doit garder son équilibre statique ET dynamique (cours « Méthode de l'équilibre global »)
@@ -873,6 +888,16 @@ const Circuits = {
       ul.querySelectorAll("li[data-k]").forEach(li => li.addEventListener("click", () => { d.formules.push(li.dataset.k); document.getElementById("ce-form-search").value = ""; ul.innerHTML = ""; pf(); }));
     });
     document.getElementById("ce-annuler").addEventListener("click", () => { this.edition = null; if (d.nouveau) { this.actif = null; this.rendreListe(); } this.rendreFiche(); });
+    if (d.champ) {                                   // un seul champ : les autres restent intacts et cachés
+      const cible = document.getElementById(d.champ);
+      const form = document.getElementById("circ-form");
+      [...form.children].forEach(el => { el.hidden = !(el.matches("#ce-statut, .circ-barre") || (cible && el.contains(cible))); });
+      const barre = form.querySelector(".circ-barre");
+      if (barre) barre.insertAdjacentHTML("beforeend", ` <button type="button" class="edit-toggle-btn" id="ce-tout">Tous les champs</button>`);
+      const tout = document.getElementById("ce-tout");
+      if (tout) tout.addEventListener("click", () => { lire(); d.champ = null; this.rendreEdition(c); });
+      if (cible && cible.focus) cible.focus();
+    }
     document.getElementById("circ-form").addEventListener("submit", ev => { ev.preventDefault(); lire(); this.sauver(c); });
   },
 

@@ -1239,3 +1239,14 @@ body:has(.onglets-travail:not([hidden])) .edit-flottante, body:has(.onglets-trav
 .actions-visibles .circ-pts-liste li > .circ-act, .actions-visibles .circ-pts-prop li > .circ-act, .actions-visibles.circ-pts-zone .circ-pts-prop li > .circ-act {
   display: block !important; position: static !important; margin: 0.1rem 0 0.25rem 2.4rem; border: 0 !important; padding: 0 !important; box-shadow: none !important; background: none !important; max-width: none !important; }
 .circ-act:empty { display: none !important; }
+
+/* Modifier un seul champ : crayon près du titre de la rubrique, et menu du crayon flottant */
+.edit-champ { font: inherit; font-size: 0.8rem; background: none; border: 1px solid transparent; cursor: pointer; padding: 0 0.3rem; margin-left: 0.4rem; opacity: 0.55; vertical-align: middle; border-radius: 50%; }
+h3:hover > .edit-champ, .edit-champ:focus, .edit-champ:hover { opacity: 1; border-color: var(--ink); }
+@media (hover: none) { .edit-champ { opacity: 0.9; } }
+.edit-champs-menu { position: absolute; right: 0; top: 3rem; z-index: 40; width: min(16rem, 80vw); max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 0.2rem; background: var(--bg); color: var(--ink); border: 2px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); padding: 0.5rem; pointer-events: auto; text-transform: none; }
+.edit-champs-menu p { margin: 0 0 0.2rem; font-size: 0.78rem; }
+.edit-champs-menu hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 0.2rem 0; }
+.edit-champs-menu .edit-toggle-btn { width: auto !important; height: auto !important; border-radius: 0 !important; padding: 0.3rem 0.6rem !important; font-size: 0.85rem !important; box-shadow: none !important; justify-content: flex-start; display: block !important; text-align: left; }
+.edit-champ-item { font: inherit; font-size: 0.85rem; text-align: left; background: none; border: 0; border-bottom: 1px dotted var(--line); cursor: pointer; color: inherit; padding: 0.25rem 0.3rem; }
+.edit-champ-item:hover { background: var(--ink); color: var(--bg); }

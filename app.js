@@ -5293,7 +5293,34 @@ function addEditControls(container, relPath, obj, opts) {
   bar.appendChild(btn);
   container.prepend(bar);
   const editorFn = opts.editorFn || openGenericFormEditor;
-  btn.addEventListener("click", () => editorFn(container, relPath, obj, opts));
+  const ouvrir = champ => (champ ? openGenericFormEditor(container, relPath, obj, { ...opts, champ }) : editorFn(container, relPath, obj, opts));
+  // menu : toute la fiche, ou un seul champ (les autres ne sont pas touchés)
+  btn.addEventListener("click", ev => {
+    ev.stopPropagation();
+    const ancien = bar.querySelector(".edit-champs-menu");
+    if (ancien) { ancien.remove(); return; }
+    const menu = document.createElement("div");
+    menu.className = "edit-champs-menu";
+    menu.innerHTML = `<p class="muted">Modifier…</p><button type="button" class="edit-toggle-btn" data-champ="">La fiche entière</button><hr>` +
+      Object.keys(obj).filter(k => k !== "id").map(k => `<button type="button" class="edit-champ-item" data-champ="${escapeHtml(k)}">${escapeHtml(prettifyKey(k))}</button>`).join("");
+    bar.appendChild(menu);
+    menu.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { menu.remove(); ouvrir(b.dataset.champ); }));
+    const fermer = e2 => { if (!menu.contains(e2.target)) { menu.remove(); document.removeEventListener("click", fermer); } };
+    setTimeout(() => document.addEventListener("click", fermer), 0);
+  });
+  // petit crayon près du titre des rubriques dont le titre correspond à un champ de la fiche
+  const norme = s => dsNorm(s).replace(/\b(de|du|des|la|le|les|d|l|et|a|au)\b/g, "").replace(/[^a-z0-9]+/g, "");
+  const cles = {};
+  Object.keys(obj).forEach(k => { cles[norme(prettifyKey(k))] = k; });
+  container.querySelectorAll("section > h3").forEach(h => {
+    const k = cles[norme(h.textContent)];
+    if (!k || h.querySelector(".edit-champ")) return;
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "edit-champ"; b.textContent = "✏️";
+    b.title = "Modifier ce champ seul : " + prettifyKey(k); b.setAttribute("aria-label", "Modifier ce champ seul : " + prettifyKey(k));
+    b.addEventListener("click", () => ouvrir(k));
+    h.appendChild(b);
+  });
 }
 
 // Enregistre un objet de fiche modifié (JSON entier ou élément d'un tableau, selon opts.arrayItem) —
@@ -5409,7 +5436,7 @@ function openPointEditor(container, relPath, obj, opts) {
       <button type="button" id="edit-cancel">Annuler</button>
       <span id="edit-status" class="muted"></span>
     </div>
-    <p class="muted ff-hint">Formulaire — chaque champ s'enregistre séparément, pas besoin d'écrire du JSON. <button type="button" id="ff-switch-json" class="ff-link-btn">Passer en mode JSON brut (avancé)</button></p>
+    <p class="muted ff-hint">${opts && opts.champ ? "Un seul champ : <strong>" + escapeHtml(prettifyKey(opts.champ)) + "</strong> — le reste de la fiche ne change pas." : "Formulaire — chaque champ s'enregistre séparément, pas besoin d'écrire du JSON."} ${opts && opts.champ ? "" : `<button type="button" id="ff-switch-json" class="ff-link-btn">Passer en mode JSON brut (avancé)</button>`}</p>
   `;
   const fieldsHost = document.createElement("div");
   fieldsHost.className = "ff-fields";
@@ -5669,7 +5696,7 @@ function openGenericFormEditor(container, relPath, obj, opts) {
       <button type="button" id="edit-cancel">Annuler</button>
       <span id="edit-status" class="muted"></span>
     </div>
-    <p class="muted ff-hint">Formulaire — chaque champ s'enregistre séparément, pas besoin d'écrire du JSON. <button type="button" id="ff-switch-json" class="ff-link-btn">Passer en mode JSON brut (avancé)</button></p>
+    <p class="muted ff-hint">${opts && opts.champ ? "Un seul champ : <strong>" + escapeHtml(prettifyKey(opts.champ)) + "</strong> — le reste de la fiche ne change pas." : "Formulaire — chaque champ s'enregistre séparément, pas besoin d'écrire du JSON."} ${opts && opts.champ ? "" : `<button type="button" id="ff-switch-json" class="ff-link-btn">Passer en mode JSON brut (avancé)</button>`}</p>
   `;
   const fieldsHost = document.createElement("div");
   fieldsHost.className = "ff-fields";
@@ -5689,6 +5716,7 @@ function openGenericFormEditor(container, relPath, obj, opts) {
   const handlers = {}; // key -> () => nouvelle valeur
 
   Object.keys(obj).forEach(key => {
+    if (opts && opts.champ && key !== opts.champ) return;          // édition d'un seul champ
     const val = obj[key];
     const label = prettifyKey(key);
 
@@ -5770,10 +5798,11 @@ function openGenericFormEditor(container, relPath, obj, opts) {
   container.appendChild(wrap);
 
   document.getElementById("edit-cancel").addEventListener("click", () => { container.innerHTML = original; });
-  document.getElementById("ff-switch-json").addEventListener("click", () => openJsonEditor(container, relPath, obj, opts));
+  const versJson = document.getElementById("ff-switch-json");
+  if (versJson) versJson.addEventListener("click", () => openJsonEditor(container, relPath, obj, opts));
   document.getElementById("edit-save").addEventListener("click", async () => {
     const status = document.getElementById("edit-status");
-    const parsed = {};
+    const parsed = opts && opts.champ ? { ...obj } : {};          // un seul champ : on repart de la fiche entière
     Object.keys(handlers).forEach(k => { parsed[k] = handlers[k](); });
     try {
       await saveFicheObject(relPath, opts, parsed, obj, status);
