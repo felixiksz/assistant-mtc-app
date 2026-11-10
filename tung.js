@@ -199,7 +199,7 @@ const Tung = {
       ${(f.images || []).length ? `<div class="tung-imgs">${f.images.map(i => this.img(i)).join("")}</div>` : ""}
       ${blocs}
       ${prot.length ? `<section><h3>Dans les protocoles</h3><div class="circ-synd-liste">${prot.map(p => `<button type="button" class="edit-toggle-btn" data-tung-proto="${escapeHtml(p.id)}">${escapeHtml(p.nom)}</button>`).join(" ")}</div></section>` : ""}
-      ${casHtml ? `<section><h3>Cas cliniques du livre de Tan</h3><p class="muted">Résumés en anglais, pas le texte du livre.</p>${casHtml}</section>` : ""}
+      ${casHtml ? `<section><h3>Cas cliniques du livre de Tan</h3><p class="muted">Résumés traduits en français, pas le texte du livre.</p>${casHtml}</section>` : ""}
       ${(f.a_verifier || []).length ? `<section><h3>À vérifier</h3>${this.ul(f.a_verifier)}</section>` : ""}`;
     z.querySelectorAll("[data-tung-proto]").forEach(b => b.addEventListener("click", () => this.afficher(b.dataset.tungProto, "protocoles")));
     document.getElementById("tung-edit").addEventListener("click", () => this.modifier(f));
