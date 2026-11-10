@@ -16,6 +16,8 @@ const Tung = {
   vue: "fiches",            // fiches | protocoles | mouvements
   actif: null,
   zone: null,
+  canal: null,
+  CODES: ["P", "GI", "E", "Rt", "C", "IG", "V", "Rn", "EC", "TF", "VB", "F"],
   recherche: "",
   edition: null,
   _p: null,
@@ -40,9 +42,10 @@ const Tung = {
       const a = aj[f.id];
       const blocs = [...f.blocs];
       if (a && a.champs && a.champs.length) blocs.push({ source: "perso", page: "", champs: a.champs, titre: a.source || "" });
-      return { ...f, alias: [...(f.alias || []), ...((a && a.alias) || [])], blocs, origine: "base", complete: !!a };
+      const canaux = a && a.canaux !== undefined ? { codes: a.canaux, statut: "toi", source: "" } : (f.canaux || { codes: [], statut: "", source: "" });
+      return { ...f, alias: [...(f.alias || []), ...((a && a.alias) || [])], blocs, canaux, origine: "base", complete: !!a };
     });
-    const p = (this.perso.fiches || []).map(f => ({ zh: "", trad: "", numeros: [], alias: [], membres: [], images: [], a_verifier: [], ...f, origine: "perso" }));
+    const p = (this.perso.fiches || []).map(f => ({ zh: "", trad: "", numeros: [], alias: [], membres: [], images: [], a_verifier: [], canaux: { codes: [], statut: "", source: "" }, ...f, origine: "perso" }));
     this.liste = [...b, ...p];
     this.protos = [...this.base.protocoles.map(x => ({ ...x, origine: "base" })), ...(this.perso.protocoles || []).map(x => ({ ...x, origine: "perso" }))];
   },
@@ -52,7 +55,7 @@ const Tung = {
   srcCourt(s) { return s === "perso" ? "Toi" : ((this.base.sources[s] || {}).court || s); },
   texteRecherche(f) {
     const ch = f.blocs.flatMap(b => b.champs.map(c => [c.k, ...(Array.isArray(c.v) ? c.v : [c.v])].join(" ")));
-    return dsNorm([f.nom, f.zh, f.trad, ...(f.numeros || []), ...(f.alias || []), ...(f.membres || []).map(m => m[0] || m), ...ch].join(" "));
+    return dsNorm([f.nom, f.zh, f.trad, ...(f.numeros || []), ...((f.canaux || {}).codes || []), ...(f.alias || []), ...(f.membres || []).map(m => m[0] || m), ...ch].join(" "));
   },
   ul(items) { return items && items.length ? `<ul class="tcm-list">${items.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : ""; },
   lignes(t) { return String(t || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean); },
@@ -81,21 +84,25 @@ const Tung = {
     document.querySelectorAll("#tung-vues button").forEach(b => b.addEventListener("click", () => { this.vue = b.dataset.v; this.actif = null; this.edition = null; this.rendrePuces(); this.rendreListe(); this.rendreDetail(); }));
     const z = document.getElementById("tung-zones");
     if (this.vue !== "fiches") { z.innerHTML = ""; return; }
+    const nc = k => this.liste.filter(f => ((f.canaux || {}).codes || []).includes(k)).length;
     const n = k => this.liste.filter(f => f.zone === k).length;
     z.innerHTML = `<button type="button" class="cat-chip${this.zone ? "" : " active"}" data-z="">Toutes</button>` +
       this.base.zones.filter(x => n(x.n)).map(x => `<button type="button" class="cat-chip${this.zone === x.n ? " active" : ""}" data-z="${x.n}" title="${escapeHtml(x.nom)}">${x.n} · ${escapeHtml(x.nom)}</button>`).join("") +
-      (this.liste.some(f => !f.zone) ? `<button type="button" class="cat-chip${this.zone === "?" ? " active" : ""}" data-z="?">Sans numéro</button>` : "");
-    z.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { this.zone = b.dataset.z || null; this.rendrePuces(); this.rendreListe(); }));
+      (this.liste.some(f => !f.zone) ? `<button type="button" class="cat-chip${this.zone === "?" ? " active" : ""}" data-z="?">Sans numéro</button>` : "") +
+      `<div class="tung-canaux-filtre muted">Canal :</div>` + this.CODES.filter(nc).map(k => `<button type="button" class="cat-chip${this.canal === k ? " active" : ""}" data-c="${k}">${k} (${nc(k)})</button>`).join("") +
+      `<button type="button" class="cat-chip${this.canal === "?" ? " active" : ""}" data-c="?">Canal inconnu</button>`;
+    z.querySelectorAll("button[data-z]").forEach(b => b.addEventListener("click", () => { this.zone = b.dataset.z || null; this.rendrePuces(); this.rendreListe(); }));
+    z.querySelectorAll("button[data-c]").forEach(b => b.addEventListener("click", () => { this.canal = this.canal === b.dataset.c ? null : b.dataset.c; this.rendrePuces(); this.rendreListe(); }));
   },
 
   rendreListe() {
     const ul = document.getElementById("tung-list"), q = dsNorm(this.recherche.trim()), mots = q ? q.split(/\s+/) : [];
     let html = "", n = 0;
     if (this.vue === "fiches") {
-      const l = this.liste.filter(f => (!this.zone || (this.zone === "?" ? !f.zone : f.zone === this.zone)) && mots.every(m => this.texteRecherche(f).includes(m)));
+      const l = this.liste.filter(f => (!this.zone || (this.zone === "?" ? !f.zone : f.zone === this.zone)) && (!this.canal || (this.canal === "?" ? !((f.canaux || {}).codes || []).length : ((f.canaux || {}).codes || []).includes(this.canal))) && mots.every(m => this.texteRecherche(f).includes(m)));
       n = l.length;
       html = l.map(f => `<li class="gl-item tung-item${f.id === this.actif ? " selected" : ""}" data-id="${escapeHtml(f.id)}"><strong>${escapeHtml(f.nom)}</strong>` +
-        `<span class="muted">${escapeHtml((f.numeros || []).join(" · ") || "sans numéro")}${f.type === "groupe" ? " · groupe" : ""}${f.origine === "perso" ? " · créé par toi" : f.complete ? " · complété" : ""}</span>` +
+        `<span class="muted">${escapeHtml((f.numeros || []).join(" · ") || "sans numéro")}${((f.canaux || {}).codes || []).length ? " · canal " + f.canaux.codes.join("+") : ""}${f.type === "groupe" ? " · groupe" : ""}${f.origine === "perso" ? " · créé par toi" : f.complete ? " · complété" : ""}</span>` +
         `<span class="tung-srcs">${[...new Set(f.blocs.map(b => b.source))].map(s => `<span class="sx-code">${escapeHtml(this.srcCourt(s))}</span>`).join("")}</span></li>`).join("");
     } else if (this.vue === "protocoles") {
       const l = this.protos.filter(p => mots.every(m => dsNorm([p.nom, p.mouvement, p.indication].join(" ")).includes(m)));
@@ -156,6 +163,7 @@ const Tung = {
       </div>
       <h2>${escapeHtml(f.nom)} ${f.zh ? `<span class="tung-zh">${escapeHtml(f.zh)}</span>` : ""}</h2>
       <p class="tung-ident">${(f.numeros || []).map(n => `<span class="sx-code">${escapeHtml(n)}</span>`).join(" ")} ${f.zone ? `<span class="muted">zone ${escapeHtml(f.zone)} · ${escapeHtml(this.zoneNom(f.zone))}</span>` : `<span class="muted">zone non précisée</span>`}${f.type === "groupe" ? ` <span class="muted">· groupe de points</span>` : ""}</p>
+      ${this.htmlCanaux(f)}
       ${f.trad ? `<p class="muted">${escapeHtml(f.trad)}</p>` : ""}
       ${(f.alias || []).length ? `<p class="muted">Aussi : ${escapeHtml(f.alias.join(" ; "))}</p>` : ""}
       ${membres ? `<div class="cat-chip-row">${membres}</div>` : ""}
@@ -168,6 +176,25 @@ const Tung = {
     document.getElementById("tung-edit").addEventListener("click", () => this.modifier(f));
     const s = document.getElementById("tung-suppr"); if (s) s.addEventListener("click", () => this.supprimer(f));
     const r = document.getElementById("tung-retablir"); if (r) r.addEventListener("click", () => this.retablir(f));
+  },
+
+  htmlCanaux(f) {
+    const c = f.canaux || {}, l = c.codes || [];
+    if (!l.length) return `<p class="muted tung-canal">Canal : non renseigné — « ${f.origine === "perso" ? "Modifier" : "Compléter"} cette fiche » permet de le choisir.</p>`;
+    const st = c.statut === "deduit" ? "déduit, à valider" : c.statut === "toi" ? "choisi par toi" : "d'après la source";
+    return `<p class="tung-canal"><strong>Canal :</strong> ${l.map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")} <span class="muted">(${st}${c.source ? " — " + escapeHtml(c.source) : ""})</span></p>`;
+  },
+
+  // points Tung compatibles avec un circuit : tous leurs canaux sont dans le circuit (le réseau reste équilibré) ; « avec ajout » si un canal d'ajout possible est nécessaire
+  compatibles(grille, ajouts) {
+    const g = new Set(grille), a = new Set((ajouts || []).flat());
+    const ok = [], avec = [];
+    (this.liste || []).forEach(f => {
+      const l = (f.canaux || {}).codes || [];
+      if (!l.length) return;
+      if (l.every(k => g.has(k))) ok.push(f); else if (l.every(k => g.has(k) || a.has(k))) avec.push(f);
+    });
+    return { ok, avec };
   },
 
   cellule(c) { return !c ? "" : typeof c === "string" ? escapeHtml(c) : `<button type="button" class="tung-lien" data-tung-fiche="${escapeHtml(c.id)}">${escapeHtml(c.t)}</button>`; },
@@ -206,7 +233,7 @@ const Tung = {
     this.ensureLoaded().then(() => {
       if (this.vue === "protocoles") { this.edition = { proto: true, nouveau: true, nom: "", mouvement: "", indication: "", rows: "", centre: "", notes: "" }; this.actif = "(nouveau)"; this.rendreListe(); this.rendreEditionProto(); return; }
       this.vue = "fiches"; this.rendrePuces();
-      this.edition = { nouveau: true, nom: "", zh: "", numeros: "", zone: "", type: "point", alias: "", membres: "", localisation: "", indications: "", technique: "", associations: "", notes: "", source: "" };
+      this.edition = { nouveau: true, canaux: [], nom: "", zh: "", numeros: "", zone: "", type: "point", alias: "", membres: "", localisation: "", indications: "", technique: "", associations: "", notes: "", source: "" };
       this.actif = "(nouveau)"; this.rendreListe(); this.rendreEdition({ origine: "perso" });
     }).catch(e => { document.getElementById("tung-detail").innerHTML = `<p class="muted">Chargement impossible (${escapeHtml(e.message)}).</p>`; });
   },
@@ -219,7 +246,7 @@ const Tung = {
     const bl = perso ? f.blocs.find(b => b.source === "perso") : (f.blocs.find(b => b.source === "perso") || null);
     const g = this.champsDe(bl);
     const a = (this.perso.ajouts || {})[f.id] || {};
-    this.edition = { nouveau: false, nom: f.nom, zh: f.zh || "", numeros: (f.numeros || []).join(", "), zone: f.zone || "", type: f.type || "point",
+    this.edition = { nouveau: false, canaux: [...((f.canaux || {}).codes || [])], nom: f.nom, zh: f.zh || "", numeros: (f.numeros || []).join(", "), zone: f.zone || "", type: f.type || "point",
       alias: (perso ? f.alias : (a.alias || [])).join("\n"), membres: (f.membres || []).map(m => Array.isArray(m) ? m[0] : m).join("\n"),
       localisation: g("Localisation").join("\n"), indications: g("Indications").join("\n"), technique: g("Technique").join("\n"), associations: g("Associations").join("\n"), notes: g("Notes").join("\n"),
       source: bl ? (bl.titre || "") : (a.source || "") };
@@ -238,6 +265,8 @@ const Tung = {
         <label>Zone<select id="te-zone"><option value="">— non précisée / déduite du numéro —</option>${this.base.zones.map(x => `<option value="${x.n}"${d.zone === x.n ? " selected" : ""}>${x.n} · ${escapeHtml(x.nom)}</option>`).join("")}</select></label>
         <label>Type<select id="te-type"><option value="point"${d.type === "point" ? " selected" : ""}>Point</option><option value="groupe"${d.type === "groupe" ? " selected" : ""}>Groupe de points (Dao Ma)</option></select></label>
         ${T("membres", "Points du groupe (un par ligne)", 3, d.membres)}` : ""}
+        <fieldset><legend>Canal de rattachement (pour les circuits)</legend><div class="tung-cases">${this.CODES.map(k => `<label class="tung-case"><input type="checkbox" data-canal="${k}"${(d.canaux || []).includes(k) ? " checked" : ""}> ${k}</label>`).join("")}</div>
+          <p class="muted">À cocher quand le point agit sur ce canal : il pourra alors être proposé comme ajout dans les circuits qui contiennent ce canal.</p></fieldset>
         ${T("alias", "Autres noms (un par ligne)", 2, d.alias)}
         ${T("localisation", "Localisation", 3, d.localisation)}
         ${T("indications", "Indications (une par ligne)", 4, d.indications)}
@@ -262,16 +291,22 @@ const Tung = {
                     ["Associations", this.lignes(v("associations"))], ["Notes", this.lignes(v("notes"))]]
       .filter(x => x[1].length).map(([k, l]) => ({ k, v: l.length > 1 ? l : l[0] }));
     const alias = this.lignes(v("alias")), source = v("source").trim();
+    const canaux = [...document.querySelectorAll("#tung-form [data-canal]:checked")].map(x => x.dataset.canal);
     let id = f.id;
     if (complet) {
       const numeros = v("numeros").split(/[,;]\s*/).map(x => x.trim()).filter(Boolean);
       const fiche = { id: d.nouveau ? "perso_" + dsNorm(v("nom")).replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40) + "_" + Date.now().toString(36) : f.id,
         nom: v("nom").trim(), zh: v("zh").trim(), numeros, zone: v("zone") || (numeros[0] && /^\d\d\./.test(numeros[0]) ? numeros[0].slice(0, 2) : null), type: v("type") || "point",
-        alias, membres: this.lignes(v("membres")).map(t => [t, null]), images: f.images || [], blocs: [{ source: "perso", page: "", titre: source, champs }], a_verifier: [] };
+        alias, membres: this.lignes(v("membres")).map(t => [t, null]), images: f.images || [], blocs: [{ source: "perso", page: "", titre: source, champs }], a_verifier: [], canaux: { codes: canaux, statut: canaux.length ? "toi" : "", source: "" } };
       id = fiche.id;
       if (d.nouveau) this.perso.fiches.push(fiche); else this.perso.fiches[this.perso.fiches.findIndex(x => x.id === f.id)] = fiche;
-    } else if (champs.length || alias.length) this.perso.ajouts[f.id] = { alias, champs, source };
-    else delete this.perso.ajouts[f.id];
+    } else {
+      const o = { alias, champs, source };
+      const orig = (f.canaux || {}).statut === "toi" ? null : (f.canaux || {}).codes || [];
+      if (!(orig && JSON.stringify(canaux) === JSON.stringify(orig))) o.canaux = canaux;
+      if (champs.length || alias.length || o.canaux) this.perso.ajouts[f.id] = o; else delete this.perso.ajouts[f.id];
+    }
+    
     statut.textContent = "Enregistrement…";
     try { await this.ecrire(); } catch (e) { statut.textContent = "Enregistrement impossible : " + e.message; return; }
     this.recomposer(); this.edition = null; this.actif = id; this.rendrePuces(); this.rendreListe(); this.rendreDetail();

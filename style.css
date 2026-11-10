@@ -1120,3 +1120,8 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .tung-dg th { background: var(--ink); color: var(--bg); text-align: center; }
 .tung-dg .tung-centre td { text-align: center; font-weight: 700; background: var(--panel); }
 .tung-lien { font: inherit; background: none; border: 0; border-bottom: 2px solid var(--accent); padding: 0; cursor: pointer; color: inherit; text-align: left; }
+.tung-canaux-filtre { flex-basis: 100%; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.3rem; }
+.tung-cases { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; }
+.tung-case { display: inline-flex !important; align-items: center; gap: 0.3rem; font-weight: 400 !important; margin: 0 !important; }
+.tung-canal { margin: 0.3rem 0; }
+.circ-tung { margin: 0.3rem 0; }

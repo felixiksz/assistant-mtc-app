@@ -209,6 +209,7 @@ const Circuits = {
         : `<p class="muted">Aucune pour l'instant : « Modifier cette fiche » permet d'ajouter un tableau avec les points de chaque canal.</p>`)}
       ${this.section("Comparaison des associations et des ajouts", this.graphe(c))}
       ${this.section("Formule de pharmacopée équivalente", this.equivalent(c))}
+      <section><h3>Points Tung compatibles</h3><div id="circ-tung" class="circ-tung"><p class="muted">Chargement…</p></div></section>
       ${(c.notes || []).length ? this.section("Notes", this.ul(c.notes)) : ""}
       ${niveaux ? this.section("Niveaux", niveaux) : ""}
       ${astuces ? this.section("Astuces du Dr Tán Té Fū (cours, p. 41)", `<ul class="tcm-list">${astuces}</ul>`) : ""}
@@ -220,9 +221,21 @@ const Circuits = {
     zone.querySelectorAll(".circ-assoc-puces [data-a]").forEach(b => b.addEventListener("click", () => { this.assocActive = this.assocActive === +b.dataset.a ? null : +b.dataset.a; this.majAssoc(c); }));
     this.majAssoc(c);
     this.tracerGraphe();
+    this.pointsTung(c);
     document.getElementById("circ-edit").addEventListener("click", () => this.modifier(c));
     const s = document.getElementById("circ-suppr"); if (s) s.addEventListener("click", () => this.supprimer(c));
     const r = document.getElementById("circ-retablir"); if (r) r.addEventListener("click", () => this.retablir(c));
+  },
+
+  // points de Maître Tung dont tous les canaux sont dans le circuit : on peut les ajouter sans déséquilibrer le réseau
+  async pointsTung(c) {
+    const el = document.getElementById("circ-tung");
+    if (!el) return;
+    try { await Tung.ensureLoaded(); } catch (e) { el.innerHTML = `<p class="muted">Points Tung indisponibles (${escapeHtml(e.message)}).</p>`; return; }
+    const r = Tung.compatibles(c.grille, (c.ajouts || []).map(a => a.canaux || []));
+    const bt = f => `<button type="button" class="edit-toggle-btn" data-tung-fiche="${escapeHtml(f.id)}">${escapeHtml(f.nom)}${(f.numeros || []).length ? " " + escapeHtml(f.numeros.join("/")) : ""} <span class="muted">${f.canaux.codes.join("+")}</span></button>`;
+    el.innerHTML = (r.ok.length ? `<p class="muted">Leurs canaux sont déjà dans le circuit : ils s'y ajoutent sans le déséquilibrer.</p><div class="circ-synd-liste">${r.ok.map(bt).join(" ")}</div>` : `<p class="muted">Aucun point Tung dont le canal soit dans ce circuit pour l'instant (les canaux se renseignent dans l'onglet Points Tung).</p>`) +
+      (r.avec.length ? `<p class="muted">Avec un des ajouts possibles du circuit :</p><div class="circ-synd-liste">${r.avec.map(bt).join(" ")}</div>` : "");
   },
 
   // graphe de comparaison (même principe que l'arbre des modifications d'une formule) : à gauche les tableaux et les ajouts,
