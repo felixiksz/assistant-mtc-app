@@ -243,9 +243,9 @@ const Circuits = {
       return `<details class="circ-synd"><summary><span class="sx-code">${code}</span> ${escapeHtml((this.canaux.get(code) || {}).nom || "")} <span class="muted">(${l.length})</span></summary><div class="circ-synd-liste">${l.map(e => `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(this.cleSynd(e))}">${escapeHtml(sansHanzi(e.nom))}</button>`).join(" ")}</div></details>`;
     }).join("");
     zone.innerHTML = `
-      <div class="circ-barre">
-        <button type="button" class="edit-toggle-btn" id="circ-edit">✏️ Modifier cette fiche</button>
-        ${c.origine === "perso" ? `<button type="button" class="edit-toggle-btn" id="circ-suppr">🗑 Supprimer</button>` : c.modifie ? `<button type="button" class="edit-toggle-btn" id="circ-retablir">↺ Revenir à la version du cours</button>` : ""}
+      <div class="circ-barre barre-flottante">
+        <button type="button" class="edit-toggle-btn" id="circ-edit" title="Modifier cette fiche" aria-label="Modifier cette fiche">✏️</button>
+        ${c.origine === "perso" ? `<button type="button" class="edit-toggle-btn" id="circ-suppr" title="Supprimer ce circuit" aria-label="Supprimer ce circuit">🗑</button>` : c.modifie ? `<button type="button" class="edit-toggle-btn" id="circ-retablir" title="Revenir à la version du cours" aria-label="Revenir à la version du cours">↺</button>` : ""}
       </div>
       <h2>${escapeHtml(sansHanzi(c.nom))}</h2>
       <div class="circ-haut">
@@ -253,14 +253,14 @@ const Circuits = {
 
       </div>
       ${this.section("Syndromes du circuit", this.ul((c.syndromes || []).map(s => s.replace(/^syndromes? du /i, "du ").replace(/^du /, "Syndromes du "))))}
-      ${this.section("Syndromes de ta base rattachés à ce circuit", lies ? `<div class="circ-synd-liste">${lies}</div>` : `<p class="muted">Aucun pour l'instant : « Modifier cette fiche » permet d'en rattacher.</p>`)}
+      ${this.section("Syndromes de ta base rattachés à ce circuit", lies ? `<div class="circ-synd-liste">${lies}</div>` : `<p class="muted">Aucun pour l'instant : le crayon ✏️ permet d'en rattacher.</p>`)}
       ${this.section("Actions / fonctions du circuit", this.ul(c.actions))}
       ${this.section("Indications", this.indicationsHtml(c))}
       <section><h3>Points des canaux</h3><div id="circ-pts" class="circ-pts-grille"></div></section>
       <section><h3>Ajouts possibles</h3>${ajouts ? `<ul class="tcm-list">${ajouts}</ul><p class="muted">Dessinés en pointillé sous le circuit.</p>` : ""}<div class="circ-barre"><button type="button" class="edit-toggle-btn" id="circ-aj-prop">💡 Proposer des canaux à ajouter</button></div><div id="circ-aj-zone"></div></section>
       ${this.section("Associations de points", ((c.associations || []).length
         ? `<div class="cat-chip-row circ-assoc-puces">${c.associations.map((a, i) => `<button type="button" class="cat-chip" data-a="${i}">${escapeHtml(sansHanzi(a.tableau))}</button>`).join("")}</div>`
-        : `<p class="muted">Aucun tableau à toi pour l'instant : « Modifier cette fiche » permet d'en ajouter un avec les points de chaque canal.</p>`) + this.wjyChipsHtml(c) + `<div id="circ-assoc-detail" class="circ-assoc-detail"></div>`)}
+        : `<p class="muted">Aucun tableau à toi pour l'instant : le crayon ✏️ permet d'en ajouter un avec les points de chaque canal.</p>`) + this.wjyChipsHtml(c) + `<div id="circ-assoc-detail" class="circ-assoc-detail"></div>`)}
       ${this.section("Comparaison des associations et des ajouts", this.graphe(c))}
       ${this.section("Formule de pharmacopée équivalente", this.equivalent(c))}
       <section><h3>Points Tung compatibles</h3><div id="circ-tung" class="circ-tung"><p class="muted">Chargement…</p></div></section>

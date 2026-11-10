@@ -5282,11 +5282,13 @@ function slugify(s) {
 function addEditControls(container, relPath, obj, opts) {
   opts = opts || {};
   const bar = document.createElement("div");
-  bar.className = "edit-bar";
+  bar.className = "edit-bar edit-flottante";           // crayon flottant, toujours accessible quand on fait défiler
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "edit-toggle-btn";
-  btn.textContent = "✏️ Modifier cette fiche";
+  btn.textContent = "✏️";
+  btn.title = "Modifier cette fiche";
+  btn.setAttribute("aria-label", "Modifier cette fiche");
   bar.appendChild(btn);
   container.prepend(bar);
   const editorFn = opts.editorFn || openGenericFormEditor;

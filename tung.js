@@ -207,9 +207,9 @@ const Tung = {
       [["Patient", c.patient], ["Motif", c.motif], ["Points", c.points.map(p => p.point + (p.cote ? " — " + p.cote : "")).join(" ; ")], ["Traitement", c.traitement], ["Résultat", c.resultat], ["Commentaire", c.commentaire]].filter(x => x[1]).map(x => `<p><strong>${x[0]} :</strong> ${escapeHtml(x[1])}</p>`).join("") +
       (c.a_verifier.length ? `<p class="muted">À vérifier : ${escapeHtml(c.a_verifier.join(" · "))}</p>` : "") + `</details>`).join("");
     z.innerHTML = `
-      <div class="circ-barre">
-        <button type="button" class="edit-toggle-btn" id="tung-edit">✏️ ${f.origine === "perso" ? "Modifier cette fiche" : "Compléter cette fiche"}</button>
-        ${f.origine === "perso" ? `<button type="button" class="edit-toggle-btn" id="tung-suppr">🗑 Supprimer</button>` : f.complete ? `<button type="button" class="edit-toggle-btn" id="tung-retablir">↺ Retirer mes ajouts</button>` : ""}
+      <div class="circ-barre barre-flottante">
+        <button type="button" class="edit-toggle-btn" id="tung-edit" title="${f.origine === "perso" ? "Modifier cette fiche" : "Compléter cette fiche"}" aria-label="${f.origine === "perso" ? "Modifier cette fiche" : "Compléter cette fiche"}">✏️</button>
+        ${f.origine === "perso" ? `<button type="button" class="edit-toggle-btn" id="tung-suppr" title="Supprimer cette fiche" aria-label="Supprimer cette fiche">🗑</button>` : f.complete ? `<button type="button" class="edit-toggle-btn" id="tung-retablir" title="Retirer mes ajouts" aria-label="Retirer mes ajouts">↺</button>` : ""}
       </div>
       <h2>${escapeHtml(f.nom)} ${f.zh ? `<span class="tung-zh">${escapeHtml(f.zh)}</span>` : ""}</h2>
       <p class="tung-ident">${(f.numeros || []).map(n => `<span class="sx-code">${escapeHtml(n)}</span>`).join(" ")} ${f.zone ? `<span class="muted">zone ${escapeHtml(f.zone)} · ${escapeHtml(this.zoneNom(f.zone))}</span>` : `<span class="muted">zone non précisée</span>`}${f.type === "groupe" ? ` <span class="muted">· groupe de points</span>` : ""}</p>
@@ -245,7 +245,7 @@ const Tung = {
 
   htmlCanaux(f) {
     const c = f.canaux || {}, l = c.codes || [];
-    if (!l.length) return `<p class="muted tung-canal">Canal : non renseigné — « ${f.origine === "perso" ? "Modifier" : "Compléter"} cette fiche » permet de le choisir.</p>`;
+    if (!l.length) return `<p class="muted tung-canal">Canal : non renseigné — le crayon ✏️ permet de le choisir.</p>`;
     if (c.collectif) { const FU = ["GI", "E", "IG", "V", "VB", "TF"], autres = l.filter(k => !FU.includes(k)); return `<p class="tung-canal"><strong>Canal :</strong> <span class="sx-code">les six fu</span> ${autres.map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")} <span class="muted">(les six fu ensemble${autres.length ? ", et " + autres.join(", ") : ""} — ${c.statut === "toi" ? "précision donnée par toi" : "d'après la source"})</span></p>`; }
     const st = c.statut === "deduit" ? "déduit, à valider" : c.statut === "toi" ? "choisi par toi" : "d'après la source";
     return `<p class="tung-canal"><strong>Canal :</strong> ${l.map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")} <span class="muted">(${st}${c.source ? " — " + escapeHtml(c.source) : ""})</span></p>`;
