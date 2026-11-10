@@ -205,7 +205,7 @@ const Circuits = {
       </div>
       ${this.section("Syndromes du circuit", this.ul((c.syndromes || []).map(s => s.replace(/^syndromes? du /i, "du ").replace(/^du /, "Syndromes du "))))}
       ${this.section("Syndromes de ta base rattachés à ce circuit", lies ? `<div class="circ-synd-liste">${lies}</div>` : `<p class="muted">Aucun pour l'instant : « Modifier cette fiche » permet d'en rattacher.</p>`)}
-      ${this.section("Actions / fonctions du circuit", `${c.actions_exemples ? `<p class="muted">Exemples non exclusifs des fonctions du circuit.</p>` : ""}${this.ul(c.actions)}`)}
+      ${this.section("Actions / fonctions du circuit", this.ul(c.actions))}
       ${this.section("Indications", this.ul(c.indications))}
       ${this.section("Ajouts possibles", ajouts ? `<ul class="tcm-list">${ajouts}</ul><p class="muted">Dessinés en pointillé sous le circuit.</p>` : "")}
       ${this.section("Associations de points", (c.associations || []).length
