@@ -218,7 +218,7 @@ const Tung = {
   htmlCanaux(f) {
     const c = f.canaux || {}, l = c.codes || [];
     if (!l.length) return `<p class="muted tung-canal">Canal : non renseigné — « ${f.origine === "perso" ? "Modifier" : "Compléter"} cette fiche » permet de le choisir.</p>`;
-    if (c.collectif) return `<p class="tung-canal"><strong>Canal :</strong> ${l.map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")} <span class="muted">(les six fu ensemble — ${c.statut === "toi" ? "précision donnée par toi" : "d'après la source"})</span></p>`;
+    if (c.collectif) { const FU = ["GI", "E", "IG", "V", "VB", "TF"], autres = l.filter(k => !FU.includes(k)); return `<p class="tung-canal"><strong>Canal :</strong> <span class="sx-code">les six fu</span> ${autres.map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")} <span class="muted">(les six fu ensemble${autres.length ? ", et " + autres.join(", ") : ""} — ${c.statut === "toi" ? "précision donnée par toi" : "d'après la source"})</span></p>`; }
     const st = c.statut === "deduit" ? "déduit, à valider" : c.statut === "toi" ? "choisi par toi" : "d'après la source";
     return `<p class="tung-canal"><strong>Canal :</strong> ${l.map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")} <span class="muted">(${st}${c.source ? " — " + escapeHtml(c.source) : ""})</span></p>`;
   },
