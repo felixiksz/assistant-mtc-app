@@ -133,7 +133,7 @@ const Circuits = {
       const pil = aff.map((t, k) => {
         const mv = this._mouv ? this._mouv.get(this.cleP(t)) : "", fond = mv ? this.COULEUR_MOUV[mv] : "var(--bg)", w = Math.max(14, t.length * 4.2 + 5);
         return `<g><title>${escapeHtml(t + (mv ? " — " + this.NOM_MOUV[mv] : ""))}</title><rect x="${x - w / 2}" y="${y0 + k * (hP + ec)}" width="${w}" height="${hP}" rx="2.2" fill="${fond}" stroke="#1d1d1b" stroke-width="0.6"/>` +
-          `<text x="${x}" y="${y0 + k * (hP + ec) + 6.4}" text-anchor="middle" font-size="6.6" font-weight="700" ${police} fill="#1d1d1b">${escapeHtml(t)}</text></g>`;
+          `<text x="${x}" y="${y0 + k * (hP + ec) + 6.4}" text-anchor="middle" font-size="6.6" font-weight="700" ${police} fill="${mv === "eau" ? "#FFFFFF" : "#1d1d1b"}">${escapeHtml(t)}</text></g>`;
       }).join("");
       return anneau + rond(x, y, rayon, code, { etiquette: false, sansNom: true }) + code_ + pil;
     }).join("");
@@ -482,7 +482,7 @@ const Circuits = {
   VAISSEAUX_INTER: [[/chong\s*mai/, "chōng mài"], [/dai\s*mai/, "dài mài"], [/yin\s*wei\s*mai/, "yīn wéi mài"], [/yang\s*wei\s*mai/, "yáng wéi mài"],
                     [/yin\s*qiao\s*mai/, "yīn qiāo mài"], [/yang\s*qiao\s*mai/, "yáng qiāo mài"], [/ren\s*mai/, "rèn mài"], [/du\s*mai/, "dū mài"]],
   // couleurs des cinq mouvements (fond des pastilles de points)
-  COULEUR_MOUV: { bois: "#97C459", feu: "#F09595", terre: "#FAC775", metal: "#D3D1C7", eau: "#85B7EB" },
+  COULEUR_MOUV: { bois: "#97C459", feu: "#F09595", terre: "#FAC775", metal: "#FFFFFF", eau: "#1d1d1b" },
   NOM_MOUV: { bois: "bois", feu: "feu", terre: "terre", metal: "métal", eau: "eau" },
   mouvementDe(p) {
     for (const l of String(p.categories_point || "").split(/\n+/)) {
