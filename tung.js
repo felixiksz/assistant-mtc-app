@@ -138,6 +138,38 @@ const Tung = {
     return `<a class="tung-img" ${gh ? `data-gh-rel="${rel}" href="#"` : `href="data/${rel}"`} target="_blank" rel="noopener"><img loading="lazy" alt="Schéma" ${gh ? "" : `src="data/${rel}"`}></a>`;
   },
 
+  // abréviations des sources, écrites seulement quand une information ne vient pas de la source dominante du champ
+  ABBR: { goodman: "Go", gyneco: "Gy", tan: "Ta", elotus: "eL", perso: "Toi" },
+  etiquette(it) {
+    const s = it.source, nom = s === "perso" ? "Tes ajouts" + (it.titre ? " — " + it.titre : "") : ((this.base.sources[s] || {}).nom || s);
+    return `<span class="tung-tag" title="${escapeHtml(nom + (it.page ? ", p. " + it.page : "") + (it.langue === "en" ? " (texte en anglais)" : ""))}">${this.ABBR[s] || s}${it.page ? " " + escapeHtml(it.page) : ""}${it.langue === "en" ? " · EN" : ""}</span>`;
+  },
+
+  // un seul bloc par rubrique : les informations de toutes les sources sont mises ensemble ; seule la source qui diffère du reste de la rubrique est abrégée
+  champsFusionnes(f) {
+    const NORM = { "Fonctions": "Action", "Localisation / équivalence": "Localisation" };
+    const ORDRE = ["Membres", "Localisation", "Action", "Indications", "Technique", "Logique / correspondance", "Associations", "Avec", "Usage"];
+    const m = new Map();
+    f.blocs.forEach(b => b.champs.forEach(c => {
+      const k = NORM[c.k] || c.k;
+      if (!m.has(k)) m.set(k, []);
+      (Array.isArray(c.v) ? c.v : [c.v]).forEach(x => m.get(k).push({ text: x, source: b.source, page: b.page, titre: b.titre, langue: b.langue }));
+    }));
+    const cles = [...m.keys()].sort((a, b) => { const x = ORDRE.indexOf(a), y = ORDRE.indexOf(b); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y); });
+    const sources = [...new Set(f.blocs.map(b => b.source))];
+    const principale = sources.find(s => s !== "perso") || sources[0];
+    const liste = sources.map(s => { const b = f.blocs.filter(x => x.source === s); const pg = b.map(x => x.page).filter(Boolean).join(", "); return `<span class="tung-tag-leg">${this.ABBR[s] || s} = ${escapeHtml(s === "perso" ? "Tes ajouts" : (this.base.sources[s] || {}).court || s)}${pg ? " p. " + escapeHtml(pg) : ""}${b.some(x => x.langue === "en") ? " (anglais)" : ""}</span>`; });
+    const champs = cles.map(k => {
+      const items = m.get(k), cnt = {};
+      items.forEach(x => { cnt[x.source] = (cnt[x.source] || 0) + 1; });
+      const dom = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || sources.indexOf(a) - sources.indexOf(b))[0];
+      const tete = dom !== principale || items[0].source === "perso" ? this.etiquette(items.find(x => x.source === dom)) : "";
+      const ligne = x => escapeHtml(x.text) + (x.source !== dom ? " " + this.etiquette(x) : "");
+      return `<div class="tung-champ"><h4>${escapeHtml(k)} ${tete}</h4>${items.length > 1 ? `<ul class="tcm-list">${items.map(x => `<li>${ligne(x)}</li>`).join("")}</ul>` : `<p>${ligne(items[0])}</p>`}</div>`;
+    }).join("");
+    return `<p class="tung-sources muted">Sources : ${liste.join(" · ")}. Une abréviation n'est écrite que là où l'information ne vient pas de la même source que le reste de la rubrique.</p>${champs}`;
+  },
+
   champ(c, langue) {
     const v = Array.isArray(c.v) ? c.v : [c.v];
     return `<div class="tung-champ"><h4>${escapeHtml(c.k)}</h4>${v.length > 1 ? this.ul(v) : `<p>${escapeHtml(v[0])}</p>`}</div>`;
@@ -147,10 +179,7 @@ const Tung = {
     const f = this.parId(this.actif);
     if (!f) { z.innerHTML = ""; return; }
     const membres = (f.membres || []).map(m => { const t = Array.isArray(m) ? m[0] : m, id = Array.isArray(m) ? m[1] : null; return id ? `<button type="button" class="cat-chip" data-tung-fiche="${escapeHtml(id)}">${escapeHtml(t)}</button>` : `<span class="cat-chip tung-membre">${escapeHtml(t)}</span>`; }).join("");
-    const blocs = f.blocs.map((b, i) => {
-      const src = b.source === "perso" ? "Tes ajouts" + (b.titre ? " — " + escapeHtml(b.titre) : "") : `${escapeHtml((this.base.sources[b.source] || {}).nom || b.source)}${b.page ? " — p. " + escapeHtml(b.page) : ""}${b.url ? ` — <a href="${escapeHtml(b.url)}" target="_blank" rel="noopener">page du site</a>` : ""}`;
-      return `<details class="tung-bloc" open><summary><strong>${src}</strong>${b.langue === "en" ? ` <span class="muted">(texte en anglais)</span>` : ""}</summary>${b.champs.map(c => this.champ(c)).join("") || `<p class="muted">Rien d'autre que le nom dans cette source.</p>`}</details>`;
-    }).join("");
+    const blocs = this.champsFusionnes(f);
     const prot = this.protos.filter(p => JSON.stringify(p.etapes).includes('"id":"' + f.id + '"'));
     const cas = (this.base.cas || []).filter(c => (c.ids || []).includes(f.id));
     const casHtml = cas.map(c => `<details class="tung-cas"><summary><strong>${escapeHtml(c.titre)}</strong> <span class="muted">(Tan, p. ${c.pages[0]}${c.pages.length > 1 ? "–" + c.pages[c.pages.length - 1] : ""})</span></summary>` +
