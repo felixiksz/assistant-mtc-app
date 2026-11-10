@@ -1134,3 +1134,14 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .tung-enfant { margin-left: 1.1rem; border-left: 3px solid var(--ink); padding-left: 0.5rem !important; font-size: 0.86rem; }
 .circ-indic-groupe { margin: 0.5rem 0; }
 .circ-indic-titre { margin: 0.6rem 0 0.1rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.circ-pts-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
+@media (max-width: 700px) { .circ-pts-grille { grid-template-columns: 1fr; } }
+.circ-pts-carte { border: 2px solid var(--ink); padding: 0.5rem 0.7rem; min-width: 0; }
+.circ-pts-tete { display: flex; justify-content: space-between; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; border-bottom: 2px solid var(--ink); padding-bottom: 0.3rem; margin-bottom: 0.3rem; }
+.circ-pts-btns { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.circ-pts-liste, .circ-pts-prop { list-style: none; margin: 0.2rem 0; padding: 0; display: grid; gap: 0.25rem; }
+.circ-pts-prop li { border-top: 1px dashed var(--line); padding-top: 0.25rem; }
+.circ-pt-tag { font-size: 0.65rem; font-weight: 700; border: 1px dashed var(--ink); padding: 0 0.25rem; margin-left: 0.2rem; white-space: nowrap; text-transform: uppercase; cursor: help; }
+.circ-pts-edit { display: block; font-weight: 600; margin: 0.4rem 0; }
+.circ-pts-edit textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 0.2rem; font: inherit; }
+.circ-pts-avert { font-size: 0.8rem; margin: 0.4rem 0 0.2rem; }

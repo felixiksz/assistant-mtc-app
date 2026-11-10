@@ -16,6 +16,10 @@ function sansHanzi(t) {
 const Circuits = {
   CHEMIN_BASE: "acupuncture/circuits/circuits.json",
   CHEMIN_PERSO: "acupuncture/circuits/circuits_perso.json",
+  CHEMIN_POINTS: "acupuncture/circuits/points_canaux_perso.json",       // points ajoutés par canal (toi)
+  CHEMIN_PROPOSES: "acupuncture/circuits/points_proposes.json",         // points proposés par catégorie classique (actions à valider)
+  points: { titre: "Points par canal, ajoutés dans l'application", canaux: {} },
+  proposes: null,
   base: null,
   perso: { titre: "Circuits créés ou modifiés dans l'application", circuits: [], surcharges: {} },
   canaux: new Map(),
@@ -43,6 +47,10 @@ const Circuits = {
           const p = await Store.readJSON(this.CHEMIN_PERSO);
           this.perso = { titre: p.titre || this.perso.titre, circuits: p.circuits || [], surcharges: p.surcharges || {} };
         } catch (e) { /* pas encore de fichier personnel : rien n'a été créé */ }
+        try {
+          const q = await Store.readJSON(this.CHEMIN_POINTS);
+          this.points = { titre: q.titre || this.points.titre, canaux: q.canaux || {} };
+        } catch (e) { /* pas encore de points ajoutés */ }
         this.base.canaux.forEach(c => this.canaux.set(c.code, c));
         this.recomposer();
       })();
@@ -250,6 +258,7 @@ const Circuits = {
       ${this.section("Syndromes de ta base rattachés à ce circuit", lies ? `<div class="circ-synd-liste">${lies}</div>` : `<p class="muted">Aucun pour l'instant : « Modifier cette fiche » permet d'en rattacher.</p>`)}
       ${this.section("Actions / fonctions du circuit", this.ul(c.actions))}
       ${this.section("Indications", this.indicationsHtml(c))}
+      <section><h3>Points des canaux</h3><div id="circ-pts" class="circ-pts-grille"></div></section>
       ${this.section("Ajouts possibles", ajouts ? `<ul class="tcm-list">${ajouts}</ul><p class="muted">Dessinés en pointillé sous le circuit.</p>` : "")}
       ${this.section("Associations de points", (c.associations || []).length
         ? `<div class="cat-chip-row circ-assoc-puces">${c.associations.map((a, i) => `<button type="button" class="cat-chip" data-a="${i}">${escapeHtml(sansHanzi(a.tableau))}</button>`).join("")}</div><div id="circ-assoc-detail" class="circ-assoc-detail"></div>`
@@ -268,9 +277,71 @@ const Circuits = {
     this.majAssoc(c);
     this.tracerGraphe();
     this.pointsTung(c);
+    this.rendrePoints(c);
     document.getElementById("circ-edit").addEventListener("click", () => this.modifier(c));
     const s = document.getElementById("circ-suppr"); if (s) s.addEventListener("click", () => this.supprimer(c));
     const r = document.getElementById("circ-retablir"); if (r) r.addEventListener("click", () => this.retablir(c));
+  },
+
+  // ---------- points par canal : une liste par canal (la même dans tous les circuits qui contiennent ce canal), avec l'action de chaque point
+  ptsDe(code) { return this.points.canaux[code] || []; },
+  async ecrirePoints() { await Store.writeJSON(this.CHEMIN_POINTS, { titre: this.points.titre, canaux: this.points.canaux }); },
+  ligneEnPoint(l) {
+    const m = String(l).match(/^\s*([^:：]{1,14}?)\s*[:：]\s*(.*)$/);
+    return m ? { point: m[1].trim(), action: m[2].trim() } : { point: String(l).trim(), action: "" };
+  },
+  rendrePoints(c) {
+    const z = document.getElementById("circ-pts");
+    if (!z) return;
+    const ouvert = this._ptsOuvert || {};
+    z.innerHTML = c.grille.map(code => {
+      const k = this.canaux.get(code) || {}, l = this.ptsDe(code);
+      const li = l.map(x => `<li><strong>${escapeHtml(x.point)}</strong>${x.action ? " " + escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}</li>`).join("");
+      return `<div class="circ-pts-carte" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}</span></span>` +
+        `<span class="circ-pts-btns"><button type="button" class="edit-toggle-btn" data-act="edit">✏️ Modifier</button> <button type="button" class="edit-toggle-btn" data-act="prop">💡 Proposer</button></span></div>` +
+        (li ? `<ul class="circ-pts-liste">${li}</ul>` : `<p class="muted">Aucun point pour l'instant.</p>`) + `<div class="circ-pts-zone"></div></div>`;
+    }).join("");
+    z.querySelectorAll(".circ-pts-carte").forEach(carte => {
+      const code = carte.dataset.k, zone = carte.querySelector(".circ-pts-zone");
+      carte.querySelector('[data-act="edit"]').addEventListener("click", () => this.editerPoints(c, code, carte, zone));
+      carte.querySelector('[data-act="prop"]').addEventListener("click", () => this.proposerPoints(c, code, zone));
+      if (ouvert[code]) this.proposerPoints(c, code, zone, true);
+    });
+  },
+  editerPoints(c, code, carte, zone) {
+    const l = this.ptsDe(code);
+    zone.innerHTML = `<label class="circ-pts-edit">Un point par ligne : « C8 : clarifie le feu vide »<textarea rows="${Math.max(4, l.length + 2)}">${escapeHtml(l.map(x => x.point + (x.action ? " : " + x.action : "")).join("\n"))}</textarea></label>` +
+      `<p class="muted circ-pts-statut"></p><div class="circ-barre"><button type="button" class="edit-toggle-btn" data-s="ok">💾 Enregistrer</button> <button type="button" class="edit-toggle-btn" data-s="non">Annuler</button></div>`;
+    zone.querySelector('[data-s="non"]').addEventListener("click", () => { zone.innerHTML = ""; });
+    zone.querySelector('[data-s="ok"]').addEventListener("click", async () => {
+      const anciens = this.ptsDe(code);
+      const nv = this.lignes(zone.querySelector("textarea").value).map(x => this.ligneEnPoint(x)).filter(x => x.point).map(x => {
+        const a = anciens.find(y => y.point === x.point && y.action === x.action);      // ligne inchangée : garde son statut (une proposition reste « à valider »)
+        return { ...x, statut: a ? a.statut : "toi" };
+      });
+      this.points.canaux[code] = nv;
+      if (!nv.length) delete this.points.canaux[code];
+      try { await this.ecrirePoints(); } catch (e) { zone.querySelector(".circ-pts-statut").textContent = "Enregistrement impossible : " + e.message; return; }
+      this.rendrePoints(c);
+    });
+  },
+  async proposerPoints(c, code, zone, sansBascule) {
+    this._ptsOuvert = this._ptsOuvert || {};
+    if (!sansBascule && this._ptsOuvert[code]) { this._ptsOuvert[code] = false; zone.innerHTML = ""; return; }
+    this._ptsOuvert[code] = true;
+    if (!this.proposes) {
+      try { this.proposes = await Store.readJSON(this.CHEMIN_PROPOSES); } catch (e) { zone.innerHTML = `<p class="muted">Propositions indisponibles (${escapeHtml(e.message)}).</p>`; return; }
+    }
+    const deja = new Set(this.ptsDe(code).map(x => x.point));
+    const l = ((this.proposes.canaux || {})[code] || []).filter(x => !deja.has(x.point));
+    zone.innerHTML = `<p class="muted circ-pts-avert">Propositions par catégorie classique ; les actions sont à valider (elles ne viennent pas de tes cours).</p>` +
+      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${escapeHtml(x.point)}</strong> <span class="muted">${escapeHtml(x.categorie)}</span>${x.action ? " — " + escapeHtml(x.action) : ""} <button type="button" class="edit-toggle-btn" data-i="${i}">+ Ajouter</button></li>`).join("")}</ul>` : `<p class="muted">Rien à proposer de plus pour ce canal (ou pas encore de propositions).</p>`);
+    zone.querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", async () => {
+      const x = l[+b.dataset.i];
+      (this.points.canaux[code] = this.points.canaux[code] || []).push({ point: x.point, action: x.action, statut: "propose" });
+      try { await this.ecrirePoints(); } catch (e) { alert("Enregistrement impossible : " + e.message); return; }
+      this.rendrePoints(c);
+    }));
   },
 
   // points de Maître Tung dont tous les canaux sont dans le circuit : on peut les ajouter sans déséquilibrer le réseau
