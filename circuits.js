@@ -450,6 +450,8 @@ const Circuits = {
     racine.querySelectorAll("a.circ-ptlien[data-pt-fiche]").forEach(a => {
       if (a.dataset.inter) return;
       a.dataset.inter = "1";
+      const li = a.closest("li");
+      if (li && /ouvert par/.test(li.innerText)) return;                 // la proposition le dit déjà dans sa catégorie
       const v = m.get(this.cleP(this.pointBase(a.dataset.ptFiche)));
       if (!v) return;
       const ouv = this.ouverture(a.dataset.ptFiche), l = v.filter(x => !ouv || x !== ouv[0]);
@@ -563,9 +565,32 @@ const Circuits = {
     const axe = [...(await this.dbCanal("RM")), ...(await this.dbCanal("DM"))];
     return axe.filter(p => String(p.categories_point || "").split(/\n+/).some(l => /mù-collecteur/i.test(l) && re.test(l)));
   },
-  async propositionsCanal(code) {
+  // points d'un merveilleux vaisseau, situés sur un canal du circuit, quand le point d'ouverture de ce vaisseau est lui aussi sur un canal du circuit
+  // (ex. circuit avec TF et VB : TF5 ouvre le yáng wéi mài, donc VB35, VB20… et TF15 sont proposés avec lui)
+  async pointsVaisseaux(code, c) {
+    if (!c) return [];
+    const canaux = new Set([...c.grille, ...(c.ajouts || []).flatMap(a => a.canaux || [])]);
+    const ouverts = Object.entries(this.OUVERTURES).filter(([pt]) => canaux.has((pt.match(/^[A-Za-z]+/) || [""])[0])).map(([pt, v]) => ({ pt, vaisseau: v[0] }));
+    if (!ouverts.length) return [];
+    const m = await this.chargerInter(), db = await this.dbCanal(code), out = [];
+    db.forEach(p => {
+      const vs = m.get(this.cleP(p.point)) || [], lies = ouverts.filter(o => vs.includes(o.vaisseau) && this.cleP(o.pt) !== this.cleP(p.point));     // le point d'ouverture lui-même est déjà proposé comme tel
+      if (lies.length) out.push({ p, lies });
+    });
+    return out;
+  },
+  async propositionsCanal(code, c) {
     const db = [...(await this.dbCanal(code)), ...(await this.pointsAxe(code))];
-    if (db.length) return db.filter(p => this.pointAdmis(p.point, code)).map(p => ({ point: String(p.point).replace(/\s+/g, ""), categorie: this.categoriesDe(p).join(" ; "), action: this.actionsDe(p).slice(0, 2).join(" ; "), saignee: this.saigneeDe(p), indic: p })).filter(x => x.categorie || x.saignee.length);
+    if (db.length) {
+      const base = db.filter(p => this.pointAdmis(p.point, code)).map(p => ({ point: String(p.point).replace(/\s+/g, ""), categorie: this.categoriesDe(p).join(" ; "), action: this.actionsDe(p).slice(0, 2).join(" ; "), saignee: this.saigneeDe(p), indic: p })).filter(x => x.categorie || x.saignee.length);
+      (await this.pointsVaisseaux(code, c)).forEach(({ p, lies }) => {
+        const txt = lies.map(o => `croise le ${o.vaisseau} (ouvert par ${o.pt})`).join(" ; "), nom = this.cleP(p.point);
+        const ex = base.find(x => this.cleP(x.point) === nom);
+        if (ex) ex.categorie = [ex.categorie, txt].filter(Boolean).join(" ; ");
+        else base.push({ point: String(p.point).replace(/\s+/g, ""), categorie: txt, action: this.actionsDe(p).slice(0, 2).join(" ; "), saignee: this.saigneeDe(p), indic: p, vaisseau: true });
+      });
+      return base;
+    }
     if (!this.proposes) { try { this.proposes = await Store.readJSON(this.CHEMIN_PROPOSES); } catch (e) { return []; } }
     return ((this.proposes.canaux || {})[code] || []).map(x => ({ ...x, saignee: [], repli: true })).filter(x => this.pointAdmis(x.point, code));
   },
@@ -587,7 +612,7 @@ const Circuits = {
     this._ptsOuvert[code] = true;
     zone.innerHTML = `<p class="muted">Chargement…</p>`;
     const deja = new Set(this.ptsDe(code).map(x => this.cleP(x.point)));
-    const tous = await this.propositionsCanal(code);
+    const tous = await this.propositionsCanal(code, c);
     const l = tous.filter(x => !deja.has(this.cleP(x.point)));
     const repli = tous.some(x => x.repli);
     zone.innerHTML = `<p class="muted circ-pts-avert">${repli ? "Base de points indisponible : propositions par catégorie classique, actions à valider (elles ne viennent pas de tes cours)." : "Points tirés de ta base de points (Points des canaux) : cinq points shu, yuán, luò, xī, hé… et points ayant des indications en saignée. Actions reprises de la base."}</p>` +
