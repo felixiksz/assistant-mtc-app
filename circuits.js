@@ -33,7 +33,25 @@ const Circuits = {
   _p: null,
   POSITIONS: [[30, 30], [90, 30], [30, 90], [90, 90]],
   PLACES: ["Haut gauche (main)", "Haut droite (main)", "Bas gauche (pied)", "Bas droite (pied)"],
-  LIENS: { 0: ["H", "V"], 1: ["H", "D"], 2: ["V", "D"], 3: ["H", "V"], 4: ["H", "V", "D"] },
+  LIENS: { 1: ["H", "D"], 2: ["V", "D"], 3: ["H", "V"], 4: ["H", "V", "D"] },
+  // les quatre schémas d'interrelation du yīn yáng ; chacun est la conséquence des connexions réelles entre les quatre canaux (tableau des systèmes), jamais un choix libre
+  NOM_SCHEMA: { 1: "sablier", 2: "papillon", 3: "carré", 4: "enveloppe" },
+  DESC_SCHEMA: { 1: "horizontales + diagonales", 2: "verticales + diagonales", 3: "horizontales + verticales", 4: "horizontales + verticales + diagonales" },
+  // paires de positions reliées (parmi les 6 possibles) selon les connexions entre canaux
+  liensReels(g) {
+    return Object.values(this.PAIRES).flat().filter(([a, b]) => (this.SYSTEMES[g[a]] || []).includes(g[b]));
+  },
+  // schéma = types de liens (horizontal, vertical, diagonal) dont les DEUX paires sont reliées ; null si cela ne donne aucun des quatre schémas
+  figureDe(g) {
+    if (!g || g.length !== 4 || !g.every(Boolean)) return null;
+    const ok = t => this.PAIRES[t].every(([a, b]) => (this.SYSTEMES[g[a]] || []).includes(g[b]));
+    const H = ok("H"), V = ok("V"), D = ok("D");
+    if (H && V && D) return 4;
+    if (H && D) return 1;
+    if (V && D) return 2;
+    if (H && V) return 3;
+    return null;
+  },
   PAIRES: { H: [[0, 1], [2, 3]], V: [[0, 2], [1, 3]], D: [[0, 3], [1, 2]] },
   // nom d'organe ou de canal (sans accent, en minuscules) -> code du canal
   NOM_CODE: { poumon: "P", "gros intestin": "GI", estomac: "E", rate: "Rt", coeur: "C", "intestin grele": "IG", vessie: "V", rein: "Rn", reins: "Rn",
@@ -67,6 +85,7 @@ const Circuits = {
     const b = this.base.circuits.map(c => ({ ...vide, ...c, ...(surch[c.id] || {}), origine: "cours", modifie: !!surch[c.id], de_base: c }));
     const p = (this.perso.circuits || []).map(c => ({ ...vide, figure: 1, ...c, origine: "perso", modifie: false }));
     this.liste = [...b, ...p];
+    this.liste.forEach(x => { x.figure = this.figureDe(x.grille) || 3; });        // le schéma découle des connexions entre les canaux
   },
 
   parId(id) { return this.liste.find(c => c.id === id) || null; },
@@ -86,10 +105,11 @@ const Circuits = {
   },
 
   dessin(c, o = {}) {
-    const taille = o.taille || 120, fig = this.LIENS[c.figure] ? c.figure : 0;
+    const taille = o.taille || 120, fig = this.LIENS[c.figure] ? c.figure : 3;
     const pos = this.POSITIONS, g = c.grille || [], pts = o.points || null, marge = pts ? 27 : 0;
     const police = `font-family="var(--font-body, sans-serif)"`;
-    const traits = this.LIENS[fig].flatMap(t => this.PAIRES[t]).map(([a, b]) => `<line x1="${pos[a][0]}" y1="${pos[a][1]}" x2="${pos[b][0]}" y2="${pos[b][1]}" stroke="var(--ink)" stroke-width="3.2" stroke-linecap="round"/>`).join("");
+    const paires = (g.length === 4 && g.every(Boolean)) ? this.liensReels(g) : this.LIENS[fig].flatMap(t => this.PAIRES[t]);
+    const traits = paires.map(([a, b]) => `<line x1="${pos[a][0]}" y1="${pos[a][1]}" x2="${pos[b][0]}" y2="${pos[b][1]}" stroke="var(--ink)" stroke-width="3.2" stroke-linecap="round"/>`).join("");
     const rond = (x, y, r, code, o2 = {}) => {
       const yin = this.polarite(code) === "yin";
       const lib = o2.etiquette && code ? `<text x="${x}" y="${y + (r > 12 ? 4.5 : 3)}" text-anchor="middle" font-size="${r > 12 ? (code.length > 1 ? 12 : 14) : 8}" font-weight="700" ${police} fill="${yin ? "var(--bg)" : "var(--ink)"}">${escapeHtml(code)}</text>` : "";
@@ -123,7 +143,7 @@ const Circuits = {
     const cote = "";                                   // pas de mention « main » / « pied » : ça va de soi
     const L = 120, H = 120 + marge * 2 + (groupes.length ? groupes.length * 52 + 6 : 0);
     const px = pts ? 24 : 0;                                // marge de chaque côté quand des points sont écrits : les noms longs (TF5 TF10 TF23…) ne sont jamais coupés
-    return `<svg class="circ-svg" viewBox="${-px} ${-marge} ${L + 2 * px} ${H}" width="${Math.round(taille * (L + 2 * px) / L)}" height="${Math.round(taille * H / L)}" role="img" aria-label="Circuit ${escapeHtml(g.join(", "))}">${traits}${ronds}${etiq}${cote}${aj}</svg>`;
+    return `<svg class="circ-svg" viewBox="${-px} ${-marge} ${L + 2 * px} ${H}" width="${Math.round(taille * (L + 2 * px) / L)}" height="${Math.round(taille * H / L)}" role="img" aria-label="Circuit ${escapeHtml(g.join(", "))}${this.NOM_SCHEMA[this.figureDe(g)] ? " (schéma " + this.NOM_SCHEMA[this.figureDe(g)] + ")" : ""}">${traits}${ronds}${etiq}${cote}${aj}</svg>`;
   },
 
   // ---------- canaux d'un syndrome de la base (organes, canaux, six niveaux)
@@ -784,7 +804,6 @@ const Circuits = {
   rendreEdition(c) {
     const d = this.edition, zone = document.getElementById("circuit-detail");
     const opts = v => `<option value="">— choisir —</option>` + this.base.canaux.map(k => `<option value="${k.code}"${v === k.code ? " selected" : ""}>${k.code} — ${escapeHtml(k.nom)} (${escapeHtml(k.canal)})</option>`).join("");
-    const figure = n => `<label class="circ-fig"><input type="radio" name="circ-fig" value="${n}"${+d.figure === n ? " checked" : ""}> <span class="circ-fig-img" data-fig="${n}"></span> <span>${n === 0 ? "Boucle<br><small>sans schéma</small>" : "Schéma " + n + "<br><small>" + this.LIENS[n].map(t => ({ H: "horizontales", V: "verticales", D: "diagonales" })[t]).join(" + ") + "</small>"}</span></label>`;
     zone.innerHTML = `
       <h2>${d.nouveau ? "Nouveau circuit" : "Modifier : " + escapeHtml(this.nomCourt(c))}</h2>
       <form class="circ-form" id="circ-form">
@@ -794,7 +813,7 @@ const Circuits = {
           <div class="circ-selects">${this.PLACES.map((p, i) => `<label>${p}<select data-i="${i}">${opts(d.grille[i])}</select></label>`).join("")}</div>
           <p class="muted" id="ce-alerte"></p>
         </fieldset>
-        <fieldset><legend>Schéma de liaison</legend><div class="circ-figs">${[1, 2, 3, 4, 0].map(figure).join("")}</div></fieldset>
+        <p class="muted" id="ce-schema" aria-live="polite"></p>
         <div class="circ-apercu" id="ce-apercu"></div>
         <label>Syndromes du circuit (un par ligne)<textarea id="ce-syndromes" rows="3">${escapeHtml(d.syndromes)}</textarea></label>
         <label>Actions / fonctions (une par ligne)<textarea id="ce-actions" rows="5">${escapeHtml(d.actions)}</textarea></label>
@@ -824,14 +843,18 @@ const Circuits = {
       d.nom = document.getElementById("ce-nom").value;
       ["alias", "syndromes", "actions", "indications", "ajouts", "notes"].forEach(k => { d[k] = document.getElementById("ce-" + k).value; });
       zone.querySelectorAll(".circ-selects select").forEach(s => { d.grille[+s.dataset.i] = s.value; });
-      const r = zone.querySelector('input[name="circ-fig"]:checked'); if (r) d.figure = +r.value;
     };
     const apercu = () => {
       lire();
       const g = d.grille;
       const ok = g.every(Boolean) && new Set(g).size === 4;
       document.getElementById("ce-apercu").innerHTML = this.dessin({ grille: g.map(x => x || ""), figure: d.figure }, { taille: 160, etiquettes: true, legende: true });
-      zone.querySelectorAll(".circ-fig-img").forEach(el => { el.innerHTML = this.dessin({ grille: g.map(x => x || ""), figure: +el.dataset.fig }, { taille: 56 }); });
+      const fg = ok ? this.figureDe(g) : null, sch = document.getElementById("ce-schema");
+      if (sch) {
+        const liens = ok ? g.map(k => g.filter(x => x !== k && (this.SYSTEMES[k] || []).includes(x)).length) : [];
+        sch.innerHTML = !ok ? "" : (fg ? `Schéma déduit des connexions entre ces canaux (systèmes de canaux unis) : <strong>${this.NOM_SCHEMA[fg]}</strong> — ${this.DESC_SCHEMA[fg]}.`
+          : `Les connexions de ces quatre canaux ne forment aucun des quatre schémas (sablier, papillon, carré, enveloppe) : vérifie le choix des canaux.`) + (liens.some(n => n < 2) ? " Un canal a moins de deux connexions dans ce circuit." : "");
+      }
       const al = [];
       if (g.some(Boolean) && !ok) al.push("Choisis 4 canaux différents.");
       [0, 1].forEach(i => { if (g[i] && this.canaux.get(g[i]) && this.canaux.get(g[i]).membre !== "main") al.push(this.PLACES[i] + " : " + g[i] + " est un canal de pied."); });
@@ -856,7 +879,7 @@ const Circuits = {
     };
     document.getElementById("ce-assoc-add").addEventListener("click", () => { d.associations.push({ tableau: "", note: "", points: {} }); assoc(); });
     document.getElementById("ce-ajouts").addEventListener("change", () => { lire(); assoc(); });
-    zone.querySelectorAll("select, input[name=circ-fig]").forEach(el => el.addEventListener("change", apercu));
+    zone.querySelectorAll("select").forEach(el => el.addEventListener("change", apercu));
     document.getElementById("ce-nom").addEventListener("input", lire);
     apercu();
     const puces = () => {
@@ -906,7 +929,7 @@ const Circuits = {
     const g = d.grille;
     if (!d.nom.trim()) { statut.textContent = "Le nom du circuit est obligatoire."; return; }
     if (!g.every(Boolean) || new Set(g).size !== 4) { statut.textContent = "Choisis 4 canaux différents."; return; }
-    const champs = { nom: d.nom.trim(), alias: this.lignes(d.alias), grille: [...g], figure: +d.figure, syndromes: this.lignes(d.syndromes), actions: this.lignes(d.actions),
+    const champs = { nom: d.nom.trim(), alias: this.lignes(d.alias), grille: [...g], figure: this.figureDe(g) || 3, syndromes: this.lignes(d.syndromes), actions: this.lignes(d.actions),
                      ...this.texteEnIndications(d.indications), ajouts: this.texteEnAjouts(d.ajouts, c.ajouts), notes: this.lignes(d.notes), syndromes_lies: [...d.syndromes_lies], niveaux: this.lignes(d.niveaux),
                      associations: (d.associations || []).map(a => {
                        const nom = dsNorm((a.tableau || "").trim()), e = (Syndromes.entries || []).find(x => dsNorm(x.nom) === nom);

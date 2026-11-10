@@ -1250,3 +1250,4 @@ h3:hover > .edit-champ, .edit-champ:focus, .edit-champ:hover { opacity: 1; borde
 .edit-champs-menu .edit-toggle-btn { width: auto !important; height: auto !important; border-radius: 0 !important; padding: 0.3rem 0.6rem !important; font-size: 0.85rem !important; box-shadow: none !important; justify-content: flex-start; display: block !important; text-align: left; }
 .edit-champ-item { font: inherit; font-size: 0.85rem; text-align: left; background: none; border: 0; border-bottom: 1px dotted var(--line); cursor: pointer; color: inherit; padding: 0.25rem 0.3rem; }
 .edit-champ-item:hover { background: var(--ink); color: var(--bg); }
+#ce-schema { margin: 0.4rem 0; }
