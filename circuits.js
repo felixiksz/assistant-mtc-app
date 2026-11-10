@@ -53,6 +53,10 @@ const Circuits = {
     return null;
   },
   PAIRES: { H: [[0, 1], [2, 3]], V: [[0, 2], [1, 3]], D: [[0, 3], [1, 2]] },
+  // RM et DM : l'axe du corps ; ils ne comptent pas parmi les quatre canaux du circuit mais s'associent à n'importe lequel
+  AXE: ["RM", "DM"],
+  NOM_AXE: { RM: "Rèn mài (axe antérieur)", DM: "Dū mài (axe postérieur)" },
+  nomCanalOuAxe(k) { return (this.canaux.get(k) || {}).nom || this.NOM_AXE[k] || ""; },
   // nom d'organe ou de canal (sans accent, en minuscules) -> code du canal
   NOM_CODE: { poumon: "P", "gros intestin": "GI", estomac: "E", rate: "Rt", coeur: "C", "intestin grele": "IG", vessie: "V", rein: "Rn", reins: "Rn",
               "enveloppe du coeur": "EC", "trois foyers": "TF", "vesicule biliaire": "VB", foie: "F" },
@@ -127,10 +131,14 @@ const Circuits = {
       const y0 = i < 2 ? y - 22 - (l.length - 1) * 8.5 : y + 29;
       return l.map((t, k) => `<text x="${x}" y="${y0 + k * 8.5}" text-anchor="middle" font-size="7.8" font-weight="700" ${police} fill="var(--ink)">${escapeHtml(t)}</text>`).join("");
     }).join("") : "";
+    // points de l'axe (RM, DM) : une ligne chacun sous la figure
+    const axe = pts ? this.AXE.filter(k => (pts[k] || []).length) : [];
+    const axeH = axe.length ? axe.length * 10 + 6 : 0;
+    const axeSvg = axe.map((k, i) => `<text x="60" y="${120 + marge + 4 + i * 10}" text-anchor="middle" font-size="7.8" font-weight="700" ${police} fill="var(--ink)">${k} : ${escapeHtml(this.lignesPoints(pts[k]).join(" "))}</text>`).join("");
     // ajouts possibles : canaux en pointillé sous la figure, « + » devant, trait entre eux quand ils vont ensemble
     const groupes = o.ajouts ? (c.ajouts || []).filter(a => (a.canaux || []).length) : [];
     const aj = groupes.map((a, k) => {
-      const n = a.canaux.length, cy = 120 + marge + 30 + k * 52, x0 = 60 - n * 15 + 15;
+      const n = a.canaux.length, cy = 120 + marge + 30 + axeH + k * 52, x0 = 60 - n * 15 + 15;
       const lien = n > 1 ? a.canaux.slice(1).map((_, j) => a.ensemble
         ? `<line x1="${x0 + j * 30}" y1="${cy}" x2="${x0 + (j + 1) * 30}" y2="${cy}" stroke="var(--ink)" stroke-width="2"/>`
         : `<text x="${x0 + j * 30 + 15}" y="${cy + 3}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)">ou</text>`).join("") : "";
@@ -141,9 +149,9 @@ const Circuits = {
         (legende ? `<text x="60" y="${cy + 25}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)" opacity="0.8">${escapeHtml(legende)}</text>` : "");
     }).join("");
     const cote = "";                                   // pas de mention « main » / « pied » : ça va de soi
-    const L = 120, H = 120 + marge * 2 + (groupes.length ? groupes.length * 52 + 6 : 0);
+    const L = 120, H = 120 + marge * 2 + axeH + (groupes.length ? groupes.length * 52 + 6 : 0);
     const px = pts ? 24 : 0;                                // marge de chaque côté quand des points sont écrits : les noms longs (TF5 TF10 TF23…) ne sont jamais coupés
-    return `<svg class="circ-svg" viewBox="${-px} ${-marge} ${L + 2 * px} ${H}" width="${Math.round(taille * (L + 2 * px) / L)}" height="${Math.round(taille * H / L)}" role="img" aria-label="Circuit ${escapeHtml(g.join(", "))}${this.NOM_SCHEMA[this.figureDe(g)] ? " (schéma " + this.NOM_SCHEMA[this.figureDe(g)] + ")" : ""}">${traits}${ronds}${etiq}${cote}${aj}</svg>`;
+    return `<svg class="circ-svg" viewBox="${-px} ${-marge} ${L + 2 * px} ${H}" width="${Math.round(taille * (L + 2 * px) / L)}" height="${Math.round(taille * H / L)}" role="img" aria-label="Circuit ${escapeHtml(g.join(", "))}${this.NOM_SCHEMA[this.figureDe(g)] ? " (schéma " + this.NOM_SCHEMA[this.figureDe(g)] + ")" : ""}">${traits}${ronds}${etiq}${axeSvg}${cote}${aj}</svg>`;
   },
 
   // ---------- canaux d'un syndrome de la base (organes, canaux, six niveaux)
@@ -540,10 +548,10 @@ const Circuits = {
     if (!z) return;
     const ouvert = this._ptsOuvert || {};
     const supp = [...new Set((c.ajouts || []).flatMap(a => a.canaux || []))].filter(k => !c.grille.includes(k));
-    z.innerHTML = [...c.grille, ...supp].map(code => {
-      const k = this.canaux.get(code) || {}, l = this.ptsDe(code), ajout = !c.grille.includes(code);
+    z.innerHTML = [...c.grille, ...supp, ...this.AXE].map(code => {
+      const k = this.canaux.get(code) || { nom: this.NOM_AXE[code] }, l = this.ptsDe(code), axe = this.AXE.includes(code), ajout = !axe && !c.grille.includes(code);
       const li = l.map(x => `<li><button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: code, raison: x.action || "", source: "points du canal " + code, circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ${escapeHtml(x.point)} pour le réseau de la patiente">✓</button> <strong>${this.pointHtml(x.point)}</strong>${x.commentaire ? ` <span class="circ-com" title="Ton commentaire">${escapeHtml(x.commentaire)}</span>` : ""} <button type="button" class="circ-com-btn" data-point="${escapeHtml(x.point)}" title="Ajouter ou modifier un commentaire sur ce point" aria-label="Commentaire sur ${escapeHtml(x.point)}">💬</button>${x.categorie ? ` <span class="circ-cat">${escapeHtml(x.categorie)}</span>` : ""}${x.action || x.statut === "base" ? ` <button type="button" class="circ-info" aria-expanded="false" title="Afficher ou masquer les actions de ce point" aria-label="Afficher ou masquer les actions de ce point">ⓘ</button>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}<span class="circ-act">${x.action ? escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}</span></li>`).join("");
-      return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}${this.actionsVisibles()[code] ? " actions-visibles" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
+      return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}${axe ? " circ-pts-axe" : ""}${this.actionsVisibles()[code] ? " actions-visibles" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
         `<span class="circ-pts-btns"><button type="button" class="edit-toggle-btn" data-act="actions" title="Afficher ou masquer les actions de tous les points de ce canal">👁 Actions</button> <button type="button" class="edit-toggle-btn" data-act="edit">✏️ Modifier</button> <button type="button" class="edit-toggle-btn" data-act="prop">💡 Proposer</button></span></div>` +
         (li ? `<ul class="circ-pts-liste">${li}</ul>` : `<p class="muted">Aucun point pour l'instant.</p>`) + `<div class="circ-pts-zone"></div></div>`;
     }).join("");
@@ -656,7 +664,15 @@ const Circuits = {
   async propositionsCanal(code, c) {
     const db = [...(await this.dbCanal(code)), ...(await this.pointsAxe(code))];
     if (db.length) {
-      const base = db.filter(p => this.pointAdmis(p.point, code)).map(p => ({ point: String(p.point).replace(/\s+/g, ""), categorie: this.categoriesDe(p).join(" ; "), action: this.actionsDe(p).slice(0, 2).join(" ; "), saignee: this.saigneeDe(p), indic: p })).filter(x => x.categorie || x.saignee.length);
+      const organes = c ? [...c.grille, ...(c.ajouts || []).flatMap(a => a.canaux || [])] : [];
+      const utile = p => {                          // sur l'axe : un mù n'est utile que s'il collecte l'organe d'un canal du circuit
+        if (!this.AXE.includes(code)) return true;
+        const mu = String(p.categories_point || "").split(/\n+/).filter(l => /mù-collecteur/i.test(l));
+        if (!mu.length) return true;
+        const autres = this.categoriesDe(p).filter(x => !/mù-collecteur/i.test(x));
+        return autres.length > 0 || mu.some(l => organes.some(k => this.ORGANE_MU[k] && this.ORGANE_MU[k].test(l)));
+      };
+      const base = db.filter(p => this.pointAdmis(p.point, code) && utile(p)).map(p => ({ point: String(p.point).replace(/\s+/g, ""), categorie: this.categoriesDe(p).join(" ; "), action: this.actionsDe(p).slice(0, 2).join(" ; "), saignee: this.saigneeDe(p), indic: p })).filter(x => x.categorie || x.saignee.length);
       (await this.pointsVaisseaux(code, c)).forEach(({ p, lies }) => {
         const txt = lies.map(o => `croise le ${o.vaisseau} (ouvert par ${o.pt})`).join(" ; "), nom = this.cleP(p.point);
         const ex = base.find(x => this.cleP(x.point) === nom);
@@ -745,7 +761,7 @@ const Circuits = {
       this.commentairesDe(p).forEach(t => v.notes.add(t));
     })));
     points.forEach((v, k) => { const e = this.ptsDe(v.code).find(x => this.clePoint(x.point) === k); if (e && e.commentaire) v.notes.add(e.commentaire); });   // + le commentaire du point dans la liste du canal
-    const nomCanal = k => (this.canaux.get(k) || {}).nom || "";
+    const nomCanal = k => this.nomCanalOuAxe(k);
     const codes = [...new Set([...c.grille, ...[...points.values()].map(v => v.code)])].filter(k => [...points.values()].some(v => v.code === k));
     const canauxAj = [...new Set(ajouts.flatMap(a => a.canaux))];
     const gauche = assoc.map((a, i) => {
@@ -795,7 +811,7 @@ const Circuits = {
   // une association = un tableau (syndrome) et les points de chaque canal du circuit ; un seul tableau est affiché à la fois, sur le dessin
   majAssoc(c) {
     const w = typeof this.assocActive === "string" ? (this._wjyListe || [])[+this.assocActive.slice(1)] : null;
-    const a = w ? { tableau: this.nomRecette(w.r), points: { ...w.r.canaux } } : (this.assocActive != null ? (c.associations || [])[this.assocActive] : null);
+    const a = w ? { tableau: this.nomRecette(w.r), points: (() => { const o = { ...w.r.canaux }; (w.r.axe || []).forEach(pt => { const k = (pt.match(/^[A-Za-z]+/) || [""])[0].toUpperCase(); (o[k] = o[k] || []).push(pt); }); return o; })() } : (this.assocActive != null ? (c.associations || [])[this.assocActive] : null);
     document.getElementById("circ-dessin").innerHTML = this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true, points: a ? a.points : null });
     document.querySelectorAll(".circ-assoc-puces [data-a]").forEach(b => b.classList.toggle("active", !w && a && +b.dataset.a === this.assocActive));
     document.querySelectorAll(".circ-wjy [data-w]").forEach(b => b.classList.toggle("active", !!w && this.assocActive === "w" + b.dataset.w));
@@ -908,7 +924,7 @@ const Circuits = {
     // associations de points : un champ par canal du circuit (et par canal ajouté)
     const assoc = () => {
       const cont = document.getElementById("ce-assoc");
-      const codes = [...new Set([...d.grille.filter(Boolean), ...this.texteEnAjouts(d.ajouts).flatMap(a => a.canaux), ...d.associations.flatMap(a => Object.keys(a.points))])];
+      const codes = [...new Set([...d.grille.filter(Boolean), ...this.texteEnAjouts(d.ajouts).flatMap(a => a.canaux), ...d.associations.flatMap(a => Object.keys(a.points)), ...this.AXE])];
       cont.innerHTML = d.associations.map((a, i) => `<div class="circ-assoc-ligne" data-i="${i}">
         <label>Tableau<input type="text" list="ce-synd-noms" data-champ="tableau" value="${escapeHtml(a.tableau)}" placeholder="nom d'un syndrome de ta base, ou ton intitulé"></label>
         <div class="circ-assoc-pts">${codes.map(k => `<label>${escapeHtml(k)}<input type="text" data-pt="${escapeHtml(k)}" value="${escapeHtml(a.points[k] || "")}" placeholder="P7, P9 (commentaire possible)" title="Entre parenthèses : un commentaire sur le point, par exemple TF5 (yáng wéi mài)"></label>`).join("")}</div>
