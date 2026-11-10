@@ -122,7 +122,8 @@ const Circuits = {
     }).join("");
     const cote = "";                                   // pas de mention « main » / « pied » : ça va de soi
     const L = 120, H = 120 + marge * 2 + (groupes.length ? groupes.length * 52 + 6 : 0);
-    return `<svg class="circ-svg" viewBox="0 ${-marge} ${L} ${H}" width="${taille}" height="${Math.round(taille * H / L)}" role="img" aria-label="Circuit ${escapeHtml(g.join(", "))}">${traits}${ronds}${etiq}${cote}${aj}</svg>`;
+    const px = pts ? 24 : 0;                                // marge de chaque côté quand des points sont écrits : les noms longs (TF5 TF10 TF23…) ne sont jamais coupés
+    return `<svg class="circ-svg" viewBox="${-px} ${-marge} ${L + 2 * px} ${H}" width="${Math.round(taille * (L + 2 * px) / L)}" height="${Math.round(taille * H / L)}" role="img" aria-label="Circuit ${escapeHtml(g.join(", "))}">${traits}${ronds}${etiq}${cote}${aj}</svg>`;
   },
 
   // ---------- canaux d'un syndrome de la base (organes, canaux, six niveaux)

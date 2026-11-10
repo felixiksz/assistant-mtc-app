@@ -1222,3 +1222,5 @@ body:has(.onglets-travail:not([hidden])) .edit-flottante, body:has(.onglets-trav
   .reseau-fenetre { left: 0.5rem !important; right: 0.5rem !important; top: auto !important; bottom: 3.6rem !important; width: auto; max-height: 70vh; resize: none; }
 }
 @media print { .reseau-lanceur, .reseau-fenetre { display: none !important; } }
+.reseau-schema svg { max-width: 100%; height: auto; overflow: visible; }
+.reseau-tung { font-size: 0.85rem; line-height: 1.35; text-align: center; margin: 0.3rem 0; }
