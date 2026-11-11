@@ -418,7 +418,6 @@ const Circuits = {
       (w.manque && w.manque.length ? `<p class="muted">${escapeHtml(w.manque.join(", "))} n'est pas dans ce circuit : non intégrée, à toi de juger.</p>` : "") +
       `<p><button type="button" class="edit-toggle-btn" data-reseau="${escapeHtml(JSON.stringify(r.points.map(p => ({ point: p, raison: "Wang Ju Yi " + r.points.join(" – ") + (r.puces[0] ? " : " + r.puces[0] : ""), source: "Wang Ju Yi" }))))}" title="Ajouter les points de cette recette au réseau de la patiente">✓ Choisir ces points pour le réseau</button></p>` +
       this.ul(r.puces) + (notes.length ? `<p class="muted">${notes.map(escapeHtml).join(" · ")}</p>` : "") +
-      ((r.circuits_notes || []).length ? `<p class="muted">Circuits cités dans tes notes : ${escapeHtml(r.circuits_notes.join(", "))}.</p>` : "") +
       ((r.lectures || []).length ? `<p class="muted">Lu autrement que tes notes : ${r.lectures.map(l => `« ${escapeHtml(l.note)} » → ${escapeHtml(l.lu)}`).join(" ; ")} (faute probable dans tes notes).</p>` : "");
   },
   wjyChipsHtml(c) {
