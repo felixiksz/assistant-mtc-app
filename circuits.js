@@ -155,10 +155,16 @@ const Circuits = {
     // ajouts possibles : canaux en pointillé sous la figure, « + » devant, trait entre eux quand ils vont ensemble
     const groupes = o.ajouts ? (c.ajouts || []).filter(a => (a.canaux || []).length) : [];
     const grosse = a => !!pts && a.canaux.some(k => ((pts[k]) || []).length);
-    const hGroupe = a => grosse(a) ? 70 : 52;
-    const yGroupe = k => 120 + marge + 30 + axeH + groupes.slice(0, k).reduce((s, a) => s + hGroupe(a), 0) + (grosse(groupes[k]) ? 14 : 0);
+    // hauteur d'un groupe d'ajouts : « AJOUT POSSIBLE », les ronds (grosses bulles s'ils portent des points), la légende éventuelle
+    const hGroupe = a => grosse(a) ? (a.action ? 88 : 70) : (a.action ? 60 : 48);
+    const hautGroupe = k => 122 + marge + axeH + groupes.slice(0, k).reduce((s, a) => s + hGroupe(a), 0);
+    const yGroupe = k => hautGroupe(k) + 8 + (grosse(groupes[k]) ? 29 : 17);
+    const espGroupe = a => grosse(a) ? 52 : 30;
+    // largeur : les groupes de grosses bulles (3 canaux par exemple) dépassent les 120 de la figure
+    const debGroupe = a => 60 - (a.canaux.length - 1) * espGroupe(a) / 2 - (grosse(a) ? 46 : 28), finGroupe = a => 60 + (a.canaux.length - 1) * espGroupe(a) / 2 + (grosse(a) ? 28 : 14);
+    const debord = groupes.reduce((m, a) => Math.max(m, -debGroupe(a), finGroupe(a) - 120), 0);
     const aj = groupes.map((a, k) => {
-      const n = a.canaux.length, big = grosse(a), esp = big ? 54 : 30, cy = yGroupe(k), x0 = 60 - (n - 1) * esp / 2;
+      const n = a.canaux.length, big = grosse(a), esp = espGroupe(a), cy = yGroupe(k), x0 = 60 - (n - 1) * esp / 2;
       const lien = n > 1 ? a.canaux.slice(1).map((_, j) => a.ensemble
         ? `<line x1="${x0 + j * esp}" y1="${cy}" x2="${x0 + (j + 1) * esp}" y2="${cy}" stroke="var(--ink)" stroke-width="2"/>`
         : `<text x="${x0 + j * esp + esp / 2}" y="${cy + 3}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)">ou</text>`).join("") : "";
@@ -173,8 +179,8 @@ const Circuits = {
         (legende ? `<text x="60" y="${cy + (big ? 38 : 25)}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)" opacity="0.8">${escapeHtml(legende)}</text>` : "");
     }).join("");
     const cote = "";                                   // pas de mention « main » / « pied » : ça va de soi
-    const L = 120, H = 120 + marge * 2 + axeH + (groupes.length ? groupes.reduce((s, a) => s + hGroupe(a), 0) + 6 : 0);
-    const px = pts ? 4 : 0;                                // marge de chaque côté quand des points sont écrits : les noms longs (TF5 TF10 TF23…) ne sont jamais coupés
+    const L = 120, H = 120 + marge * 2 + axeH + (groupes.length ? 2 + groupes.reduce((s, a) => s + hGroupe(a), 0) + 4 : 0);
+    const px = Math.max(pts ? 4 : 0, Math.ceil(debord));                                // marge de chaque côté quand des points sont écrits : les noms longs (TF5 TF10 TF23…) ne sont jamais coupés
     return `<svg class="circ-svg" viewBox="${-px} ${-marge} ${L + 2 * px} ${H}" width="${Math.round(taille * (L + 2 * px) / L)}" height="${Math.round(taille * H / L)}" role="img" aria-label="Circuit ${escapeHtml(g.join(", "))}${this.NOM_SCHEMA[this.figureDe(g)] ? " (schéma " + this.NOM_SCHEMA[this.figureDe(g)] + ")" : ""}">${traits}${ronds}${etiq}${axeSvg}${cote}${aj}</svg>`;
   },
 
