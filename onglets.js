@@ -76,8 +76,7 @@ const Onglets = {
 
   rendreBarre() {
     if (!this.barre) return;
-    this.barre.hidden = !this.liste.length;
-    if (!this.liste.length) { this.ajusterBarre(); return; }
+    this.barre.hidden = false;                                  // toujours visible : le ☰ (menu, choix du circuit) doit rester accessible même sans onglet ouvert
     this.barre.innerHTML = `<button type="button" class="onglet-menu" id="onglet-menu-btn" title="Menu et choix du circuit" aria-label="Menu et choix du circuit">☰</button>` + `<button type="button" class="onglet-t${this.actif === null ? " actif" : ""}" data-o="" title="Retour à la vue du module">${escapeHtml(this.etiquetteModule())}</button>` +
       this.liste.map(o => `<span class="onglet-t${this.actif === o.id ? " actif" : ""}" data-o="${escapeHtml(o.id)}"><button type="button" class="onglet-nom" data-o="${escapeHtml(o.id)}" title="${escapeHtml(o.titre)}">${escapeHtml(o.genre)} ${escapeHtml(o.titre)}</button><button type="button" class="onglet-x" data-x="${escapeHtml(o.id)}" aria-label="Fermer l'onglet">✕</button></span>`).join("") + (this.enLigne() ? `<span class="onglet-sync" title="Onglets synchronisés avec tes autres appareils (via ton dépôt GitHub)">🔄</span>` : "");
     document.getElementById("onglet-menu-btn").addEventListener("click", e => this.basculerMenuRapide(e));
