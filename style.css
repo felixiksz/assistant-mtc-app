@@ -1303,8 +1303,14 @@ section.replie > :not(h3:first-child) { display: none !important; }
 .circ-ass-ligne { cursor: pointer; }
 .circ-ass-ligne:hover { background: rgba(0,0,0,.05); }
 .circ-ass-ligne.actif { background: rgba(0,0,0,.09); font-weight: 600; }
-.circ-ass-p { white-space: nowrap; font-weight: 700; }
-.circ-ass-i { width: 100%; }
+.circ-ass-p { width: 42%; font-weight: 700; }
+.circ-ass-i { width: auto; }
 .circ-ass-s { font-size: 0.65rem; letter-spacing: 0.06em; color: var(--muted, #777); text-align: right; white-space: nowrap; }
 .circ-ass-ok { width: 1%; text-align: right; }
 .circ-ass-det > td { padding: 0.2rem 0.4rem 0.6rem 1.2rem; }
+/* onglet Tableaux et réseau : le schéma à gauche (collé en haut), les associations et le graphe à droite : plus de grand vide à côté du schéma */
+.circ-t2 { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1.2rem; align-items: start; }
+.circ-t2-g { position: sticky; top: calc(var(--haut-onglets, 0px) + 6.5rem); }
+.circ-t2-g .circ-svg { max-width: 100%; height: auto; }
+.circ-t2-d > section:first-child > h3:first-child { margin-top: 0; }
+@media (max-width: 800px) { .circ-t2 { grid-template-columns: 1fr; } .circ-t2-g { position: static; } .circ-t2-g .circ-svg { max-width: 170px; } }

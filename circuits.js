@@ -342,9 +342,9 @@ const Circuits = {
       ${this.onglet(1, `<section><h3>Points des canaux</h3><div id="circ-pts" class="circ-pts"></div></section>
         <section><h3>Ajouts possibles</h3>${ajouts ? `<ul class="tcm-list">${ajouts}</ul>` : ""}${this.candidatsAjout(c).length ? `<div class="circ-barre"><button type="button" class="edit-toggle-btn" id="circ-aj-prop">💡 Proposer des canaux à ajouter</button></div>` : ""}<div id="circ-aj-zone"></div></section>
         <section><h3>Points Tung compatibles</h3><div id="circ-tung" class="circ-tung"><p class="muted">Chargement…</p></div></section>`)}
-      ${this.onglet(2, `<div class="circ-haut"><div class="circ-grand" id="circ-dessin">${this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true })}</div></div>` +
+      ${this.onglet(2, `<div class="circ-t2"><div class="circ-t2-g"><div class="circ-grand" id="circ-dessin">${this.dessin(c, { taille: 190, etiquettes: true, legende: true, ajouts: true })}</div></div><div class="circ-t2-d">` +
         this.section("Associations de points", this.assocTableHtml(c) + this.wjyChipsHtml(c) + `<div id="circ-assoc-detail" class="circ-assoc-detail"></div>`) +
-        this.section("Comparaison des associations et des ajouts", this.graphe(c)))}
+        this.section("Comparaison des associations et des ajouts", this.graphe(c)) + `</div></div>`)}
       ${this.onglet(3, `<section><h3>Syndromes de ta base rattachés à ce circuit</h3>${lies ? `<div class="circ-synd-liste">${lies}</div>` : ""}</section>` +
         this.section("Formule de pharmacopée équivalente", this.equivalent(c)) +
         `<section><h3>Syndromes de ta base portant sur ces canaux</h3>${parCanal}</section>`)}`;
@@ -1020,7 +1020,7 @@ const Circuits = {
   majAssoc(c) {
     const w = typeof this.assocActive === "string" ? (this._wjyListe || [])[+this.assocActive.slice(1)] : null;
     const a = w ? { tableau: this.nomRecette(w.r), points: (() => { const o = { ...w.r.canaux }; (w.r.axe || []).forEach(pt => { const k = (pt.match(/^[A-Za-z]+/) || [""])[0].toUpperCase(); (o[k] = o[k] || []).push(pt); }); return o; })() } : (this.assocActive != null ? (c.associations || [])[this.assocActive] : null);
-    document.getElementById("circ-dessin").innerHTML = this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true, points: a ? a.points : null });
+    document.getElementById("circ-dessin").innerHTML = this.dessin(c, { taille: 190, etiquettes: true, legende: true, ajouts: true, points: a ? a.points : null });
     const cle = typeof this.assocActive === "string" ? this.assocActive : (this.assocActive != null ? "a" + this.assocActive : null);
     document.querySelectorAll(".circ-ass-ligne").forEach(r => r.classList.toggle("actif", r.dataset.k === cle));
     document.querySelectorAll(".circ-ass-det").forEach(r => { r.hidden = r.dataset.k !== cle; });
