@@ -1298,3 +1298,13 @@ h3[data-repliable] { cursor: pointer; user-select: none; }
 h3[data-repliable]::before { content: "▾"; display: inline-block; width: 1.1em; font-size: 0.85em; color: var(--muted, #666); }
 section.replie > h3[data-repliable]::before { content: "▸"; }
 section.replie > :not(h3:first-child) { display: none !important; }
+.circ-assoc-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 0.3rem 0; }
+.circ-assoc-table td { padding: 0.35rem 0.4rem; border-top: 1px solid rgba(0,0,0,.25); vertical-align: top; }
+.circ-ass-ligne { cursor: pointer; }
+.circ-ass-ligne:hover { background: rgba(0,0,0,.05); }
+.circ-ass-ligne.actif { background: rgba(0,0,0,.09); font-weight: 600; }
+.circ-ass-p { white-space: nowrap; font-weight: 700; }
+.circ-ass-i { width: 100%; }
+.circ-ass-s { font-size: 0.65rem; letter-spacing: 0.06em; color: var(--muted, #777); text-align: right; white-space: nowrap; }
+.circ-ass-ok { width: 1%; text-align: right; }
+.circ-ass-det > td { padding: 0.2rem 0.4rem 0.6rem 1.2rem; }

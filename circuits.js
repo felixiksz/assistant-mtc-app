@@ -343,9 +343,7 @@ const Circuits = {
         <section><h3>Ajouts possibles</h3>${ajouts ? `<ul class="tcm-list">${ajouts}</ul>` : ""}${this.candidatsAjout(c).length ? `<div class="circ-barre"><button type="button" class="edit-toggle-btn" id="circ-aj-prop">💡 Proposer des canaux à ajouter</button></div>` : ""}<div id="circ-aj-zone"></div></section>
         <section><h3>Points Tung compatibles</h3><div id="circ-tung" class="circ-tung"><p class="muted">Chargement…</p></div></section>`)}
       ${this.onglet(2, `<div class="circ-haut"><div class="circ-grand" id="circ-dessin">${this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true })}</div></div>` +
-        this.section("Associations de points", ((c.associations || []).length
-          ? `<div class="cat-chip-row circ-assoc-puces">${c.associations.map((a, i) => `<button type="button" class="cat-chip" data-a="${i}">${escapeHtml(sansHanzi(a.tableau))}</button>`).join("")}</div>`
-          : "") + this.wjyChipsHtml(c) + `<div id="circ-assoc-detail" class="circ-assoc-detail"></div>`) +
+        this.section("Associations de points", this.assocTableHtml(c) + this.wjyChipsHtml(c) + `<div id="circ-assoc-detail" class="circ-assoc-detail"></div>`) +
         this.section("Comparaison des associations et des ajouts", this.graphe(c)))}
       ${this.onglet(3, `<section><h3>Syndromes de ta base rattachés à ce circuit</h3>${lies ? `<div class="circ-synd-liste">${lies}</div>` : ""}</section>` +
         this.section("Formule de pharmacopée équivalente", this.equivalent(c)) +
@@ -353,8 +351,12 @@ const Circuits = {
     zone.querySelectorAll(".circ-onglet-btn").forEach(b => b.addEventListener("click", () => this.choisirOnglet(+b.dataset.o)));
     zone.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const e = this.entreeSynd(b.dataset.synd); if (e) this.ouvrirSyndrome(e); }));
     this.assocActive = null;
-    zone.querySelectorAll(".circ-assoc-puces [data-a]").forEach(b => b.addEventListener("click", () => { this.assocActive = this.assocActive === +b.dataset.a ? null : +b.dataset.a; this.majAssoc(c); }));
-    zone.querySelectorAll(".circ-wjy [data-w]").forEach(b => b.addEventListener("click", () => { const k = "w" + b.dataset.w; this.assocActive = this.assocActive === k ? null : k; this.majAssoc(c); }));
+    zone.querySelectorAll(".circ-ass-ligne").forEach(r => r.addEventListener("click", ev => {
+      if (ev.target.closest("[data-reseau], a")) return;
+      const k = r.dataset.k, v = k[0] === "w" ? k : +k.slice(1);
+      this.assocActive = this.assocActive === v ? null : v;
+      this.majAssoc(c);
+    }));
     this.majAssoc(c);
     if (this.ongletFiche === 2) this.tracerGraphe();
     this.brancherNotes(zone);
@@ -415,25 +417,40 @@ const Circuits = {
     return res;
   },
   nomRecette(r) { return r.points.join(" – "); },
-  recetteHtml(w) {
+  recetteHtml(w, sansOk) {
     const r = w.r;
     const notes = (this.wjy.notes_groupes || {})[r.groupe] || [];
     return `<p><strong>${r.points.map(p => this.pointHtml(p)).join(" – ")}</strong> <span class="circ-pt-tag circ-pt-base" title="${escapeHtml(this.wjy.source || "")}">Wang Ju Yi</span> <span class="muted">${escapeHtml(r.groupe)}</span>${r.vaisseaux ? ` <span class="muted">(${escapeHtml(r.vaisseaux)})</span>` : ""}</p>` +
       (w.ajout && w.ajout.length ? `<p class="muted">Utilise ${escapeHtml(w.ajout.join(", "))} : un des ajouts possibles de ce circuit.</p>` : "") +
       (w.manque && w.manque.length ? `<p class="muted">${escapeHtml(w.manque.join(", "))} n'est pas dans ce circuit : non intégrée, à toi de juger.</p>` : "") +
-      `<p><button type="button" class="edit-toggle-btn" data-reseau="${escapeHtml(JSON.stringify(r.points.map(p => ({ point: p, raison: "Wang Ju Yi " + r.points.join(" – ") + (r.puces[0] ? " : " + r.puces[0] : ""), source: "Wang Ju Yi" }))))}" title="Ajouter les points de cette recette au réseau de la patiente">✓ Choisir ces points pour le réseau</button></p>` +
+      (sansOk ? "" : `<p><button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify(r.points.map(p => ({ point: p, raison: "Wang Ju Yi " + r.points.join(" – ") + (r.puces[0] ? " : " + r.puces[0] : ""), source: "Wang Ju Yi" }))))}" title="Ajouter les points de cette recette au réseau de la patiente" aria-label="Ajouter les points de cette recette au réseau de la patiente">✓</button></p>`) +
       this.ul(r.puces) + (notes.length ? `<p class="muted">${notes.map(escapeHtml).join(" · ")}</p>` : "") +
       ((r.lectures || []).length ? `<p class="muted">Lu autrement que tes notes : ${r.lectures.map(l => `« ${escapeHtml(l.note)} » → ${escapeHtml(l.lu)}`).join(" ; ")} (faute probable dans tes notes).</p>` : "");
+  },
+  // tableau unique des associations (les tiennes et celles de Wang Ju Yi) : les points, l'indication principale, « WJY » discret, ✓ pour le réseau ; un clic déplie
+  assocTableHtml(c) {
+    const res = this.recettesWjy(c);
+    this._wjyListe = res.liste;
+    const ok = lst => `<button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify(lst))}" title="Choisir ces points pour le réseau de la patiente" aria-label="Choisir ces points pour le réseau de la patiente">✓</button>`;
+    const ligne = (cle, pts, ind, wjy, lst) => `<tr class="circ-ass-ligne" data-k="${cle}"><td class="circ-ass-p">${escapeHtml(pts)}</td><td class="circ-ass-i">${escapeHtml(ind)}</td><td class="circ-ass-s">${wjy ? "WJY" : ""}</td><td class="circ-ass-ok">${ok(lst)}</td></tr>` +
+      `<tr class="circ-ass-det" data-k="${cle}" hidden><td colspan="4"></td></tr>`;
+    const siennes = (c.associations || []).map((a, i) => {
+      const pts = [...new Set(Object.values(a.points || {}).flat().map(p => this.clePoint(p)).filter(Boolean))];
+      const lst = Object.entries(a.points || {}).flatMap(([k, v]) => v.map(p => ({ point: this.clePoint(p), canal: k, raison: sansHanzi(a.tableau), source: "ton tableau" })));
+      return ligne("a" + i, pts.join(" · "), sansHanzi(a.tableau), false, lst);
+    });
+    const wjy = res.liste.map((w, i) => ligne("w" + i, this.nomRecette(w.r) + (w.ajout.length ? " +" + w.ajout.join("+") : ""), w.r.puces[0] || w.r.groupe || "", true,
+      w.r.points.map(p => ({ point: p, raison: "Wang Ju Yi " + w.r.points.join(" – ") + (w.r.puces[0] ? " : " + w.r.puces[0] : ""), source: "Wang Ju Yi" }))));
+    const tout = [...siennes, ...wjy];
+    return tout.length ? `<table class="circ-assoc-table"><tbody>${tout.join("")}</tbody></table>` : "";
   },
   wjyChipsHtml(c) {
     const res = this.recettesWjy(c);
     this._wjyListe = res.liste;
     if (!res.liste.length && !res.citees.length) return "";
-    const groupes = [...new Set(res.liste.map(w => w.r.groupe))];
-    const chips = groupes.map(gr => `<div class="circ-wjy-groupe"><span class="muted">${escapeHtml(gr)}</span> ${res.liste.map((w, i) => w.r.groupe === gr ? `<button type="button" class="cat-chip circ-wjy-chip" data-w="${i}" title="${escapeHtml(w.r.puces[0] || "")}">${escapeHtml(this.nomRecette(w.r))}${w.ajout.length ? " +" + escapeHtml(w.ajout.join("+")) : ""}</button>` : "").join("")}</div>`).join("");
     const citees = res.citees.length ? `<details class="circ-wjy-citees"><summary>Citées dans tes notes pour ce circuit mais non intégrées (un canal du couple n'y est pas) — ${res.citees.length}</summary>${res.citees.map(w => `<details><summary>${escapeHtml(this.nomRecette(w.r))}</summary>${this.recetteHtml(w)}</details>`).join("")}</details>` : "";
     const regles = (this.wjy.regles_generales || []).length ? `<details class="circ-wjy-citees"><summary>Règles de Wang Ju Yi (tes notes)</summary>${this.ul(this.wjy.regles_generales)}</details>` : "";
-    return `<div class="circ-wjy"><h4 class="circ-indic-titre">Wang Ju Yi (tes notes) — ${res.liste.length} recette(s) qui gardent l'équilibre du circuit</h4>${chips}${citees}${regles}</div>`;
+    return citees || regles ? `<div class="circ-wjy">${citees}${regles}</div>` : "";
   },
 
   // petit crayon près du titre d'une rubrique : ouvre le formulaire de modification limité à ce seul champ
@@ -1004,12 +1021,18 @@ const Circuits = {
     const w = typeof this.assocActive === "string" ? (this._wjyListe || [])[+this.assocActive.slice(1)] : null;
     const a = w ? { tableau: this.nomRecette(w.r), points: (() => { const o = { ...w.r.canaux }; (w.r.axe || []).forEach(pt => { const k = (pt.match(/^[A-Za-z]+/) || [""])[0].toUpperCase(); (o[k] = o[k] || []).push(pt); }); return o; })() } : (this.assocActive != null ? (c.associations || [])[this.assocActive] : null);
     document.getElementById("circ-dessin").innerHTML = this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true, points: a ? a.points : null });
-    document.querySelectorAll(".circ-assoc-puces [data-a]").forEach(b => b.classList.toggle("active", !w && a && +b.dataset.a === this.assocActive));
-    document.querySelectorAll(".circ-wjy [data-w]").forEach(b => b.classList.toggle("active", !!w && this.assocActive === "w" + b.dataset.w));
+    const cle = typeof this.assocActive === "string" ? this.assocActive : (this.assocActive != null ? "a" + this.assocActive : null);
+    document.querySelectorAll(".circ-ass-ligne").forEach(r => r.classList.toggle("actif", r.dataset.k === cle));
+    document.querySelectorAll(".circ-ass-det").forEach(r => { r.hidden = r.dataset.k !== cle; });
+    const det0 = document.getElementById("circ-assoc-detail");
+    if (det0) {                                                                  // le détail s'écrit dans la ligne dépliée
+      const cible = cle && document.querySelector(`.circ-ass-det[data-k="${cle}"] td`);
+      if (cible) cible.appendChild(det0); else { const tb = document.querySelector(".circ-assoc-table"); if (tb) tb.insertAdjacentElement("afterend", det0); }
+    }
     const det = document.getElementById("circ-assoc-detail");
     if (!det) return;
     if (!a) { det.innerHTML = ""; return; }
-    if (w) { det.innerHTML = this.recetteHtml(w); this.annoterCroisements(det); return; }
+    if (w) { det.innerHTML = this.recetteHtml(w, true); this.annoterCroisements(det); return; }
     const e = a.synd ? this.entreeSynd(a.synd) : null;
     det.innerHTML = `<p>${e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(a.synd)}">${escapeHtml(sansHanzi(a.tableau))}</button>` : `<strong>${escapeHtml(sansHanzi(a.tableau))}</strong>`}</p>` +
       `<p>${Object.entries(a.points || {}).map(([k, v]) => `<span class="sx-code">${escapeHtml(k)}</span> ${v.map((p, j) => this.pointHtml(p) + ` <button type="button" class="circ-com-btn" data-k="${escapeHtml(k)}" data-j="${j}" title="Ajouter une remarque sur ce point, pour ce tableau seulement (elle s'affiche entre parenthèses dans le graphe)" aria-label="Remarque sur ${escapeHtml(p)}">💬</button>`).join(", ")}`).join(" · ")}</p>` + (a.note ? `<p class="muted">${escapeHtml(sansHanzi(a.note))}</p>` : "");
