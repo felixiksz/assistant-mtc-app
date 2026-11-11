@@ -1348,3 +1348,12 @@ section.replie > :not(h3:first-child) { display: none !important; }
 article.formule-detail, .vue-travail { border-radius: 12px !important; }
 #tab-circuits.circ-onglet .formules-sidebar { display: none; }
 #tab-circuits.circ-onglet .formules-layout { grid-template-columns: 1fr; }
+/* thème personnalisé */
+#theme-invert-row { display: block; margin: 0.3rem 0 0.6rem; }
+#theme-custom { margin-top: 0.8rem; }
+#theme-custom > summary { cursor: pointer; font-weight: 700; }
+.theme-champs { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.4rem 0.8rem; margin: 0.6rem 0; }
+.theme-champ { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
+.theme-champ input[type="color"] { width: 2.4rem; height: 1.8rem; padding: 0; border: 1.5px solid var(--ink); background: none; cursor: pointer; }
+.theme-custom-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+#theme-grid button[data-theme="custom"] { font-size: 0.8rem; }

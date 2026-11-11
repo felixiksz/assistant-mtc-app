@@ -32,6 +32,16 @@
 
   const KEY_THEME = "mtc_assistant_theme";
   const KEY_BOOST = "mtc_assistant_theme_boost";
+  const KEY_INVERT = "mtc_assistant_theme_invert";      // fond et lettres inversés
+  const KEY_CUSTOM = "mtc_assistant_theme_custom";      // couleurs du thème personnalisé (JSON)
+  // toutes les couleurs que le thème personnalisé permet de choisir
+  const CHAMPS = [
+    ["--bg", "Fond"], ["--panel", "Panneaux"], ["--ink", "Lettres"], ["--muted", "Texte atténué"], ["--line", "Filets et cadres"],
+    ["--accent", "Accent"], ["--accent-soft", "Accent léger"], ["--on-accent", "Texte sur l'accent"],
+    ["--danger", "Danger"], ["--on-danger", "Texte sur le danger"], ["--ok", "Bonne réponse"],
+    ["--row-alt", "Lignes alternées"], ["--row-section", "Lignes de section"], ["--cell-sec", "Cellules de section"],
+    ["--c-vent", "Vent"], ["--c-chaleur", "Chaleur"], ["--c-froid", "Froid"], ["--c-stase", "Stase"], ["--c-humidite", "Humidité"]
+  ];
   const TARGET_INK = 7;      // lettres / fond (AAA)
   const TARGET_TEXT = 4.5;   // texte atténué, couleurs sémantiques (AA)
   const TARGET_UI = 3;       // éléments graphiques (accent / fond)
@@ -158,6 +168,23 @@
     del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignoré */ } }
   };
   const boostOn = () => store.get(KEY_BOOST) !== "0";
+  const invertOn = () => store.get(KEY_INVERT) === "1";
+  const lireCustom = () => { try { const o = JSON.parse(store.get(KEY_CUSTOM) || "null"); return o && typeof o === "object" ? o : null; } catch (e) { return null; } };
+  // palette d'un thème prêt (index) avec l'inversion éventuelle fond / lettres
+  const paletteDe = (i, sansInv) => {
+    const inv = invertOn() && !sansInv;
+    if (i === null) return inv ? palette("#000000", "#ffffff", boostOn()) : null;
+    const t0 = THEMES[i]; if (!t0) return null;
+    return inv ? palette(t0[3], t0[2], boostOn()) : palette(t0[2], t0[3], boostOn());
+  };
+  // le thème personnalisé, avec l'inversion éventuelle (fond et lettres échangés, le reste suit)
+  const paletteCustom = () => {
+    const base = lireCustom() || paletteDe(current.index === "custom" ? null : current.index, true) || palette("#ffffff", "#000000", false);
+    const pal = {}; CHAMPS.forEach(([k]) => { pal[k] = /^#[0-9a-f]{6}$/i.test(base[k] || "") ? base[k] : (palette("#CFDDCD", "#5616AF", false)[k]); });
+    if (!invertOn()) return pal;
+    const bg = pal["--ink"], ink = pal["--bg"], clair = lum(ink) > lum(bg);
+    return { ...pal, "--bg": bg, "--ink": ink, "--line": ink, "--panel": panelOf(bg, clair), "--row-alt": mix(bg, ink, 0.06), "--row-section": mix(bg, ink, 0.16), "--cell-sec": mix(bg, ink, 0.28) };
+  };
   let VARS = [];
 
   function clearTheme() {
@@ -170,9 +197,11 @@
 
   function applyTheme(index) {
     clearTheme();
-    if (index === null || !THEMES[index]) return;
-    const t = THEMES[index];
-    const pal = palette(t[2], t[3], boostOn());
+    let pal = null;
+    if (index === "custom") pal = paletteCustom();
+    else if (index === null) pal = paletteDe(null);
+    else if (THEMES[index]) pal = paletteDe(index);
+    if (!pal) return;
     VARS = Object.keys(pal);
     VARS.forEach(k => root.style.setProperty(k, pal[k]));
     root.style.setProperty("color-scheme", lum(pal["--bg"]) < 0.4 ? "dark" : "light");   // barres de défilement, champs
@@ -181,7 +210,7 @@
   }
 
   const saved = store.get(KEY_THEME);
-  const current = { index: saved !== null && saved !== "" && THEMES[+saved] ? +saved : null };
+  const current = { index: saved === "custom" ? "custom" : saved !== null && saved !== "" && THEMES[+saved] ? +saved : null };
   applyTheme(current.index);
 
   /* ---------- interface ---------- */
@@ -191,8 +220,13 @@
   function info(index) {
     const el = document.getElementById("theme-info");
     if (!el) return;
-    if (index === null) { el.textContent = "Thème d'origine de l'assistant (blanc et rouge)."; return; }
-    const t = THEMES[index], pal = palette(t[2], t[3], boostOn());
+    if (index === "custom") {
+      const p = paletteCustom(), r = contrast(p["--ink"], p["--bg"]);
+      el.textContent = "Thème personnalisé — contraste lettres/fond : " + ratio(r) + (r < 4.5 ? " (faible : le texte risque d'être difficile à lire)" : "");
+      return;
+    }
+    if (index === null) { el.textContent = "Thème d'origine de l'assistant (" + (invertOn() ? "noir et blanc inversé" : "blanc et rouge") + ")."; return; }
+    const t = THEMES[index], pal = paletteDe(index);
     const after = contrast(pal["--ink"], pal["--bg"]);
     const before = contrast(t[3], t[2]);
     el.textContent = nameOf(t) + " — contraste lettres/fond : " + ratio(after) +
@@ -201,7 +235,7 @@
 
   function refresh() {
     document.querySelectorAll("#theme-grid button").forEach(b => {
-      const i = b.dataset.theme === "" ? null : +b.dataset.theme;
+      const i = b.dataset.theme === "" ? null : b.dataset.theme === "custom" ? "custom" : +b.dataset.theme;
       b.classList.toggle("on", i === current.index);
       b.setAttribute("aria-pressed", i === current.index ? "true" : "false");
     });
@@ -221,12 +255,35 @@
       b.title = label; b.setAttribute("aria-label", aria);
       grid.appendChild(b);
     };
-    add("Thème d'origine (blanc et rouge)", "Thème d'origine", "#ffffff", "#000000", null);
+    const orig = paletteDe(null);
+    add("Thème d'origine (blanc et rouge)", "Thème d'origine", orig ? orig["--bg"] : "#ffffff", orig ? orig["--ink"] : "#000000", null);
     THEMES.forEach((t, i) => {
-      const pal = palette(t[2], t[3], boostOn());
+      const pal = paletteDe(i);
       add(nameOf(t), "Thème " + nameOf(t).replace(/&/g, "et"), pal["--bg"], pal["--ink"], i);
     });
+    const pc = paletteCustom();
+    add("Thème personnalisé", "Thème personnalisé", pc["--bg"], pc["--ink"], "custom");
     refresh();
+    champsPerso();
+  }
+
+  // sélecteurs de couleur : un par couleur de l'interface
+  function champsPerso() {
+    const zone = document.getElementById("theme-custom-champs");
+    if (!zone) return;
+    const base = paletteCustom();
+    zone.innerHTML = CHAMPS.map(([k, lib]) => `<label class="theme-champ"><input type="color" data-var="${k}" value="${base[k]}"><span>${lib}</span></label>`).join("");
+    zone.querySelectorAll('input[type="color"]').forEach(inp => inp.addEventListener("input", () => {
+      const c = lireCustom() || paletteCustom();
+      // les sélecteurs montrent les couleurs affichées (inversion comprise) : on enregistre en tenant compte de l'inversion
+      const aff = paletteCustom(), v = {}; CHAMPS.forEach(([k]) => { v[k] = aff[k]; }); v[inp.dataset.var] = inp.value;
+      let sauve = v;
+      if (invertOn()) sauve = { ...v, "--bg": v["--ink"], "--ink": v["--bg"], "--line": v["--bg"] };
+      store.set(KEY_CUSTOM, JSON.stringify({ ...c, ...sauve }));
+      current.index = "custom"; store.set(KEY_THEME, "custom");
+      applyTheme("custom"); refresh();
+      const b = document.querySelector('#theme-grid button[data-theme="custom"]'); if (b) { const p = paletteCustom(); b.style.background = p["--bg"]; b.style.color = p["--ink"]; }
+    }));
   }
 
   function build() {
@@ -238,6 +295,18 @@
 
     const boost = document.getElementById("theme-boost");
     if (boost) boost.checked = boostOn();
+    const inv = document.getElementById("theme-invert");
+    if (inv) { inv.checked = invertOn(); inv.addEventListener("change", () => { store.set(KEY_INVERT, inv.checked ? "1" : "0"); applyTheme(current.index); renderGrid(); }); }
+    const copie = document.getElementById("theme-custom-copie");
+    if (copie) copie.addEventListener("click", () => {
+      // part du thème affiché (sans l'inversion : elle reste réglable à part)
+      const base = current.index === "custom" ? paletteCustom() : (paletteDe(current.index, true) || palette("#ffffff", "#000000", false));
+      const v = {}; CHAMPS.forEach(([k]) => { v[k] = base[k]; });
+      store.set(KEY_CUSTOM, JSON.stringify(v));
+      current.index = "custom"; store.set(KEY_THEME, "custom"); applyTheme("custom"); renderGrid();
+    });
+    const reinit = document.getElementById("theme-custom-reinit");
+    if (reinit) reinit.addEventListener("click", () => { store.del(KEY_CUSTOM); if (current.index === "custom") { current.index = null; store.del(KEY_THEME); } applyTheme(current.index); renderGrid(); });
 
     btn.addEventListener("click", () => {
       const open = panel.style.display === "none" || panel.style.display === "";
@@ -248,7 +317,7 @@
     grid.addEventListener("click", e => {
       const b = e.target.closest("button[data-theme]");
       if (!b) return;
-      current.index = b.dataset.theme === "" ? null : +b.dataset.theme;
+      current.index = b.dataset.theme === "" ? null : b.dataset.theme === "custom" ? "custom" : +b.dataset.theme;
       if (current.index === null) store.del(KEY_THEME); else store.set(KEY_THEME, String(current.index));
       applyTheme(current.index);
       refresh();

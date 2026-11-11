@@ -11,8 +11,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&family=Noto+Serif:wght@700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=144">
-<script src="theme.js?v=2"></script>
+<link rel="stylesheet" href="style.css?v=145">
+<script src="theme.js?v=3"></script>
 </head>
 <body>
 <header class="topbar">
@@ -54,8 +54,18 @@
   <h2>Thèmes de couleurs</h2>
   <p class="muted" data-aide>Les mêmes paires fond / lettres que le jeu. Le contraste est renforcé automatiquement : lettres visées à 7:1 sur le fond, texte atténué et couleurs d'indication (vent, chaleur, froid…) à 4,5:1 au minimum.</p>
   <label id="theme-boost-row"><input type="checkbox" id="theme-boost" checked> Contraste renforcé (recommandé)</label>
+  <label id="theme-invert-row"><input type="checkbox" id="theme-invert"> Inverser le fond et les lettres</label>
   <div id="theme-grid" role="group" aria-label="Choix du thème"></div>
   <p id="theme-info" aria-live="polite"></p>
+  <details id="theme-custom">
+    <summary>Thème personnalisé : choisir toutes les couleurs</summary>
+    <p class="muted">Chaque sélecteur change la couleur tout de suite. Tu peux partir du thème affiché, puis retoucher ce que tu veux. L'inversion ci-dessus s'applique aussi à ce thème.</p>
+    <div id="theme-custom-champs" class="theme-champs"></div>
+    <div class="theme-custom-actions">
+      <button type="button" id="theme-custom-copie" class="edit-toggle-btn">Partir du thème affiché</button>
+      <button type="button" id="theme-custom-reinit" class="edit-toggle-btn">Effacer le thème perso</button>
+    </div>
+  </details>
 </div>
 
 <div id="sync-settings-panel" class="sync-panel" style="display:none;">
