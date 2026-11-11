@@ -641,7 +641,7 @@ const Circuits = {
     const ouvert = this._ptsOuvert || {};
     const supp = [...new Set((c.ajouts || []).flatMap(a => a.canaux || []))].filter(k => !c.grille.includes(k));
     const cartes = [...c.grille, ...supp, ...this.AXE, ...(this.vaisseauxOuverts(c).length || this.ptsDe("VX").length ? ["VX"] : [])].map(code => {
-      const k = this.canaux.get(code) || { nom: this.NOM_AXE[code] }, l = this.ptsDe(code), axe = this.AXE.includes(code) || code === "VX", ajout = !axe && !c.grille.includes(code);
+      const k = this.canaux.get(code) || { nom: this.NOM_AXE[code] }, l = this.ptsAffiches(code, c), axe = this.AXE.includes(code) || code === "VX", ajout = !axe && !c.grille.includes(code);
       const lis = l.map(x => ({ r: this.retenu(x), h: `<li><button type="button" class="circ-pt-etoile${this.retenu(x) ? " actif" : ""}" data-point="${escapeHtml(x.point)}" title="${this.retenu(x) ? "Favori : cliquer pour le retirer des favoris" : "Ajouter aux favoris"}" aria-label="Mettre ${escapeHtml(x.point)} en favori" aria-pressed="${this.retenu(x)}">${this.retenu(x) ? "★" : "☆"}</button> <button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: x.canal || code, raison: x.action || "", source: "points du canal " + code, circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ${escapeHtml(x.point)} pour le réseau de la patiente">✓</button> <strong>${this.pointHtml(x.point)}</strong>${x.canal ? ` <span class="sx-code" title="Canal du point">${escapeHtml(x.canal)}</span>` : ""}${x.commentaire ? ` <span class="circ-com" title="Ton commentaire">${escapeHtml(x.commentaire)}</span>` : ""}${x.categorie ? ` <span class="circ-cat">${escapeHtml(x.categorie)}</span>` : ""}${x.action || x.statut === "base" ? ` <button type="button" class="circ-info" aria-expanded="false" title="Afficher ou masquer les actions de ce point" aria-label="Afficher ou masquer les actions de ce point">ⓘ</button>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}<span class="circ-act">${x.action ? escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}</span></li>` }));
       const ret = lis.filter(o => o.r), dis = lis.filter(o => !o.r), rend = a => a.map(o => o.h).join("");
       return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}${axe ? " circ-pts-axe" : ""}${this.actionsVisibles()[code] ? " actions-visibles" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code === "VX" ? "8MV" : code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
@@ -662,20 +662,27 @@ const Circuits = {
       });
       this.brancherInfos(carte);
       carte.querySelectorAll(".circ-pt-etoile").forEach(b => b.addEventListener("click", async () => {
-        const e = this.ptsDe(code).find(y => this.cleP(y.point) === this.cleP(b.dataset.point));
-        if (!e) return;
+        let e = this.ptsDe(code).find(y => this.cleP(y.point) === this.cleP(b.dataset.point));
+        if (!e) {                                                                        // point standard affiché d'office : il entre dans ta liste quand tu le mets en favori
+          const a = this.standardsDe(code).find(y => this.cleP(y.point) === this.cleP(b.dataset.point));
+          if (!a) return;
+          e = { point: a.point, action: a.action, categorie: a.categorie, statut: "base" };
+          (this.points.canaux[code] = this.points.canaux[code] || []).push(e);
+        }
         e.retenu = !this.retenu(e);
         try { await this.ecrirePoints(); } catch (err) { alert("Enregistrement impossible : " + err.message); }
         this.rendrePoints(c);
       }));
       if (ouvert[code]) this.proposerPoints(c, code, zone, true);
       else this.propositionsCanal(code, c).then(l => {
-        const deja = new Set(this.ptsDe(code).map(x => this.cleP(x.point)));
+        const deja = new Set(this.ptsAffiches(code, c).map(x => this.cleP(x.point)));
         if (!l.some(x => !deja.has(this.cleP(x.point)))) { const b = carte.querySelector('[data-act="prop"]'); if (b && carte.isConnected) b.hidden = true; }
       });
     });
     this.marquerSaignees(z);
     this.marquerCategories(z);
+    const codesStd = [...c.grille, ...supp];
+    if (!codesStd.every(k => (this._dbSync || {})[k])) Promise.all(codesStd.map(k => this.dbCanal(k))).then(() => { if (this.actif === c.id && document.getElementById("circ-pts")) this.rendrePoints(c); });
   },
   // catégorie des points de la liste qui n'en ont pas encore (ajoutés avant, ou saisis à la main) : lue dans ta base de points
   async marquerCategories(z) {
@@ -714,7 +721,7 @@ const Circuits = {
   // ---------- base de points du jeu (reference/points_canaux/<canal>.json) : propositions, actions et indications en saignée
   async dbCanal(code) {
     this._db = this._db || {};
-    if (!this._db[code]) this._db[code] = Store.readJSON("reference/points_canaux/" + code + ".json").then(d => Array.isArray(d) ? d : []).catch(() => []);
+    if (!this._db[code]) this._db[code] = Store.readJSON("reference/points_canaux/" + code + ".json").then(d => Array.isArray(d) ? d : []).catch(() => []).then(d => { (this._dbSync = this._dbSync || {})[code] = d; return d; });
     return this._db[code];
   },
   // pas de points shù dorsaux (vessie) ni de mù d'un autre canal : seuls les points du canal lui-même, de RM ou de DM sont proposés
@@ -737,6 +744,28 @@ const Circuits = {
     this.enListe(p.actions).forEach(x => ajoute(this.texteItem(x), "action"));
     this.enListe(p.indications_psycho_emotionnelles).forEach(x => ajoute(this.texteItem(x), "psycho-émotionnel"));
     return out;
+  },
+  // points de transport (cinq shū antiques), luò de liaison et yuán-source d'un canal : repris de la base et ajoutés d'office à chaque canal d'un circuit
+  standardsDe(code) {
+    const db = (this._dbSync || {})[code] || [];
+    const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return db.filter(p => {
+      if (!this.pointAdmis(p.point, code) || this.AXE.includes(code)) return false;
+      return String(p.categories_point || "").split(/\n+/).some(l => {
+        const n = norm(l);
+        if (/mer de l'eau|des cereales|inferieur|intersection|jiao hui/.test(n)) return false;        // ni les hé inférieurs, ni les points d'intersection
+        return /jing-puits|ying-jaillissement|shu-riviere|jing-fleuve|he-reunion|yuan-source/.test(n) || (/luo-liaison/.test(n) && !/grand/.test(n));
+      });
+    }).map(p => ({ point: String(p.point).replace(/\s+/g, ""), categorie: this.categoriesDe(p).join(" ; "), action: this.actionsDe(p).slice(0, 2).join(" ; "), statut: "base", auto: true }));
+  },
+  numPoint(s) { const m = String(s).match(/(\d+)/); return m ? +m[1] : 0; },
+  // liste affichée d'un canal : tes points + les points standard qui n'y sont pas encore (par ordre numérique)
+  ptsAffiches(code, c) {
+    const l = this.ptsDe(code);
+    if (!c || !c.grille.includes(code) && !(c.ajouts || []).some(a => (a.canaux || []).includes(code))) return l;
+    const vus = new Set(l.map(x => this.cleP(x.point)));
+    const auto = this.standardsDe(code).filter(x => !vus.has(this.cleP(x.point)));
+    return [...l, ...auto].map((x, i) => ({ x, i })).sort((a, b) => (this.numPoint(a.x.point) - this.numPoint(b.x.point)) || (a.i - b.i)).map(o => o.x);
   },
   actionsDe(p) { return this.enListe(p.actions).map(a => this.texteItem(a).replace(/^[➢•\-\s]+/, "").replace(/\.$/, "").trim()).filter(Boolean); },
   // catégories « utiles » d'un point de la base (cinq points shu, yuán, luò, xī, hé…)
@@ -846,7 +875,7 @@ const Circuits = {
     if (!sansBascule && this._ptsOuvert[code]) { this._ptsOuvert[code] = false; zone.innerHTML = ""; return; }
     this._ptsOuvert[code] = true;
     zone.innerHTML = `<p class="muted">Chargement…</p>`;
-    const deja = new Set(this.ptsDe(code).map(x => this.cleP(x.point)));
+    const deja = new Set(this.ptsAffiches(code, c).map(x => this.cleP(x.point)));
     const tous = await this.propositionsCanal(code, c);
     const l = tous.filter(x => !deja.has(this.cleP(x.point)));
     const repli = tous.some(x => x.repli);
