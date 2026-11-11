@@ -244,7 +244,7 @@ const Circuits = {
     ul.innerHTML = l.map(c => `<li class="gl-item circ-item${c.id === this.actif ? " selected" : ""}" data-id="${escapeHtml(c.id)}">` +
       `<span class="circ-mini">${this.dessin(c, { taille: 54, etiquettes: true })}</span>` +
       `<span class="circ-titre"><strong>${escapeHtml(this.nomCourt(c))}</strong><span class="muted">${c.grille.join(" · ")}${c.origine === "perso" ? " · créé par toi" : c.modifie ? " · modifié" : ""}</span></span></li>`).join("") || `<li class="muted">Aucun circuit.</li>`;
-    ul.querySelectorAll("li[data-id]").forEach(li => li.addEventListener("click", () => this.ouvrirCircuit(li.dataset.id)));
+    ul.querySelectorAll("li[data-id]").forEach(li => li.addEventListener("click", () => this.afficher(li.dataset.id)));
     document.getElementById("circuit-count").textContent = l.length + " circuit(s)";
   },
 
@@ -362,6 +362,7 @@ const Circuits = {
     this.pointsTung(c);
     this.rendrePoints(c);
     if (!this._mouvPret) this.chargerInter().then(() => { if (this.actif === c.id && document.getElementById("circ-dessin")) this.majAssoc(c); });
+    if (!(Onglets.actif || "").startsWith("circ:")) Fenetre.boutonOnglet(zone, () => Onglets.ouvrirCircuit(c.id));
     this.crayonsChamps(zone, c);
     this.annoterCroisements(zone);
     const ajp = document.getElementById("circ-aj-prop"); if (ajp) ajp.addEventListener("click", () => this.proposerAjouts(c));
@@ -1398,7 +1399,7 @@ const CircuitsProposition = {
       document.querySelector('.tab-btn[data-tab="circuits"]').click();
       await Circuits.ouvert();
       Circuits.filtre = null; Circuits.recherche = ""; document.getElementById("circuit-search").value = "";
-      Circuits.rendrePuces(); Circuits.ouvrirCircuit(b.dataset.circ);
+      Circuits.rendrePuces(); Circuits.afficher(b.dataset.circ);
     }));
   },
 

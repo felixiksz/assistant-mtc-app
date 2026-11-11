@@ -1291,9 +1291,6 @@ li:hover > .circ-com-btn, .circ-com-btn:focus, .circ-com-btn:hover { opacity: 1;
 .mr-circuits { max-height: 38vh; overflow-y: auto; display: grid; }
 .mr-lien { display: block; width: 100%; text-align: left; border: 0; border-left: 3px solid transparent; background: none; color: var(--ink); font: inherit; font-size: 0.9rem; padding: 0.4rem 0.5rem; cursor: pointer; }
 .mr-lien:hover, .mr-lien.actif { border-left-color: var(--accent, var(--ink)); background: rgba(0,0,0,.06); }
-#tab-circuits .formules-layout { grid-template-columns: 1fr; }
-#tab-circuits .formules-sidebar { position: static; max-height: none; }
-#tab-circuits.fiche-seule .formules-sidebar { display: none; }
 #tab-circuits:not(.fiche-seule) #circuit-detail { display: none; }
 /* sections repliables */
 h3[data-repliable] { cursor: pointer; user-select: none; }
@@ -1330,25 +1327,24 @@ section.replie > :not(h3:first-child) { display: none !important; }
 #fen-plus-pop[hidden] { display: none; }
 #fen-plus-pop input[type="search"] { width: 100%; box-sizing: border-box; margin-bottom: 0.3rem; }
 /* les fiches s'ouvrent chacune dans leur onglet : la liste de l'onglet majeur prend toute la largeur */
-#formule-detail, #syn-detail, #pts-detail { display: none; }
-.formules-layout:has(> #formule-detail), .formules-layout:has(> #syn-detail), .formules-layout:has(> #pts-detail) { grid-template-columns: 1fr; }
-.formules-layout:has(> #formule-detail) > .formules-sidebar, .formules-layout:has(> #syn-detail) > .formules-sidebar, .formules-layout:has(> #pts-detail) > .formules-sidebar { position: static; max-height: none; }
 /* style arrondi (comme la maquette) pour la nouvelle structure */
-#global-search { border-radius: 999px; padding-left: 1rem; padding-right: 1rem; }
-#global-search-results { border-radius: 12px; }
-.sync-icone, .sync-btn { border-radius: 999px; }
-.sections-bar { margin: 0.7rem 1rem 0; border: 1.5px solid var(--ink); border-radius: 12px; overflow: hidden; background: var(--bg); }
+#global-search { border-radius: 999px !important; padding-left: 1rem; padding-right: 1rem; }
+#global-search-results { border-radius: 12px !important; }
+.sync-icone, .sync-btn { border-radius: 999px !important; }
+.sections-bar { margin: 0.7rem 1rem 0; border: 1.5px solid var(--ink); border-radius: 12px !important; overflow: hidden; background: var(--bg); }
 .sec-btn { padding: 0.55rem 1rem; }
 .sec-btn.actif { background: var(--ink); color: var(--bg); }
 .onglets-travail { margin: 0 1rem; padding-left: 0.2rem; padding-right: 0.2rem; }
-.onglet-t { border-radius: 10px 10px 0 0; }
-.onglet-menu, .fen-plus { border-radius: 10px 10px 0 0; }
-.circ-onglet-btn { border-radius: 8px 8px 0 0; }
-.circ-bandeau { border-radius: 8px 8px 0 0; }
-#menu-rapide, #fen-plus-pop { border-radius: 12px; }
-#menu-rapide input[type="search"], #fen-plus-pop input[type="search"] { border-radius: 999px; padding: 0.35rem 0.8rem; }
-.mr-lien { border-radius: 8px; }
-.formules-sidebar { border-radius: 12px; }
-.formules-sidebar input[type="search"] { border-radius: 999px; padding-left: 0.9rem; padding-right: 0.9rem; }
-.circ-pts-carte, .circ-assoc-table { border-radius: 10px; }
-article.formule-detail, .vue-travail { border-radius: 12px; }
+.onglet-t { border-radius: 10px 10px 0 0 !important; }
+.onglet-menu, .fen-plus { border-radius: 10px 10px 0 0 !important; }
+.circ-onglet-btn { border-radius: 8px 8px 0 0 !important; }
+.circ-bandeau { border-radius: 8px 8px 0 0 !important; }
+#menu-rapide, #fen-plus-pop { border-radius: 12px !important; }
+#menu-rapide input[type="search"], #fen-plus-pop input[type="search"] { border-radius: 999px !important; padding: 0.35rem 0.8rem; }
+.mr-lien { border-radius: 8px !important; }
+.formules-sidebar { border-radius: 12px !important; }
+.formules-sidebar input[type="search"] { border-radius: 999px !important; padding-left: 0.9rem; padding-right: 0.9rem; }
+.circ-pts-carte, .circ-assoc-table { border-radius: 10px !important; }
+article.formule-detail, .vue-travail { border-radius: 12px !important; }
+#tab-circuits.circ-onglet .formules-sidebar { display: none; }
+#tab-circuits.circ-onglet .formules-layout { grid-template-columns: 1fr; }

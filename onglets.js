@@ -99,7 +99,7 @@ const Onglets = {
     if (this.actif !== null) this.memoriserDefilement();
     this.actif = null;
     document.body.classList.remove("vue-doc");
-    if (typeof Circuits !== "undefined" && Fenetre.moduleCourant() === "circuits" && Circuits.actif) Circuits.montrerListe();
+    const tc = document.getElementById("tab-circuits"); if (tc) tc.classList.remove("circ-onglet");
     if (this.vues) { this.vues.hidden = true; this.vues.querySelectorAll(".vue-travail").forEach(z => { z.hidden = true; }); }
     this.rendreBarre();
     if (!sansBarre) window.scrollTo(0, this._y.module || 0);
@@ -112,6 +112,7 @@ const Onglets = {
     if (o.desc && o.desc.kind === "circ") return this.activerCircuit(o);
     this.memoriserDefilement();
     this.actif = id;
+    const tc0 = document.getElementById("tab-circuits"); if (tc0) tc0.classList.remove("circ-onglet");
     document.body.classList.add("vue-doc");
     this.vues.hidden = false;
     this.vues.querySelectorAll(".vue-travail").forEach(z => { z.hidden = z !== o.zone; });
@@ -130,6 +131,7 @@ const Onglets = {
     if (b) b.click();                                                     // affiche le module (remet la vue du module)
     await Circuits.ensureLoaded(); await Circuits.ouvert();
     this.actif = o.id;
+    const tc = document.getElementById("tab-circuits"); if (tc) tc.classList.add("circ-onglet");
     Circuits.afficher(o.desc.id);
     this.rendreBarre();
     window.scrollTo(0, this._y[o.id] || 0);
@@ -404,6 +406,16 @@ const Fenetre = {
     return b;
   },
   cacher() { const b = document.getElementById("fenetre-bar"); if (b) b.hidden = true; },
+  boutonOnglet(zone, ouvrir) {
+    if (!zone || zone.querySelector(".ouvrir-onglet")) return;
+    let c = zone.querySelector(".edit-flottante, .barre-flottante");
+    if (!c) { c = document.createElement("div"); c.className = "barre-flottante"; zone.prepend(c); }
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "edit-toggle-btn ouvrir-onglet"; b.textContent = "⧉";
+    b.title = "Ouvrir cette fiche dans un nouvel onglet"; b.setAttribute("aria-label", "Ouvrir cette fiche dans un nouvel onglet");
+    b.addEventListener("click", ouvrir);
+    c.prepend(b);
+  },
   // les quatre sections, en onglets sous l'en-tête
   rendreSections(sec) {
     const n = document.getElementById("sections-bar");
@@ -483,10 +495,18 @@ const Fenetre = {
 })();
 
 Onglets.init();
-// liste d'un onglet majeur : chaque fiche choisie s'ouvre dans son propre onglet (les onglets majeurs restent toujours ouverts)
-if (typeof Formules !== "undefined") { Formules.showDetail = f => Onglets.ouvrirFormule(f.id); Formules.showVariation = v => Onglets.ouvrirFormule(v.id); }
-if (typeof Syndromes !== "undefined") Syndromes.showDetail = e => Onglets.ouvrirSyndrome(e);
-if (typeof Points !== "undefined") Points.showDetail = e => Onglets.ouvrirPoint(e.id);
+// onglet majeur : la liste à gauche, l'article à droite ; un bouton ⧉ sur l'article l'ouvre dans un nouvel onglet
+(() => {
+  const brancher = (obj, nom, zoneId, ouvrir) => {
+    if (typeof obj === "undefined" || !obj[nom]) return;
+    const orig = obj[nom].bind(obj);
+    obj[nom] = async function (x, li) { const r = await orig(x, li); Fenetre.boutonOnglet(document.getElementById(zoneId), () => ouvrir(x)); return r; };
+  };
+  brancher(typeof Formules !== "undefined" ? Formules : undefined, "showDetail", "formule-detail", f => Onglets.ouvrirFormule(f.id));
+  brancher(typeof Formules !== "undefined" ? Formules : undefined, "showVariation", "formule-detail", v => Onglets.ouvrirFormule(v.id));
+  brancher(typeof Syndromes !== "undefined" ? Syndromes : undefined, "showDetail", "syn-detail", e => Onglets.ouvrirSyndrome(e));
+  brancher(typeof Points !== "undefined" ? Points : undefined, "showDetail", "pts-detail", e => Onglets.ouvrirPoint(e.id));
+})();
 Onglets.restaurer();
 
 /* ============ Sections repliables : le titre (h3) de chaque section d'une fiche la replie ou la déplie ============
