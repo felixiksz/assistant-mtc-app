@@ -1278,3 +1278,6 @@ li:hover > .circ-com-btn, .circ-com-btn:focus, .circ-com-btn:hover { opacity: 1;
 .circ-onglet > section:first-child > h3:first-child { margin-top: 0.8rem; }
 .circ-bande-vx { display: flex; flex-wrap: wrap; gap: 0.4rem 0.8rem; align-items: center; margin-top: 0.8rem; padding: 0.4rem 0.7rem; border: 2px dashed var(--ink); font-size: 0.9rem; }
 .circ-vx-puce { white-space: nowrap; }
+/* boutons minimalistes (emoji ou symbole seul) : sans cadre ni ombre */
+.circ-pts-btns .edit-toggle-btn, .circ-pts-prop li .edit-toggle-btn[data-i], .circ-pts-prop li .edit-toggle-btn[data-reseau], .circ-pt-choisir { border: none !important; box-shadow: none !important; background: none !important; padding: 0 0.25rem; min-width: 0; font-size: 1.05rem; line-height: 1.2; color: var(--ink); text-transform: none; }
+.circ-pts-btns .edit-toggle-btn:hover, .circ-pts-prop li .edit-toggle-btn[data-i]:hover, .circ-pts-prop li .edit-toggle-btn[data-reseau]:hover, .circ-pt-choisir:hover { background: var(--bg-soft, rgba(0,0,0,.08)) !important; color: var(--ink); }
