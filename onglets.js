@@ -52,6 +52,7 @@ const Onglets = {
       document.addEventListener("keydown", ev => { if (ev.key === "Escape") p.hidden = true; });
       p.addEventListener("click", ev => {
         const bc = ev.target.closest("[data-mr-circ]"), bt = ev.target.closest("[data-mr-tab]");
+      if (ev.target.closest("[data-mr-nouveau]")) { p.hidden = true; document.querySelector('.tab-btn[data-tab="circuits"]').click(); Circuits.ouvert().then(() => Circuits.nouveau()); return; }
         if (bc) { p.hidden = true; Circuits.ouvrirCircuit(bc.dataset.mrCirc); }
         else if (bt) { p.hidden = true; const orig = document.querySelector('#menu-panneau .tab-btn[data-tab="' + bt.dataset.mrTab + '"]'); if (orig) orig.click(); }
       });
@@ -64,7 +65,7 @@ const Onglets = {
     const circ = typeof Circuits !== "undefined" && Circuits.liste && Circuits.liste.length ? Circuits.liste : [];
     const groupes = [...document.querySelectorAll("#menu-panneau .menu-groupe")].map(g => `<div class="mr-groupe"><div class="menu-titre">${escapeHtml(g.querySelector(".menu-titre").textContent)}</div>` +
       [...g.querySelectorAll(".tab-btn")].map(b => `<button type="button" class="mr-lien" data-mr-tab="${escapeHtml(b.dataset.tab)}">${escapeHtml((b.title || b.textContent).trim())}</button>`).join("") + `</div>`).join("");
-    p.innerHTML = (circ.length ? `<div class="mr-groupe"><div class="menu-titre">Circuits</div><input type="search" id="mr-filtre" placeholder="Chercher un circuit" autocomplete="off"><div class="mr-circuits" id="mr-circuits"></div></div>` : "") + groupes;
+    p.innerHTML = (circ.length ? `<div class="mr-groupe"><div class="menu-titre">Circuits</div><input type="search" id="mr-filtre" placeholder="Chercher un circuit" autocomplete="off"><button type="button" class="mr-lien" data-mr-nouveau>+ Nouveau circuit</button><div class="mr-circuits" id="mr-circuits"></div></div>` : "") + groupes;
     const liste = p.querySelector("#mr-circuits"), filtre = p.querySelector("#mr-filtre");
     const dessiner = () => {
       const t = (filtre ? filtre.value : "").toLowerCase();
