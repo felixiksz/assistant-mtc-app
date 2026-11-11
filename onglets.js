@@ -330,3 +330,46 @@ const Onglets = {
 
 Onglets.init();
 Onglets.restaurer();
+
+/* ============ Sections repliables : le titre (h3) de chaque section d'une fiche la replie ou la déplie ============
+   Vaut pour toutes les fiches (circuits, formules, syndromes, points, Tung…). L'état est mémorisé par titre de section, sur cet appareil. */
+const Replier = {
+  CLE: "mtc_sections_repliees",
+  repliees() { try { return new Set(JSON.parse(localStorage.getItem(this.CLE) || "[]")); } catch (e) { return new Set(); } },
+  enregistrer(s) { try { localStorage.setItem(this.CLE, JSON.stringify([...s])); } catch (e) { /* stockage indisponible */ } },
+  // titres de sections d'une fiche (pas ceux d'un formulaire en cours de modification)
+  titres() {
+    return [...document.querySelectorAll("section > h3:first-child:not([data-repliable])")].filter(h => !h.closest("form, .circ-edition, [contenteditable], .reseau-fenetre, #reseau-fenetre"));
+  },
+  preparer() {
+    const r = this.repliees();
+    this.titres().forEach(h => {
+      h.dataset.repliable = "1";
+      h.setAttribute("role", "button"); h.tabIndex = 0;
+      const s = h.parentElement, cle = h.textContent.trim();
+      if (r.has(cle)) s.classList.add("replie");
+      h.setAttribute("aria-expanded", String(!s.classList.contains("replie")));
+      h.title = "Replier ou déplier cette section";
+    });
+  },
+  basculer(h) {
+    const s = h.parentElement, on = s.classList.toggle("replie"), r = this.repliees(), cle = h.textContent.trim();
+    if (on) r.add(cle); else r.delete(cle);
+    this.enregistrer(r);
+    h.setAttribute("aria-expanded", String(!on));
+    if (!on && s.querySelector(".circ-graphe") && typeof Circuits !== "undefined" && Circuits.tracerGraphe) setTimeout(() => Circuits.tracerGraphe(), 30);       // le graphe se retrace quand il redevient visible
+  },
+  init() {
+    document.addEventListener("click", e => {
+      const h = e.target.closest("h3[data-repliable]");
+      if (h && !e.target.closest("a, button, input, select, textarea")) this.basculer(h);
+    });
+    document.addEventListener("keydown", e => {
+      if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("h3[data-repliable]")) { e.preventDefault(); this.basculer(e.target); }
+    });
+    let t = null;
+    new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => this.preparer(), 40); }).observe(document.body, { childList: true, subtree: true });
+    this.preparer();
+  }
+};
+Replier.init();

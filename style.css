@@ -1293,3 +1293,8 @@ li:hover > .circ-com-btn, .circ-com-btn:focus, .circ-com-btn:hover { opacity: 1;
 .mr-lien:hover, .mr-lien.actif { border-left-color: var(--accent, var(--ink)); background: rgba(0,0,0,.06); }
 #tab-circuits.fiche-seule .formules-sidebar { display: none; }
 #tab-circuits.fiche-seule .formules-layout { grid-template-columns: 1fr; }
+/* sections repliables */
+h3[data-repliable] { cursor: pointer; user-select: none; }
+h3[data-repliable]::before { content: "▾"; display: inline-block; width: 1.1em; font-size: 0.85em; color: var(--muted, #666); }
+section.replie > h3[data-repliable]::before { content: "▸"; }
+section.replie > :not(h3:first-child) { display: none !important; }
