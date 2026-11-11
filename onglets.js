@@ -242,6 +242,11 @@ const Onglets = {
   async restaurer() {
     let local = null;
     try { local = JSON.parse(localStorage.getItem(this.CLE_MEMOIRE) || "null"); } catch (e) { /* illisible : on repart du distant */ }
+    // la bonne structure s'affiche tout de suite (fenêtre et module où l'on était), sans attendre le chargement des bases : les fiches ouvertes s'ajoutent ensuite
+    try {
+      if (local && local.module && local.module !== "formules") { const b0 = document.querySelector('.menu-onglets .tab-btn[data-tab="' + local.module + '"]'); if (b0) b0.click(); }
+    } catch (e) { /* module indisponible */ }
+    this.rendreBarre();
     // attend que les bases (points, formules, syndromes) soient chargées
     for (let i = 0; i < 60; i++) {
       const pret = (typeof Points !== "undefined" && (Points.entries || []).length) && (typeof Formules !== "undefined" && Formules.byId && Formules.byId.size) && (typeof Syndromes !== "undefined" && (Syndromes.entries || []).length);
@@ -386,6 +391,13 @@ const Fenetre = {
     const l = b.querySelector(".fen-liste-btn"); if (l) l.addEventListener("click", e => Onglets.basculerMenuRapide(e, true));
   }
 };
+
+// la barre suit le module affiché, d'où qu'il soit changé (menu, recherche, restauration au démarrage) : pas de structure transitoire
+(() => {
+  let t = null;
+  const mo = new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => Onglets.rendreBarre(), 30); });
+  document.querySelectorAll(".tab-panel").forEach(p => mo.observe(p, { attributes: true, attributeFilter: ["class"] }));
+})();
 
 Onglets.init();
 Onglets.restaurer();
