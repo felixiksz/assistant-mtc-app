@@ -420,7 +420,7 @@ const Circuits = {
     const r = w.r;
     const notes = (this.wjy.notes_groupes || {})[r.groupe] || [];
     return `<p><strong>${r.points.map(p => this.pointHtml(p)).join(" – ")}</strong> <span class="circ-pt-tag circ-pt-base" title="${escapeHtml(this.wjy.source || "")}">Wang Ju Yi</span> <span class="muted">${escapeHtml(r.groupe)}</span>${r.vaisseaux ? ` <span class="muted">(${escapeHtml(r.vaisseaux)})</span>` : ""}</p>` +
-      (w.ajout && w.ajout.length ? `<p class="muted">Utilise ${escapeHtml(w.ajout.join(", "))} : un des ajouts possibles de ce circuit.</p>` : "") +
+      (w.ajout && w.ajout.length ? `<p class="muted">${escapeHtml(w.ajout.join(" + "))} — ajouts possibles</p>` : "") +
       (w.manque && w.manque.length ? `<p class="muted">${escapeHtml(w.manque.join(", "))} n'est pas dans ce circuit : non intégrée, à toi de juger.</p>` : "") +
       (sansOk ? "" : `<p><button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify(r.points.map(p => ({ point: p, raison: "Wang Ju Yi " + r.points.join(" – ") + (r.puces[0] ? " : " + r.puces[0] : ""), source: "Wang Ju Yi" }))))}" title="Ajouter les points de cette recette au réseau de la patiente" aria-label="Ajouter les points de cette recette au réseau de la patiente">✓</button></p>`) +
       this.ul(r.puces) + (notes.length ? `<p class="muted">${notes.map(escapeHtml).join(" · ")}</p>` : "") +
@@ -438,7 +438,7 @@ const Circuits = {
       const lst = Object.entries(a.points || {}).flatMap(([k, v]) => v.map(p => ({ point: this.clePoint(p), canal: k, raison: sansHanzi(a.tableau), source: "ton tableau" })));
       return ligne("a" + i, pts.join(" · "), sansHanzi(a.tableau), false, lst);
     });
-    const wjy = res.liste.map((w, i) => ligne("w" + i, this.nomRecette(w.r) + (w.ajout.length ? " +" + w.ajout.join("+") : ""), w.r.puces[0] || w.r.groupe || "", true,
+    const wjy = res.liste.map((w, i) => ligne("w" + i, this.nomRecette(w.r), w.r.puces[0] || w.r.groupe || "", true,
       w.r.points.map(p => ({ point: p, raison: "Wang Ju Yi " + w.r.points.join(" – ") + (w.r.puces[0] ? " : " + w.r.puces[0] : ""), source: "Wang Ju Yi" }))));
     const tout = [...siennes, ...wjy];
     return tout.length ? `<table class="circ-assoc-table"><tbody>${tout.join("")}</tbody></table>` : "";
