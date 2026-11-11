@@ -1281,3 +1281,5 @@ li:hover > .circ-com-btn, .circ-com-btn:focus, .circ-com-btn:hover { opacity: 1;
 /* boutons minimalistes (emoji ou symbole seul) : sans cadre ni ombre */
 .circ-pts-btns .edit-toggle-btn, .circ-pts-prop li .edit-toggle-btn[data-i], .circ-pts-prop li .edit-toggle-btn[data-reseau], .circ-pt-choisir { border: none !important; box-shadow: none !important; background: none !important; padding: 0 0.25rem; min-width: 0; font-size: 1.05rem; line-height: 1.2; color: var(--ink); text-transform: none; }
 .circ-pts-btns .edit-toggle-btn:hover, .circ-pts-prop li .edit-toggle-btn[data-i]:hover, .circ-pts-prop li .edit-toggle-btn[data-reseau]:hover, .circ-pt-choisir:hover { background: var(--bg-soft, rgba(0,0,0,.08)) !important; color: var(--ink); }
+.circ-info { border: none !important; background: none !important; box-shadow: none !important; width: auto; height: auto; padding: 0 0.15rem; font-size: 0.95rem; }
+.circ-info:hover, .circ-info[aria-expanded="true"] { background: rgba(0,0,0,.08) !important; color: var(--ink); }
