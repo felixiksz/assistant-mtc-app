@@ -39,8 +39,7 @@ const Onglets = {
   ajusterBarre() {
     const vis = [this.barre, document.getElementById("fenetre-bar")].find(e => e && !e.hidden);
     const h = vis ? Math.ceil(vis.getBoundingClientRect().height) : 0;
-    document.documentElement.style.setProperty("--haut-onglets", h + "px");
-    document.body.style.paddingTop = h ? h + "px" : "";
+    document.documentElement.style.setProperty("--haut-onglets", h + "px");         // la barre est collée en haut de l'écran seulement quand on défile ; au repos elle est sous l'en-tête
   },
 
   // ☰ de la barre fixe : menu de l'application et choix du circuit, accessibles où que l'on soit dans la page
@@ -62,6 +61,8 @@ const Onglets = {
     this.remplirMenuRapide(p, seulCircuits);
     const r = e.currentTarget && e.currentTarget.getBoundingClientRect ? e.currentTarget.getBoundingClientRect() : null;
     p.style.left = seulCircuits && r ? Math.max(6, Math.min(r.left, innerWidth - p.offsetWidth - 6)) + "px" : "";
+    p.style.top = r ? Math.round(r.bottom) + "px" : "";
+    p.style.maxHeight = r ? "calc(100vh - " + Math.round(r.bottom) + "px - 1rem)" : "";
     p.hidden = false;
   },
   remplirMenuRapide(p, seulCircuits) {

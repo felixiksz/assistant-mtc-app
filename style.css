@@ -1157,7 +1157,7 @@ section.animaux ul { list-style: none; padding-left: 0; }
 .circ-sai p { margin: 0.2rem 0 0.2rem 0.8rem; }
 
 /* Onglets de travail (comme dans un navigateur) */
-.onglets-travail { display: flex; gap: 2px; align-items: flex-end; overflow-x: auto; border-bottom: 2px solid var(--ink); margin: 0; padding: 0.3rem 0.75rem 0; position: fixed; top: 0; left: 0; right: 0; z-index: 50; background: var(--bg); box-sizing: border-box; }
+.onglets-travail { display: flex; gap: 2px; align-items: flex-end; overflow-x: auto; border-bottom: 2px solid var(--ink); margin: 0; padding: 0.3rem 0.75rem 0; position: sticky; top: 0; z-index: 50; background: var(--bg); box-sizing: border-box; }
 .onglets-travail[hidden] { display: none; }
 .onglet-t { display: inline-flex; align-items: center; border: 2px solid var(--ink); border-bottom: 0; background: var(--bg); color: var(--ink); font: inherit; font-size: 0.85rem; padding: 0.3rem 0.2rem 0.3rem 0.6rem; max-width: 18rem; white-space: nowrap; cursor: pointer; flex: none; }
 .onglet-t.actif { background: var(--ink); color: var(--bg); font-weight: 700; }
@@ -1285,7 +1285,7 @@ li:hover > .circ-com-btn, .circ-com-btn:focus, .circ-com-btn:hover { opacity: 1;
 .circ-info:hover, .circ-info[aria-expanded="true"] { background: rgba(0,0,0,.08) !important; color: var(--ink); }
 .circ-fleche { color: var(--muted, #555); white-space: nowrap; }
 .onglet-menu { border: 2px solid var(--ink); border-bottom: 0; background: var(--bg); color: var(--ink); font: inherit; font-size: 1rem; padding: 0.2rem 0.6rem; cursor: pointer; flex: none; }
-#menu-rapide { position: fixed; z-index: 60; top: var(--haut-onglets, 0px); left: 0.4rem; width: min(26rem, calc(100vw - 0.8rem)); max-height: calc(100vh - var(--haut-onglets, 0px) - 1rem); overflow-y: auto; background: var(--bg); border: 2px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); padding: 0.5rem 0.6rem 0.7rem; display: grid; gap: 0.6rem; }
+#menu-rapide { position: fixed; z-index: 60; top: 2.6rem; left: 0.4rem; width: min(26rem, calc(100vw - 0.8rem)); max-height: calc(100vh - var(--haut-onglets, 0px) - 1rem); overflow-y: auto; background: var(--bg); border: 2px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); padding: 0.5rem 0.6rem 0.7rem; display: grid; gap: 0.6rem; }
 #menu-rapide[hidden] { display: none; }
 #menu-rapide input[type="search"] { width: 100%; box-sizing: border-box; margin-bottom: 0.3rem; }
 .mr-circuits { max-height: 38vh; overflow-y: auto; display: grid; }
