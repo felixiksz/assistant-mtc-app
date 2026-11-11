@@ -583,26 +583,24 @@ const Circuits = {
   // préférence « actions affichées » par canal (mémorisée dans ce navigateur)
   actionsVisibles() { try { return JSON.parse(localStorage.getItem("circ_actions_visibles") || "{}") || {}; } catch (e) { return {}; } },
   // 💬 : champ de commentaire en ligne (Entrée enregistre, Échap annule) ; le commentaire reste attaché au point et apparaît dans le graphe de comparaison
-  commenterPoint(c, code, bouton) {
-    const li = bouton.closest("li");
-    if (li.querySelector(".circ-com-input")) return;
-    const e = this.ptsDe(code).find(x => this.cleP(x.point) === this.cleP(bouton.dataset.point));
-    if (!e) return;
+  // 💬 dans un tableau d'association : la remarque s'écrit entre parenthèses après le point (« TF5 (yang WM) ») et ne s'affiche dans le graphe que pour ce tableau
+  commenterAssoc(c, i, k, j, bouton) {
+    const a = (c.associations || [])[i];
+    if (!a || bouton.parentNode.querySelector(".circ-com-input")) return;
+    const p = a.points[k][j], base = p.replace(/\s*\([^)]*\)/g, "").trim();
     const inp = document.createElement("input");
-    inp.type = "text"; inp.className = "circ-com-input"; inp.value = e.commentaire || ""; inp.placeholder = "Commentaire sur " + e.point;
-    li.querySelector(".circ-com")?.remove();
+    inp.type = "text"; inp.className = "circ-com-input"; inp.value = this.commentairesDe(p).join(" ; "); inp.placeholder = "Remarque sur " + base + " dans ce tableau";
     bouton.insertAdjacentElement("afterend", inp);
     inp.focus();
     let fini = false;
     const fin = async ok => {
       if (fini) return;
       fini = true;
-      if (ok) {
-        const v = inp.value.trim();
-        if (v) e.commentaire = v; else delete e.commentaire;
-        try { await this.ecrirePoints(); } catch (err) { alert("Enregistrement impossible : " + err.message); }
-      }
-      this.rendrePoints(c);
+      const v = inp.value.trim().replace(/[()]/g, ""), nouveau = v ? `${base} (${v})` : base;
+      if (!ok || nouveau === p) { this.majAssoc(this.parId(c.id)); return; }
+      const assoc = c.associations.map((x, n) => n === i ? { ...x, points: { ...x.points, [k]: x.points[k].map((q, m) => m === j ? nouveau : q) } } : x);
+      await this.enregistrerChamps(c, { associations: assoc });
+      this.assocActive = i; this.majAssoc(this.parId(c.id));
     };
     inp.addEventListener("keydown", ev => { if (ev.key === "Enter") fin(true); else if (ev.key === "Escape") fin(false); });
     inp.addEventListener("blur", () => fin(true));
@@ -618,7 +616,7 @@ const Circuits = {
     const supp = [...new Set((c.ajouts || []).flatMap(a => a.canaux || []))].filter(k => !c.grille.includes(k));
     const cartes = [...c.grille, ...supp, ...this.AXE, ...(this.vaisseauxOuverts(c).length || this.ptsDe("VX").length ? ["VX"] : [])].map(code => {
       const k = this.canaux.get(code) || { nom: this.NOM_AXE[code] }, l = this.ptsDe(code), axe = this.AXE.includes(code) || code === "VX", ajout = !axe && !c.grille.includes(code);
-      const lis = l.map(x => ({ r: this.retenu(x), h: `<li><button type="button" class="circ-pt-etoile${this.retenu(x) ? " actif" : ""}" data-point="${escapeHtml(x.point)}" title="${this.retenu(x) ? "Favori : cliquer pour le retirer des favoris" : "Ajouter aux favoris"}" aria-label="Mettre ${escapeHtml(x.point)} en favori" aria-pressed="${this.retenu(x)}">${this.retenu(x) ? "★" : "☆"}</button> <button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: x.canal || code, raison: x.action || "", source: "points du canal " + code, circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ${escapeHtml(x.point)} pour le réseau de la patiente">✓</button> <strong>${this.pointHtml(x.point)}</strong>${x.canal ? ` <span class="sx-code" title="Canal du point">${escapeHtml(x.canal)}</span>` : ""}${x.commentaire ? ` <span class="circ-com" title="Ton commentaire">${escapeHtml(x.commentaire)}</span>` : ""} <button type="button" class="circ-com-btn" data-point="${escapeHtml(x.point)}" title="Ajouter ou modifier un commentaire sur ce point" aria-label="Commentaire sur ${escapeHtml(x.point)}">💬</button>${x.categorie ? ` <span class="circ-cat">${escapeHtml(x.categorie)}</span>` : ""}${x.action || x.statut === "base" ? ` <button type="button" class="circ-info" aria-expanded="false" title="Afficher ou masquer les actions de ce point" aria-label="Afficher ou masquer les actions de ce point">ⓘ</button>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}<span class="circ-act">${x.action ? escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}</span></li>` }));
+      const lis = l.map(x => ({ r: this.retenu(x), h: `<li><button type="button" class="circ-pt-etoile${this.retenu(x) ? " actif" : ""}" data-point="${escapeHtml(x.point)}" title="${this.retenu(x) ? "Favori : cliquer pour le retirer des favoris" : "Ajouter aux favoris"}" aria-label="Mettre ${escapeHtml(x.point)} en favori" aria-pressed="${this.retenu(x)}">${this.retenu(x) ? "★" : "☆"}</button> <button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: x.canal || code, raison: x.action || "", source: "points du canal " + code, circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ${escapeHtml(x.point)} pour le réseau de la patiente">✓</button> <strong>${this.pointHtml(x.point)}</strong>${x.canal ? ` <span class="sx-code" title="Canal du point">${escapeHtml(x.canal)}</span>` : ""}${x.commentaire ? ` <span class="circ-com" title="Ton commentaire">${escapeHtml(x.commentaire)}</span>` : ""}${x.categorie ? ` <span class="circ-cat">${escapeHtml(x.categorie)}</span>` : ""}${x.action || x.statut === "base" ? ` <button type="button" class="circ-info" aria-expanded="false" title="Afficher ou masquer les actions de ce point" aria-label="Afficher ou masquer les actions de ce point">ⓘ</button>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}<span class="circ-act">${x.action ? escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}</span></li>` }));
       const ret = lis.filter(o => o.r), dis = lis.filter(o => !o.r), rend = a => a.map(o => o.h).join("");
       return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}${axe ? " circ-pts-axe" : ""}${this.actionsVisibles()[code] ? " actions-visibles" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code === "VX" ? "Vaisseaux" : code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
         `<span class="circ-pts-btns"><button type="button" class="edit-toggle-btn" data-act="actions" title="Afficher ou masquer les actions de tous les points de ce canal" aria-label="Afficher ou masquer les actions de tous les points de ce canal">👁</button> <button type="button" class="edit-toggle-btn" data-act="edit" title="Modifier les points de ce canal" aria-label="Modifier les points de ce canal">✏️</button> <button type="button" class="edit-toggle-btn" data-act="prop" title="Proposer des points" aria-label="Proposer des points">💡</button></span></div>` +
@@ -644,7 +642,6 @@ const Circuits = {
         try { await this.ecrirePoints(); } catch (err) { alert("Enregistrement impossible : " + err.message); }
         this.rendrePoints(c);
       }));
-      carte.querySelectorAll(".circ-com-btn").forEach(b => b.addEventListener("click", () => this.commenterPoint(c, code, b)));
       if (ouvert[code]) this.proposerPoints(c, code, zone, true);
     });
     this.marquerSaignees(z);
@@ -952,8 +949,9 @@ const Circuits = {
     if (w) { det.innerHTML = this.recetteHtml(w); this.annoterCroisements(det); return; }
     const e = a.synd ? this.entreeSynd(a.synd) : null;
     det.innerHTML = `<p>${e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(a.synd)}">${escapeHtml(sansHanzi(a.tableau))}</button>` : `<strong>${escapeHtml(sansHanzi(a.tableau))}</strong>`}</p>` +
-      `<p>${Object.entries(a.points || {}).map(([k, v]) => `<span class="sx-code">${escapeHtml(k)}</span> ${v.map(p => this.pointHtml(p)).join(", ")}`).join(" · ")}</p>` + (a.note ? `<p class="muted">${escapeHtml(sansHanzi(a.note))}</p>` : "");
+      `<p>${Object.entries(a.points || {}).map(([k, v]) => `<span class="sx-code">${escapeHtml(k)}</span> ${v.map((p, j) => this.pointHtml(p) + ` <button type="button" class="circ-com-btn" data-k="${escapeHtml(k)}" data-j="${j}" title="Ajouter une remarque sur ce point, pour ce tableau seulement (elle s'affiche entre parenthèses dans le graphe)" aria-label="Remarque sur ${escapeHtml(p)}">💬</button>`).join(", ")}`).join(" · ")}</p>` + (a.note ? `<p class="muted">${escapeHtml(sansHanzi(a.note))}</p>` : "");
     det.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const en = this.entreeSynd(b.dataset.synd); if (en) this.ouvrirSyndrome(en); }));
+    det.querySelectorAll(".circ-com-btn").forEach(b => b.addEventListener("click", () => this.commenterAssoc(c, this.assocActive, b.dataset.k, +b.dataset.j, b)));
     this.annoterCroisements(det);
   },
 
