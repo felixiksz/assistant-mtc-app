@@ -116,18 +116,17 @@ const Circuits = {
     const paires = (g.length === 4 && g.every(Boolean)) ? this.liensReels(g) : this.LIENS[fig].flatMap(t => this.PAIRES[t]);
     const traits = paires.map(([a, b]) => `<line x1="${pos[a][0]}" y1="${pos[a][1]}" x2="${pos[b][0]}" y2="${pos[b][1]}" stroke="var(--ink)" stroke-width="3.2" stroke-linecap="round"/>`).join("");
     const rond = (x, y, r, code, o2 = {}) => {
-      const yin = this.polarite(code) === "yin";
-      const lib = o2.etiquette && code && !o2.sansNom ? `<text x="${x}" y="${y + (r > 12 ? 4.5 : 3)}" text-anchor="middle" font-size="${r > 12 ? (code.length > 1 ? 12 : 14) : 8}" font-weight="700" ${police} fill="${yin ? "var(--bg)" : "var(--ink)"}">${escapeHtml(code)}</text>` : "";
-      const mc = o.couleurs ? this.COULEUR_MOUV[this.MOUV_CANAL[code]] : "";            // couleur du mouvement du canal : pleine pour un canal yīn, pâle pour un canal yáng
-      const fond = mc ? (yin ? mc : `color-mix(in srgb, ${mc} 35%, var(--bg))`) : (yin ? "var(--ink)" : "var(--bg)");
-      return `<circle cx="${x}" cy="${y}" r="${r}" style="fill:${fond}" stroke="var(--ink)" stroke-width="${o2.pointille ? 2.5 : (mc && !yin ? 2.2 : 3)}"${o2.pointille ? ` stroke-dasharray="3.5 2.5"` : ""}><title>${escapeHtml((this.canaux.get(code) || {}).nom || code)}</title></circle>${lib}`;
+      const yin = this.polarite(code) === "yin", col = code ? this.couleurCanal(code) : "var(--ink)";
+      const lib = o2.etiquette && code && !o2.sansNom ? `<text x="${x}" y="${y + (r > 12 ? 4.5 : 3)}" text-anchor="middle" font-size="${r > 12 ? (code.length > 1 ? 12 : 14) : 8}" font-weight="700" ${police} fill="${this.texteRond(code)}">${escapeHtml(code)}</text>` : "";
+      const fond = code ? (yin ? col : "var(--bg)") : (yin ? "var(--ink)" : "var(--bg)");
+      return `<circle cx="${x}" cy="${y}" r="${r}" fill="${fond}" stroke="${col}" stroke-width="${o2.pointille ? 2.5 : 3}"${o2.pointille ? ` stroke-dasharray="3.5 2.5"` : ""}><title>${escapeHtml((this.canaux.get(code) || {}).nom || code)}</title></circle>${lib}`;
     };
     // points dans un rond : pastilles empilées (4 au plus ; au-delà, « +n »), colorées selon le mouvement du point
     const contenu = (code, x, y, r) => {
       const liste = [...new Set(((pts && pts[code]) || []).map(t => this.clePoint(t)).filter(Boolean))];
       const aff = liste.length > 4 ? [...liste.slice(0, 3), "+" + (liste.length - 3)] : liste;
       const hP = 8.4, ec = 1.4, tot = aff.length * hP + Math.max(0, aff.length - 1) * ec, yin = this.polarite(code) === "yin";
-      const code_ = aff.length <= 3 && code ? `<text x="${x}" y="${y - r + 8.5}" text-anchor="middle" font-size="6.4" font-weight="700" ${police} fill="${yin ? "var(--bg)" : "var(--ink)"}" opacity="0.85">${escapeHtml(code)}</text>` : "";
+      const code_ = aff.length <= 3 && code ? `<text x="${x}" y="${y - r + 8.5}" text-anchor="middle" font-size="6.4" font-weight="700" ${police} fill="${this.texteRond(code)}" opacity="0.9">${escapeHtml(code)}</text>` : "";
       const y0 = aff.length <= 3 ? y - tot / 2 + 4.5 : y - tot / 2;
       const pil = aff.map((t, k) => {
         const mv = this._mouv ? this._mouv.get(this.cleP(t)) : "", fond = mv ? this.COULEUR_MOUV[mv] : "var(--bg)", w = Math.max(14, t.length * 4.2 + 5);
@@ -166,7 +165,7 @@ const Circuits = {
       const noeuds = a.canaux.map((code, j) => {
         const x = x0 + j * esp;
         if (!big) return rond(x, cy, 11, code, { etiquette: true, pointille: true });
-        return rond(x, cy, 24, code, { etiquette: false, sansNom: true, pointille: true }) + (((pts[code]) || []).length ? contenu(code, x, cy, 24) : `<text x="${x}" y="${cy + 4}" text-anchor="middle" font-size="12" font-weight="700" ${police} fill="${this.polarite(code) === "yin" ? "var(--bg)" : "var(--ink)"}">${escapeHtml(code)}</text>`);
+        return rond(x, cy, 24, code, { etiquette: false, sansNom: true, pointille: true }) + (((pts[code]) || []).length ? contenu(code, x, cy, 24) : `<text x="${x}" y="${cy + 4}" text-anchor="middle" font-size="12" font-weight="700" ${police} fill="${this.texteRond(code)}">${escapeHtml(code)}</text>`);
       }).join("");
       const legende = sansHanzi(a.action || "").slice(0, 34);
       const marque = `<text x="60" y="${cy - (big ? 29 : 17)}" text-anchor="middle" font-size="6.6" font-weight="700" letter-spacing="0.6" ${police} fill="var(--ink)">AJOUT POSSIBLE</text>`;
@@ -324,7 +323,7 @@ const Circuits = {
         ${c.origine === "perso" ? `<button type="button" class="edit-toggle-btn" id="circ-suppr" title="Supprimer ce circuit" aria-label="Supprimer ce circuit">🗑</button>` : c.modifie ? `<button type="button" class="edit-toggle-btn" id="circ-retablir" title="Revenir à la version du cours" aria-label="Revenir à la version du cours">↺</button>` : ""}
       </div>
       <div class="circ-bandeau">
-        <span class="circ-mini-bandeau" aria-hidden="true">${this.dessin(c, { taille: 44, couleurs: true })}</span>
+        <span class="circ-mini-bandeau" aria-hidden="true">${this.dessin(c, { taille: 76, etiquettes: true })}</span>
         <h2>${escapeHtml(sansHanzi(c.nom))}</h2>
         <div class="circ-onglets" role="tablist">${this.ONGLETS_FICHE.map((n, i) => `<button type="button" role="tab" class="circ-onglet-btn${i === this.ongletFiche ? " actif" : ""}" data-o="${i}">${n}</button>`).join("")}</div>
       </div>
@@ -522,6 +521,11 @@ const Circuits = {
   NOM_MOUV: { bois: "bois", feu: "feu", terre: "terre", metal: "métal", eau: "eau" },
   // mouvement de chaque canal (wǔ xíng) : eau = rein-vessie, bois = foie-vésicule biliaire, feu = cœur-intestin grêle, enveloppe du cœur-trois foyers, terre = rate-estomac, métal = poumon-gros intestin
   MOUV_CANAL: { P: "metal", GI: "metal", E: "terre", Rt: "terre", C: "feu", IG: "feu", V: "eau", Rn: "eau", EC: "feu", TF: "feu", VB: "bois", F: "bois" },
+  // couleurs des canaux, comme dans le jeu (module Circuits) : terre jaune, bois vert, feu rouge, eau bleu ; le métal (P, GI) prend la couleur de l'encre
+  COULEUR_CANAL: { E: "#d9a400", Rt: "#d9a400", VB: "#2f9a3c", F: "#2f9a3c", C: "#e0261b", IG: "#e0261b", EC: "#e0261b", TF: "#e0261b", V: "#1f5fd6", Rn: "#1f5fd6" },
+  couleurCanal(code) { return this.COULEUR_CANAL[code] || "var(--ink)"; },
+  // texte posé dans le rond d'un canal : blanc sur un rond plein (yīn), couleur du canal sur un rond cerclé (yáng)
+  texteRond(code) { return this.polarite(code) === "yin" ? (this.COULEUR_CANAL[code] ? "#fff" : "var(--bg)") : this.couleurCanal(code); },
   mouvementDe(p) {
     for (const l of String(p.categories_point || "").split(/\n+/)) {
       const n = l.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
