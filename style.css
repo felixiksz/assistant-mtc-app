@@ -1291,8 +1291,11 @@ li:hover > .circ-com-btn, .circ-com-btn:focus, .circ-com-btn:hover { opacity: 1;
 .mr-circuits { max-height: 38vh; overflow-y: auto; display: grid; }
 .mr-lien { display: block; width: 100%; text-align: left; border: 0; border-left: 3px solid transparent; background: none; color: var(--ink); font: inherit; font-size: 0.9rem; padding: 0.4rem 0.5rem; cursor: pointer; }
 .mr-lien:hover, .mr-lien.actif { border-left-color: var(--accent, var(--ink)); background: rgba(0,0,0,.06); }
-#tab-circuits.fiche-seule .formules-sidebar { display: none; }
-#tab-circuits.fiche-seule .formules-layout { grid-template-columns: 1fr; }
+/* sur téléphone (colonne unique) la liste disparaît quand une fiche est ouverte ; sur ordinateur elle reste à gauche de la fiche */
+@media (max-width: 800px) {
+  #tab-circuits.fiche-seule .formules-sidebar { display: none; }
+  #tab-circuits.fiche-seule .formules-layout { grid-template-columns: 1fr; }
+}
 /* sections repliables */
 h3[data-repliable] { cursor: pointer; user-select: none; }
 h3[data-repliable]::before { content: "▾"; display: inline-block; width: 1.1em; font-size: 0.85em; color: var(--muted, #666); }
