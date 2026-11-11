@@ -666,7 +666,7 @@ const Circuits = {
         if (!e) {                                                                        // point standard affiché d'office : il entre dans ta liste quand tu le mets en favori
           const a = this.standardsDe(code).find(y => this.cleP(y.point) === this.cleP(b.dataset.point));
           if (!a) return;
-          e = { point: a.point, action: a.action, categorie: a.categorie, statut: "base" };
+          e = { point: a.point, action: a.action, categorie: a.categorie, statut: "base", retenu: true };
           (this.points.canaux[code] = this.points.canaux[code] || []).push(e);
         }
         e.retenu = !this.retenu(e);
@@ -756,7 +756,7 @@ const Circuits = {
         if (/mer de l'eau|des cereales|inferieur|intersection|jiao hui/.test(n)) return false;        // ni les hé inférieurs, ni les points d'intersection
         return /jing-puits|ying-jaillissement|shu-riviere|jing-fleuve|he-reunion|yuan-source/.test(n) || (/luo-liaison/.test(n) && !/grand/.test(n));
       });
-    }).map(p => ({ point: String(p.point).replace(/\s+/g, ""), categorie: this.categoriesDe(p).join(" ; "), action: this.actionsDe(p).slice(0, 2).join(" ; "), statut: "base", auto: true }));
+    }).map(p => ({ point: String(p.point).replace(/\s+/g, ""), categorie: this.categoriesDe(p).join(" ; "), action: this.actionsDe(p).slice(0, 2).join(" ; "), statut: "base", auto: true, retenu: true }));
   },
   numPoint(s) { const m = String(s).match(/(\d+)/); return m ? +m[1] : 0; },
   // liste affichée d'un canal : tes points + les points standard qui n'y sont pas encore (par ordre numérique)
