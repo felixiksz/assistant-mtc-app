@@ -345,12 +345,11 @@ const Circuits = {
       ${this.onglet(2, `<div class="circ-haut"><div class="circ-grand" id="circ-dessin">${this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true })}</div></div>` +
         this.section("Associations de points", ((c.associations || []).length
           ? `<div class="cat-chip-row circ-assoc-puces">${c.associations.map((a, i) => `<button type="button" class="cat-chip" data-a="${i}">${escapeHtml(sansHanzi(a.tableau))}</button>`).join("")}</div>`
-          : `<p class="muted">Aucun tableau à toi pour l'instant : le crayon ✏️ permet d'en ajouter un avec les points de chaque canal.</p>`) + this.wjyChipsHtml(c) + `<div id="circ-assoc-detail" class="circ-assoc-detail"></div>`) +
+          : "") + this.wjyChipsHtml(c) + `<div id="circ-assoc-detail" class="circ-assoc-detail"></div>`) +
         this.section("Comparaison des associations et des ajouts", this.graphe(c)))}
-      ${this.onglet(3, this.section("Syndromes de ta base rattachés à ce circuit", lies ? `<div class="circ-synd-liste">${lies}</div>` : `<p class="muted">Aucun pour l'instant : le crayon ✏️ permet d'en rattacher.</p>`) +
+      ${this.onglet(3, `<section><h3>Syndromes de ta base rattachés à ce circuit</h3>${lies ? `<div class="circ-synd-liste">${lies}</div>` : ""}</section>` +
         this.section("Formule de pharmacopée équivalente", this.equivalent(c)) +
-        `<section><h3>Syndromes de ta base portant sur ces canaux</h3><p class="muted">Syndromes des organes, des canaux et des six niveaux dont l'organe ou le niveau est un des quatre canaux.</p>${parCanal || `<p class="muted">Aucun.</p>`}</section>` +
-        `<p class="muted">Méthode de l'équilibre global : chaque canal du circuit doit avoir au moins deux connexions (une entrée, une sortie). ${escapeHtml(this.base.regles.changer || "")}</p>`)}`;
+        `<section><h3>Syndromes de ta base portant sur ces canaux</h3>${parCanal}</section>`)}`;
     zone.querySelectorAll(".circ-onglet-btn").forEach(b => b.addEventListener("click", () => this.choisirOnglet(+b.dataset.o)));
     zone.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const e = this.entreeSynd(b.dataset.synd); if (e) this.ouvrirSyndrome(e); }));
     this.assocActive = null;
@@ -479,8 +478,8 @@ const Circuits = {
     const z = document.getElementById("circ-aj-zone");
     if (z.innerHTML) { z.innerHTML = ""; return; }
     const l = this.candidatsAjout(c);
-    z.innerHTML = `<p class="muted circ-pts-avert">Seuls sont proposés les canaux qui gardent l'équilibre du circuit : statique (même polarité et même membre qu'un canal du circuit, donc même place) et dynamique (au moins deux connexions avec les canaux du circuit, selon les 6 systèmes). Règles du cours « Méthode de l'équilibre global ».</p>` +
-      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><strong>${escapeHtml(x.code)}</strong> <span class="muted">${escapeHtml((this.canaux.get(x.code) || {}).nom || "")}</span> — ${escapeHtml(x.raisons.join(" ; "))} <button type="button" class="edit-toggle-btn" data-i="${i}" title="Ajouter à la liste" aria-label="Ajouter à la liste">+</button></li>`).join("")}</ul>` : `<p class="muted">Aucun autre canal ne garde l'équilibre statique et dynamique de ce circuit.</p>`);
+    z.innerHTML = ""+
+      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><span class="sx-code" title="${escapeHtml(((this.canaux.get(x.code) || {}).nom || "") + " : " + x.raisons.join(" ; "))}">${escapeHtml(x.code)}</span> <span class="circ-fleche" title="Connecté à ces canaux du circuit (6 systèmes)">→ ${x.liens.map(escapeHtml).join(" · ")}</span> <button type="button" class="edit-toggle-btn" data-i="${i}" title="Ajouter à la liste" aria-label="Ajouter à la liste">+</button></li>`).join("")}</ul>` : `<p class="muted">Aucun autre canal ne garde l'équilibre statique et dynamique de ce circuit.</p>`);
     z.querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", async () => {
       b.disabled = true;                                                     // pas de double clic
       const x = l[+b.dataset.i], nom = ((this.canaux.get(x.code) || {}).nom || x.code).toLowerCase();
@@ -651,7 +650,7 @@ const Circuits = {
       const ret = lis.filter(o => o.r), dis = lis.filter(o => !o.r), rend = a => a.map(o => o.h).join("");
       return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}${axe ? " circ-pts-axe" : ""}${this.actionsVisibles()[code] ? " actions-visibles" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code === "VX" ? "8MV" : code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
         `<span class="circ-pts-btns"><button type="button" class="edit-toggle-btn" data-act="actions" title="Afficher ou masquer les actions de tous les points de ce canal" aria-label="Afficher ou masquer les actions de tous les points de ce canal">👁</button> <button type="button" class="edit-toggle-btn" data-act="edit" title="Modifier les points de ce canal" aria-label="Modifier les points de ce canal">✏️</button> <button type="button" class="edit-toggle-btn" data-act="prop" title="Proposer des points" aria-label="Proposer des points">💡</button></span></div>` +
-        (lis.length ? (ret.length ? `<ul class="circ-pts-liste">${rend(ret)}</ul>` : `<p class="muted">Aucun point favori.</p>`) + (dis.length ? `<p class="circ-pts-sep">Disponibles (${dis.length})</p><ul class="circ-pts-liste circ-pts-dispo">${rend(dis)}</ul>` : "") : `<p class="muted">Aucun point pour l'instant.</p>`) + `<div class="circ-pts-zone"></div></div>`;
+        (lis.length ? (ret.length ? `<ul class="circ-pts-liste">${rend(ret)}</ul>` : "") + (dis.length ? `<p class="circ-pts-sep">Disponibles (${dis.length})</p><ul class="circ-pts-liste circ-pts-dispo">${rend(dis)}</ul>` : "") : "") + `<div class="circ-pts-zone"></div></div>`;
     });
     // les quatre canaux du circuit sont placés comme le schéma (carré) ; les ajouts possibles, RM, DM et les vaisseaux dessous
     const vx = this.vaisseauxOuverts(c), bande = vx.length ? `<div class="circ-bande-vx" title="Merveilleux vaisseaux ouverts par un point du circuit : leurs points se proposent dans la carte « 8MV »"><span class="muted">8MV</span> ${vx.map(o => `<span class="circ-vx-puce"><strong>${escapeHtml(o.pt)}</strong> <span class="muted">${escapeHtml(o.vaisseau)}</span></span>`).join("")}</div>` : "";
@@ -888,8 +887,8 @@ const Circuits = {
     const ligne = (x, i) => `<li><strong>${this.pointHtml(x.point)}</strong>${x.canal && code !== x.canal ? ` <span class="sx-code" title="Canal du point">${escapeHtml(x.canal)}</span>` : ""} <span class="muted">${escapeHtml(x.categorie || "")}</span>${x.action ? " " + INFO : ""} <button type="button" class="edit-toggle-btn" data-i="${i}" title="Ajouter à la liste" aria-label="Ajouter à la liste">+</button> <button type="button" class="edit-toggle-btn" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: x.canal || code, raison: x.action || "", source: "proposition", circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ce point pour le réseau de la patiente">✓</button>${x.action ? ` <span class="circ-act">${escapeHtml(sansHanzi(x.action))}</span>` : ""}` +
       (x.saignee.length ? `<details class="circ-sai"><summary>🩸 saignée</summary>${x.saignee.map(s => `<p>${escapeHtml(sansHanzi(s.texte)).slice(0, 400)} <span class="muted">(${escapeHtml(s.lib)})</span></p>`).join("")}</details>` : "") + `</li>`;
     const indexes = l.map((x, i) => ({ x, i })), normaux = indexes.filter(o => !o.x.inter), inters = indexes.filter(o => o.x.inter);
-    zone.innerHTML = `<p class="muted circ-pts-avert">${code === "VX" ? "Points des 8MV ouverts par un point du circuit, sur les autres canaux : il suffit que l'équilibre statique soit respecté." : code === "RM" || code === "DM" ? "Tous les points de la ligne médiane : neutres, ils peuvent entrer dans n'importe quel circuit." : repli ? "Base de points indisponible : propositions par catégorie classique, actions à valider (elles ne viennent pas de tes cours)." : "Points tirés de ta base de points (Points des canaux) : cinq points shu, yuán, luò, xī, hé… et points ayant des indications en saignée. Actions reprises de la base."}</p>` +
-      (normaux.length ? `<ul class="circ-pts-prop">${normaux.map(o => ligne(o.x, o.i)).join("")}</ul>` : (inters.length ? "" : `<p class="muted">Rien à proposer de plus pour ce canal.</p>`)) +
+    zone.innerHTML = (repli ? `<p class="muted circ-pts-avert">Base de points indisponible : propositions par catégorie classique, actions à valider (elles ne viennent pas de tes cours).</p>` : "") +
+      (normaux.length ? `<ul class="circ-pts-prop">${normaux.map(o => ligne(o.x, o.i)).join("")}</ul>` : "") +
       (inters.length ? `<details class="circ-inter"><summary>Points d'intersection (${inters.length}) : ils font partie de tous les canaux qu'ils croisent</summary><ul class="circ-pts-prop">${inters.map(o => ligne(o.x, o.i)).join("")}</ul></details>` : "");
     this.annoterCroisements(zone);
     this.brancherInfos(zone);
@@ -1009,7 +1008,7 @@ const Circuits = {
     document.querySelectorAll(".circ-wjy [data-w]").forEach(b => b.classList.toggle("active", !!w && this.assocActive === "w" + b.dataset.w));
     const det = document.getElementById("circ-assoc-detail");
     if (!det) return;
-    if (!a) { det.innerHTML = `<p class="muted">Choisis un tableau ou une recette : ses points s'écrivent sur le dessin.</p>`; return; }
+    if (!a) { det.innerHTML = ""; return; }
     if (w) { det.innerHTML = this.recetteHtml(w); this.annoterCroisements(det); return; }
     const e = a.synd ? this.entreeSynd(a.synd) : null;
     det.innerHTML = `<p>${e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(a.synd)}">${escapeHtml(sansHanzi(a.tableau))}</button>` : `<strong>${escapeHtml(sansHanzi(a.tableau))}</strong>`}</p>` +
