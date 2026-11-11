@@ -118,8 +118,9 @@ const Reseau = {
     const extras = Object.keys(horsGrille).filter(k => Circuits.canaux.has(k));
     const pseudo = { grille: c.grille, figure: c.figure, ajouts: extras.map(k => ({ canaux: [k], action: "" })) };
     ["RM", "DM"].forEach(k => { if (horsGrille[k]) pts[k] = horsGrille[k]; });                 // l'axe s'écrit sous le dessin
+    extras.forEach(k => { pts[k] = horsGrille[k]; });                                             // un canal ajouté devient une bulle, avec ses points dedans
     const svg = Circuits.dessin(pseudo, { taille: 230, etiquettes: true, points: pts, ajouts: !!extras.length });
-    const hors = Object.entries(horsGrille).filter(([k]) => k !== "RM" && k !== "DM").map(([k, l]) => `<span class="sx-code">${escapeHtml(k)}</span> ${escapeHtml(l.join(", "))}`).join(" · ");
+    const hors = Object.entries(horsGrille).filter(([k]) => k !== "RM" && k !== "DM" && !extras.includes(k)).map(([k, l]) => `<span class="sx-code">${escapeHtml(k)}</span> ${escapeHtml(l.join(", "))}`).join(" · ");
     return `<div class="reseau-schema">${svg}</div>` + (hors ? `<p class="muted reseau-hors">Hors des quatre canaux : ${hors}</p>` : "") + (tung.length ? `<p class="reseau-hors reseau-tung"><strong>Points Tung</strong><br>${tung.map(escapeHtml).join("<br>")}</p>` : "");
   },
 

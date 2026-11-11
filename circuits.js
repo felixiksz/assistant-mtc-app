@@ -120,22 +120,25 @@ const Circuits = {
       const lib = o2.etiquette && code && !o2.sansNom ? `<text x="${x}" y="${y + (r > 12 ? 4.5 : 3)}" text-anchor="middle" font-size="${r > 12 ? (code.length > 1 ? 12 : 14) : 8}" font-weight="700" ${police} fill="${yin ? "var(--bg)" : "var(--ink)"}">${escapeHtml(code)}</text>` : "";
       return `<circle cx="${x}" cy="${y}" r="${r}" fill="${yin ? "var(--ink)" : "var(--bg)"}" stroke="var(--ink)" stroke-width="${o2.pointille ? 2.5 : 3}"${o2.pointille ? ` stroke-dasharray="3.5 2.5"` : ""}><title>${escapeHtml((this.canaux.get(code) || {}).nom || code)}</title></circle>${lib}`;
     };
-    const ronds = pos.map(([x, y], i) => {
-      const code = g[i] || "";
-      const anneau = o.surligne && o.surligne.has(code) ? `<circle cx="${x}" cy="${y}" r="21.5" fill="none" stroke="var(--accent)" stroke-width="4"/>` : "";
-      if (!pts) return anneau + rond(x, y, rayon, code, { etiquette: o.etiquettes });
-      // points dans le rond : pastilles empilées (4 au plus ; au-delà, « +n »), colorées selon le mouvement du point
-      const liste = [...new Set((pts[code] || []).map(t => this.clePoint(t)).filter(Boolean))];
+    // points dans un rond : pastilles empilées (4 au plus ; au-delà, « +n »), colorées selon le mouvement du point
+    const contenu = (code, x, y, r) => {
+      const liste = [...new Set(((pts && pts[code]) || []).map(t => this.clePoint(t)).filter(Boolean))];
       const aff = liste.length > 4 ? [...liste.slice(0, 3), "+" + (liste.length - 3)] : liste;
       const hP = 8.4, ec = 1.4, tot = aff.length * hP + Math.max(0, aff.length - 1) * ec, yin = this.polarite(code) === "yin";
-      const code_ = aff.length <= 3 && code ? `<text x="${x}" y="${y - rayon + 8.5}" text-anchor="middle" font-size="6.4" font-weight="700" ${police} fill="${yin ? "var(--bg)" : "var(--ink)"}" opacity="0.85">${escapeHtml(code)}</text>` : "";
+      const code_ = aff.length <= 3 && code ? `<text x="${x}" y="${y - r + 8.5}" text-anchor="middle" font-size="6.4" font-weight="700" ${police} fill="${yin ? "var(--bg)" : "var(--ink)"}" opacity="0.85">${escapeHtml(code)}</text>` : "";
       const y0 = aff.length <= 3 ? y - tot / 2 + 4.5 : y - tot / 2;
       const pil = aff.map((t, k) => {
         const mv = this._mouv ? this._mouv.get(this.cleP(t)) : "", fond = mv ? this.COULEUR_MOUV[mv] : "var(--bg)", w = Math.max(14, t.length * 4.2 + 5);
         return `<g><title>${escapeHtml(t + (mv ? " — " + this.NOM_MOUV[mv] : ""))}</title><rect x="${x - w / 2}" y="${y0 + k * (hP + ec)}" width="${w}" height="${hP}" rx="2.2" fill="${fond}" stroke="#1d1d1b" stroke-width="0.6"/>` +
           `<text x="${x}" y="${y0 + k * (hP + ec) + 6.4}" text-anchor="middle" font-size="6.6" font-weight="700" ${police} fill="${mv === "eau" ? "#FFFFFF" : "#1d1d1b"}">${escapeHtml(t)}</text></g>`;
       }).join("");
-      return anneau + rond(x, y, rayon, code, { etiquette: false, sansNom: true }) + code_ + pil;
+      return code_ + pil;
+    };
+    const ronds = pos.map(([x, y], i) => {
+      const code = g[i] || "";
+      const anneau = o.surligne && o.surligne.has(code) ? `<circle cx="${x}" cy="${y}" r="21.5" fill="none" stroke="var(--accent)" stroke-width="4"/>` : "";
+      if (!pts) return anneau + rond(x, y, rayon, code, { etiquette: o.etiquettes });
+      return anneau + rond(x, y, rayon, code, { etiquette: false, sansNom: true }) + contenu(code, x, y, rayon);
     }).join("");
     // points d'acupuncture : au-dessus des ronds du haut, au-dessous de ceux du bas
     const etiq = pts && false ? pos.map(([x, y], i) => {
@@ -150,19 +153,26 @@ const Circuits = {
     const axeSvg = axe.map((k, i) => `<text x="60" y="${120 + marge + 4 + i * 10}" text-anchor="middle" font-size="7.8" font-weight="700" ${police} fill="var(--ink)">${k} : ${escapeHtml(this.lignesPoints(pts[k]).join(" "))}</text>`).join("");
     // ajouts possibles : canaux en pointillé sous la figure, « + » devant, trait entre eux quand ils vont ensemble
     const groupes = o.ajouts ? (c.ajouts || []).filter(a => (a.canaux || []).length) : [];
+    const grosse = a => !!pts && a.canaux.some(k => ((pts[k]) || []).length);
+    const hGroupe = a => grosse(a) ? 70 : 52;
+    const yGroupe = k => 120 + marge + 30 + axeH + groupes.slice(0, k).reduce((s, a) => s + hGroupe(a), 0) + (grosse(groupes[k]) ? 14 : 0);
     const aj = groupes.map((a, k) => {
-      const n = a.canaux.length, cy = 120 + marge + 30 + axeH + k * 52, x0 = 60 - n * 15 + 15;
+      const n = a.canaux.length, big = grosse(a), esp = big ? 54 : 30, cy = yGroupe(k), x0 = 60 - (n - 1) * esp / 2;
       const lien = n > 1 ? a.canaux.slice(1).map((_, j) => a.ensemble
-        ? `<line x1="${x0 + j * 30}" y1="${cy}" x2="${x0 + (j + 1) * 30}" y2="${cy}" stroke="var(--ink)" stroke-width="2"/>`
-        : `<text x="${x0 + j * 30 + 15}" y="${cy + 3}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)">ou</text>`).join("") : "";
-      const noeuds = a.canaux.map((code, j) => rond(x0 + j * 30, cy, 11, code, { etiquette: true, pointille: true })).join("");
+        ? `<line x1="${x0 + j * esp}" y1="${cy}" x2="${x0 + (j + 1) * esp}" y2="${cy}" stroke="var(--ink)" stroke-width="2"/>`
+        : `<text x="${x0 + j * esp + esp / 2}" y="${cy + 3}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)">ou</text>`).join("") : "";
+      const noeuds = a.canaux.map((code, j) => {
+        const x = x0 + j * esp;
+        if (!big) return rond(x, cy, 11, code, { etiquette: true, pointille: true });
+        return rond(x, cy, 24, code, { etiquette: false, sansNom: true, pointille: true }) + (((pts[code]) || []).length ? contenu(code, x, cy, 24) : `<text x="${x}" y="${cy + 4}" text-anchor="middle" font-size="12" font-weight="700" ${police} fill="${this.polarite(code) === "yin" ? "var(--bg)" : "var(--ink)"}">${escapeHtml(code)}</text>`);
+      }).join("");
       const legende = sansHanzi(a.action || "").slice(0, 34);
-      const marque = `<text x="60" y="${cy - 17}" text-anchor="middle" font-size="6.6" font-weight="700" letter-spacing="0.6" ${police} fill="var(--ink)">AJOUT POSSIBLE</text>`;
-      return `${marque}${lien}${noeuds}<text x="${x0 - 22}" y="${cy + 5}" text-anchor="middle" font-size="15" font-weight="700" ${police} fill="var(--ink)">+</text>` +
-        (legende ? `<text x="60" y="${cy + 25}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)" opacity="0.8">${escapeHtml(legende)}</text>` : "");
+      const marque = `<text x="60" y="${cy - (big ? 29 : 17)}" text-anchor="middle" font-size="6.6" font-weight="700" letter-spacing="0.6" ${police} fill="var(--ink)">AJOUT POSSIBLE</text>`;
+      return `${marque}${lien}${noeuds}<text x="${x0 - (big ? 38 : 22)}" y="${cy + 5}" text-anchor="middle" font-size="15" font-weight="700" ${police} fill="var(--ink)">+</text>` +
+        (legende ? `<text x="60" y="${cy + (big ? 38 : 25)}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)" opacity="0.8">${escapeHtml(legende)}</text>` : "");
     }).join("");
     const cote = "";                                   // pas de mention « main » / « pied » : ça va de soi
-    const L = 120, H = 120 + marge * 2 + axeH + (groupes.length ? groupes.length * 52 + 6 : 0);
+    const L = 120, H = 120 + marge * 2 + axeH + (groupes.length ? groupes.reduce((s, a) => s + hGroupe(a), 0) + 6 : 0);
     const px = pts ? 4 : 0;                                // marge de chaque côté quand des points sont écrits : les noms longs (TF5 TF10 TF23…) ne sont jamais coupés
     return `<svg class="circ-svg" viewBox="${-px} ${-marge} ${L + 2 * px} ${H}" width="${Math.round(taille * (L + 2 * px) / L)}" height="${Math.round(taille * H / L)}" role="img" aria-label="Circuit ${escapeHtml(g.join(", "))}${this.NOM_SCHEMA[this.figureDe(g)] ? " (schéma " + this.NOM_SCHEMA[this.figureDe(g)] + ")" : ""}">${traits}${ronds}${etiq}${axeSvg}${cote}${aj}</svg>`;
   },
