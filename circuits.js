@@ -244,7 +244,7 @@ const Circuits = {
     ul.innerHTML = l.map(c => `<li class="gl-item circ-item${c.id === this.actif ? " selected" : ""}" data-id="${escapeHtml(c.id)}">` +
       `<span class="circ-mini">${this.dessin(c, { taille: 54, etiquettes: true })}</span>` +
       `<span class="circ-titre"><strong>${escapeHtml(this.nomCourt(c))}</strong><span class="muted">${c.grille.join(" · ")}${c.origine === "perso" ? " · créé par toi" : c.modifie ? " · modifié" : ""}</span></span></li>`).join("") || `<li class="muted">Aucun circuit.</li>`;
-    ul.querySelectorAll("li[data-id]").forEach(li => li.addEventListener("click", () => this.afficher(li.dataset.id)));
+    ul.querySelectorAll("li[data-id]").forEach(li => li.addEventListener("click", () => this.ouvrirCircuit(li.dataset.id)));
     document.getElementById("circuit-count").textContent = l.length + " circuit(s)";
   },
 
@@ -1013,11 +1013,18 @@ const Circuits = {
     return `<div class="circ-synd-liste">${l.map(id => { const n = this.nomFormule(id); return `<button type="button" class="edit-toggle-btn" data-form="${escapeHtml(id)}">${escapeHtml(n ? n.nom : id)}${n && n.fr ? ` <span class="muted">${escapeHtml(n.fr)}</span>` : ""}</button>`; }).join(" ")}</div>${c.formules_note ? `<p class="muted">${escapeHtml(c.formules_note)}</p>` : ""}`;
   },
   ouvrirFormule(id) { return Onglets.ouvrirFormule(id); },
+  // ouvre le circuit dans son propre onglet (l'onglet majeur « Circuits » garde la liste)
   async ouvrirCircuit(id) {
-    document.querySelector('.tab-btn[data-tab="circuits"]').click();
-    await this.ouvert();
-    this.filtre = null; this.recherche = ""; document.getElementById("circuit-search").value = "";
-    this.rendrePuces(); this.afficher(id);
+    await this.ensureLoaded();
+    this.filtre = null; this.recherche = "";
+    const s = document.getElementById("circuit-search"); if (s) s.value = "";
+    return Onglets.ouvrirCircuit(id);
+  },
+  // onglet majeur : la liste des circuits, sans fiche
+  montrerListe() {
+    this.actif = null; this.edition = null;
+    if (!document.getElementById("circuit-list")) return;
+    this.rendrePuces(); this.rendreListe(); this.rendreFiche();
   },
   // bloc « Circuit équivalent » pour la fiche d'une formule (ou d'une variation)
   blocFormule(id) {
@@ -1391,7 +1398,7 @@ const CircuitsProposition = {
       document.querySelector('.tab-btn[data-tab="circuits"]').click();
       await Circuits.ouvert();
       Circuits.filtre = null; Circuits.recherche = ""; document.getElementById("circuit-search").value = "";
-      Circuits.rendrePuces(); Circuits.afficher(b.dataset.circ);
+      Circuits.rendrePuces(); Circuits.ouvrirCircuit(b.dataset.circ);
     }));
   },
 

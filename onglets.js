@@ -99,6 +99,7 @@ const Onglets = {
     if (this.actif !== null) this.memoriserDefilement();
     this.actif = null;
     document.body.classList.remove("vue-doc");
+    if (typeof Circuits !== "undefined" && Fenetre.moduleCourant() === "circuits" && Circuits.actif) Circuits.montrerListe();
     if (this.vues) { this.vues.hidden = true; this.vues.querySelectorAll(".vue-travail").forEach(z => { z.hidden = true; }); }
     this.rendreBarre();
     if (!sansBarre) window.scrollTo(0, this._y.module || 0);
@@ -108,6 +109,7 @@ const Onglets = {
   activer(id) {
     const o = this.liste.find(x => x.id === id);
     if (!o) return;
+    if (o.desc && o.desc.kind === "circ") return this.activerCircuit(o);
     this.memoriserDefilement();
     this.actif = id;
     document.body.classList.add("vue-doc");
@@ -117,6 +119,36 @@ const Onglets = {
     window.scrollTo(0, this._y[id] || 0);
     o.charger();
     this.memoriser();
+  },
+
+  // un onglet de circuit : le module Circuits, avec la fiche de ce circuit
+  async activerCircuit(o) {
+    this.memoriserDefilement();
+    document.body.classList.remove("vue-doc");
+    if (this.vues) { this.vues.hidden = true; this.vues.querySelectorAll(".vue-travail").forEach(z => { z.hidden = true; }); }
+    const b = document.querySelector('#menu-panneau .tab-btn[data-tab="circuits"]');
+    if (b) b.click();                                                     // affiche le module (remet la vue du module)
+    await Circuits.ensureLoaded(); await Circuits.ouvert();
+    this.actif = o.id;
+    Circuits.afficher(o.desc.id);
+    this.rendreBarre();
+    window.scrollTo(0, this._y[o.id] || 0);
+    this.memoriser();
+  },
+  async ouvrirCircuit(id, opt = {}) {
+    await Circuits.ensureLoaded();
+    const c = Circuits.parId(id);
+    if (!c) return;
+    const cle = "circ:" + id, titre = Circuits.nomCourt(c);
+    let o = this.liste.find(x => x.id === cle);
+    if (!o) {
+      o = { id: cle, titre, genre: "◎", zone: document.createElement("article"), charge: async () => {}, pret: true,
+            desc: { kind: "circ", id, titre, fenetre: opt.fenetre || (this._restauration ? null : Fenetre.courante()) || "acupuncture" } };
+      o.recharger = async () => {}; o.charger = async () => {};
+      this.liste.push(o);
+    }
+    if (opt.differe) { this.rendreBarre(); this.memoriser(); return; }
+    return this.activer(cle);
   },
 
   fermer(id) {
@@ -177,6 +209,7 @@ const Onglets = {
     if (d.kind === "pt") return "pt:" + n(d.id);
     if (d.kind === "tung") return "tung:" + d.id;
     if (d.kind === "form") return "form:" + d.id;
+    if (d.kind === "circ") return "circ:" + d.id;
     return "";
   },
   etat() {
@@ -222,6 +255,7 @@ const Onglets = {
         else if (x.kind === "pt") await this.ouvrirPoint(x.id, { differe: true, fenetre: x.fenetre });
         else if (x.kind === "tung") await this.ouvrirTung(x.id, { differe: true, titre: x.titre, fenetre: x.fenetre });
         else if (x.kind === "form") await this.ouvrirFormule(x.id, { differe: true, fenetre: x.fenetre });
+        else if (x.kind === "circ") await this.ouvrirCircuit(x.id, { differe: true, fenetre: x.fenetre });
       } catch (e) { /* fiche disparue */ }
     }
     this._restauration = false;
@@ -266,6 +300,7 @@ const Onglets = {
         else if (d.kind === "pt") await this.ouvrirPoint(d.id, { differe: true, fenetre: d.fenetre });
         else if (d.kind === "tung") await this.ouvrirTung(d.id, { differe: true, titre: d.titre, fenetre: d.fenetre });
         else if (d.kind === "form") await this.ouvrirFormule(d.id, { differe: true, fenetre: d.fenetre });
+        else if (d.kind === "circ") await this.ouvrirCircuit(d.id, { differe: true, fenetre: d.fenetre });
       } catch (e) { /* fiche disparue : on l'ignore */ }
     }
     // retrouve le module et le circuit où l'on était
@@ -273,10 +308,7 @@ const Onglets = {
       if (m.module && m.module !== "formules") {
         const b = document.querySelector('.menu-onglets .tab-btn[data-tab="' + m.module + '"]');
         if (b) b.click();
-        if (m.module === "circuits" && m.circuit && typeof Circuits !== "undefined") {
-          await Circuits.ensureLoaded(); await Circuits.ouvert();
-          if (Circuits.parId(m.circuit)) Circuits.afficher(m.circuit);
-        }
+        if (m.module === "circuits" && typeof Circuits !== "undefined") { await Circuits.ensureLoaded(); await Circuits.ouvert(); }
       }
     } catch (e) { /* module indisponible */ }
     const a = m.actif && this.liste.find(x => x.id === m.actif);
@@ -407,7 +439,7 @@ const Fenetre = {
     const norm = t => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const tous = src === "formules" ? Formules.index.map(f => ({ lib: (f.pinyin || f.id) + (f.nom_fr ? " — " + f.nom_fr : ""), ouvrir: () => Onglets.ouvrirFormule(f.id) }))
       : src === "syndromes" ? Syndromes.entries.map(x => ({ lib: x.nom + (x.sousLabel ? " — " + x.sousLabel : ""), ouvrir: () => Onglets.ouvrirSyndrome(x) }))
-      : Points.entries.map(x => ({ lib: x.id + (x.data && x.data.pinyin ? " " + x.data.pinyin : ""), ouvrir: () => Onglets.ouvrirPoint(x.id) }));
+      : (typeof Circuits !== "undefined" && Circuits.liste ? Circuits.liste.map(c => ({ lib: "◎ " + Circuits.nomCourt(c) + " " + c.grille.join(" · "), ouvrir: () => Onglets.ouvrirCircuit(c.id) })) : []).concat(Points.entries.map(x => ({ lib: x.id + (x.data && x.data.pinyin ? " " + x.data.pinyin : ""), ouvrir: () => Onglets.ouvrirPoint(x.id) })));
     p.innerHTML = `<input type="search" id="fen-plus-q" placeholder="Chercher une fiche à ouvrir dans un onglet" autocomplete="off"><div id="fen-plus-res"></div>`;
     const res = p.querySelector("#fen-plus-res"), q = p.querySelector("#fen-plus-q");
     const dessiner = () => {
@@ -426,12 +458,10 @@ const Fenetre = {
     const b = this.barre(), S = this.SECTIONS[sec], mod = this.moduleCourant(), surModule = Onglets.actif === null;
     if (surModule && mod) { try { localStorage.setItem("fenetre_dernier_" + sec, mod); } catch (e) { /* stockage indisponible */ } }
     const libelle = (id, nom) => {
-      if (id === "circuits" && typeof Circuits !== "undefined" && Circuits.actif && surModule && mod === "circuits") { const c = Circuits.parId(Circuits.actif); if (c) return nom + " — " + Circuits.nomCourt(c); }
       return nom;
     };
     b.hidden = false;
     b.innerHTML = S.mods.map(([id, nom]) => `<button type="button" class="onglet-t onglet-mod${surModule && mod === id ? " actif" : ""}" data-fm="${id}">${escapeHtml(libelle(id, nom))}</button>`).join("") +
-      (surModule && mod === "circuits" ? `<button type="button" class="onglet-menu fen-liste-btn" title="Choisir un circuit" aria-label="Choisir un circuit">▾ Circuits</button>` : "") +
       (Onglets.liste.some(o => this.deItem(o) === sec) ? `<span class="onglet-sep"></span>` : "") +
       Onglets.liste.filter(o => this.deItem(o) === sec).map(o => `<span class="onglet-t${Onglets.actif === o.id ? " actif" : ""}" data-o="${escapeHtml(o.id)}"><button type="button" class="onglet-nom" data-o="${escapeHtml(o.id)}" title="${escapeHtml(o.titre)}">${escapeHtml(o.genre)} ${escapeHtml(o.titre)}</button><button type="button" class="onglet-x" data-x="${escapeHtml(o.id)}" aria-label="Fermer l'onglet">✕</button></span>`).join("") +
       (this.sourcesPlus(sec) ? `<button type="button" class="onglet-menu fen-plus" title="Ouvrir une fiche dans un nouvel onglet" aria-label="Ouvrir une fiche dans un nouvel onglet">+</button>` : "") +
@@ -442,7 +472,6 @@ const Fenetre = {
     }));
     b.querySelectorAll("[data-o]").forEach(x => x.addEventListener("click", () => Onglets.activer(x.dataset.o)));
     b.querySelectorAll("[data-x]").forEach(x => x.addEventListener("click", e => { e.stopPropagation(); Onglets.fermer(x.dataset.x); }));
-    const l = b.querySelector(".fen-liste-btn"); if (l) l.addEventListener("click", e => Onglets.basculerMenuRapide(e, true));
   }
 };
 

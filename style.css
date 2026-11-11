@@ -1291,8 +1291,10 @@ li:hover > .circ-com-btn, .circ-com-btn:focus, .circ-com-btn:hover { opacity: 1;
 .mr-circuits { max-height: 38vh; overflow-y: auto; display: grid; }
 .mr-lien { display: block; width: 100%; text-align: left; border: 0; border-left: 3px solid transparent; background: none; color: var(--ink); font: inherit; font-size: 0.9rem; padding: 0.4rem 0.5rem; cursor: pointer; }
 .mr-lien:hover, .mr-lien.actif { border-left-color: var(--accent, var(--ink)); background: rgba(0,0,0,.06); }
-#tab-circuits .formules-sidebar { display: none; }
 #tab-circuits .formules-layout { grid-template-columns: 1fr; }
+#tab-circuits .formules-sidebar { position: static; max-height: none; }
+#tab-circuits.fiche-seule .formules-sidebar { display: none; }
+#tab-circuits:not(.fiche-seule) #circuit-detail { display: none; }
 /* sections repliables */
 h3[data-repliable] { cursor: pointer; user-select: none; }
 h3[data-repliable]::before { content: "▾"; display: inline-block; width: 1.1em; font-size: 0.85em; color: var(--muted, #666); }
