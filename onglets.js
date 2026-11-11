@@ -338,13 +338,18 @@ const Onglets = {
    Une fenêtre regroupe les modules d'une section (en onglets) et les fiches ouvertes depuis ces modules (aussi en onglets).
    Pour l'instant : la section Acupuncture (Points, Circuits, Points Tung). Les autres sections gardent la barre d'avant. */
 const Fenetre = {
-  SECTIONS: { acupuncture: { nom: "Acupuncture", mods: [["points", "Points"], ["circuits", "Circuits"], ["tung", "Points Tung"]] } },
+  SECTIONS: {
+    formules: { nom: "Formules", mods: [["formules", "Formules"], ["comparer", "Comparer"], ["proposer", "Proposer une formule"]] },
+    diagnostic: { nom: "Diagnostic", mods: [["syndromes", "Syndromes"], ["diag-signes", "Diagnostic par signes"], ["cas-pratique", "Cas cliniques"], ["tableaux-psy", "Tableaux Psy"]] },
+    acupuncture: { nom: "Acupuncture", mods: [["points", "Points"], ["circuits", "Circuits"], ["tung", "Points Tung"]] },
+    theorie: { nom: "Théorie", mods: [["psy", "Principes Taoïstes"]] }
+  },
   moduleCourant() { const p = document.querySelector(".tab-panel.active"); return p ? p.id.replace(/^tab-/, "") : null; },
   deModule(m) { return Object.keys(this.SECTIONS).find(k => this.SECTIONS[k].mods.some(x => x[0] === m)) || null; },
   // fenêtre d'une fiche ouverte (celle d'où elle a été ouverte ; à défaut : les points et les points Tung sont de l'Acupuncture)
   deItem(o) {
     const d = o.desc || {};
-    return d.fenetre || (d.kind === "pt" || d.kind === "tung" ? "acupuncture" : null);
+    return d.fenetre || (d.kind === "pt" || d.kind === "tung" ? "acupuncture" : d.kind === "synd" ? "diagnostic" : d.kind === "form" ? "formules" : null);
   },
   // fenêtre affichée en ce moment (null = une section pas encore migrée)
   courante() {
