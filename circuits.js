@@ -311,11 +311,10 @@ const Circuits = {
     const astuces = (this.base.astuces || []).filter(a => a.paires.some(p => p.every(k => c.grille.includes(k)))).map(a => `<li>${escapeHtml(sansHanzi(a.texte))}</li>`).join("");
     const ajouts = (c.ajouts || []).map(a => {
       const prop = a.source && /^proposition/.test(a.source), txt = sansHanzi(a.texte || "");
-      const liens = (a.canaux || []).map(k => c.grille.filter(g => (this.SYSTEMES[k] || []).includes(g)));
-      const fleches = (a.canaux || []).map((k, i) => `<span class="sx-code" title="${escapeHtml(txt)}">${escapeHtml(k)}</span>${liens[i].length ? ` <span class="circ-fleche" title="Connecté à ces canaux du circuit (6 systèmes)">→ ${liens[i].map(escapeHtml).join(" · ")}</span>` : ""}`).join(" ");
+      const fleches = this.ajoutFormat(c, a.canaux || [], txt);
       const libre = !prop && txt ? ` <span class="muted">${escapeHtml(txt)}</span>` : "";
       const tag = prop && !/vérifié/.test(a.source) ? ` <span class="circ-pt-tag" title="Proposition à confirmer ou supprimer">à valider</span>` : (a.source && /correction/.test(a.source) ? ` <span class="muted" title="Selon ta correction">✓</span>` : "");
-      return `<li>${a.action ? escapeHtml(sansHanzi(a.action)) + " : " : ""}${fleches}${libre}${tag}</li>`;
+      return `<li>${fleches}${a.action ? ` <span class="muted">${escapeHtml(sansHanzi(a.action))}</span>` : ""}${libre}${tag}</li>`;
     }).join("");
     const lies = (c.syndromes_lies || []).map(k => { const e = this.entreeSynd(k); return e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(k)}">${escapeHtml(sansHanzi(e.nom))}</button>` : `<span class="muted">${escapeHtml(k)} (introuvable)</span>`; }).join(" ");
     const parCanal = c.grille.map(code => {
@@ -491,12 +490,23 @@ const Circuits = {
     });
     return out;
   },
+  // « F — relié à P et IG » (un canal) ; « GI + Rn — (métal / eau) » (des canaux ajoutés ensemble : leurs mouvements)
+  ajoutFormat(c, canaux, titre) {
+    const code = k => `<span class="sx-code" title="${escapeHtml(titre || "")}">${escapeHtml(k)}</span>`;
+    const et = l => l.length > 1 ? l.slice(0, -1).join(", ") + " et " + l[l.length - 1] : l.join("");
+    if (canaux.length === 1) {
+      const liens = c.grille.filter(g => (this.SYSTEMES[canaux[0]] || []).includes(g));
+      return code(canaux[0]) + (liens.length ? ` — relié à ${escapeHtml(et(liens))}` : "");
+    }
+    const mv = [...new Set(canaux.map(k => this.NOM_MOUV[this.MOUV_CANAL[k]]).filter(Boolean))];
+    return canaux.map(code).join(" + ") + (mv.length ? ` — (${escapeHtml(mv.join(" / "))})` : "");
+  },
   proposerAjouts(c) {
     const z = document.getElementById("circ-aj-zone");
     if (z.innerHTML) { z.innerHTML = ""; return; }
     const l = this.candidatsAjout(c);
     z.innerHTML = ""+
-      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li><span class="sx-code" title="${escapeHtml(((this.canaux.get(x.code) || {}).nom || "") + " : " + x.raisons.join(" ; "))}">${escapeHtml(x.code)}</span> <span class="circ-fleche" title="Connecté à ces canaux du circuit (6 systèmes)">→ ${x.liens.map(escapeHtml).join(" · ")}</span> <button type="button" class="edit-toggle-btn" data-i="${i}" title="Ajouter à la liste" aria-label="Ajouter à la liste">+</button></li>`).join("")}</ul>` : `<p class="muted">Aucun autre canal ne garde l'équilibre statique et dynamique de ce circuit.</p>`);
+      (l.length ? `<ul class="circ-pts-prop">${l.map((x, i) => `<li>${this.ajoutFormat(c, [x.code], ((this.canaux.get(x.code) || {}).nom || "") + " : " + x.raisons.join(" ; "))} <button type="button" class="edit-toggle-btn" data-i="${i}" title="Ajouter à la liste" aria-label="Ajouter à la liste">+</button></li>`).join("")}</ul>` : `<p class="muted">Aucun autre canal ne garde l'équilibre statique et dynamique de ce circuit.</p>`);
     z.querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", async () => {
       b.disabled = true;                                                     // pas de double clic
       const x = l[+b.dataset.i], nom = ((this.canaux.get(x.code) || {}).nom || x.code).toLowerCase();
