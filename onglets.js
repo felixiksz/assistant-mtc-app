@@ -81,6 +81,7 @@ const Onglets = {
   rendreBarre() {
     if (!this.barre) return;
     const sec = Fenetre.courante();
+    Fenetre.rendreSections(sec);
     if (sec) { this.barre.hidden = true; Fenetre.rendre(sec); this.ajusterBarre(); return; }
     Fenetre.cacher();
     this.barre.hidden = false;                                  // toujours visible : le ☰ (menu, choix du circuit) doit rester accessible même sans onglet ouvert
@@ -140,7 +141,7 @@ const Onglets = {
     zone.hidden = true;
     zone.innerHTML = `<p class="muted">Chargement…</p>`;
     this.vues.appendChild(zone);
-    const o = { id, titre, genre, zone, charge, desc: { ...desc, titre, fenetre: (desc && desc.fenetre) || Fenetre.courante() || null }, pret: false };
+    const o = { id, titre, genre, zone, charge, desc: { ...desc, titre, fenetre: (desc && desc.fenetre) || (this._restauration ? null : Fenetre.courante()) || null }, pret: false };
     o.recharger = async () => { zone.innerHTML = `<p class="muted">Chargement…</p>`; await charge(zone, o.recharger); };
     o.charger = async () => {
       if (o.pret) return;
@@ -344,7 +345,7 @@ const Onglets = {
    Pour l'instant : la section Acupuncture (Points, Circuits, Points Tung). Les autres sections gardent la barre d'avant. */
 const Fenetre = {
   SECTIONS: {
-    formules: { nom: "Formules", mods: [["formules", "Formules"], ["comparer", "Comparer"], ["proposer", "Proposer une formule"]] },
+    formules: { nom: "Formules", mods: [["formules", "Formules"], ["comparer", "Comparer"], ["proposer", "Prescrire"]] },
     diagnostic: { nom: "Diagnostic", mods: [["syndromes", "Syndromes"], ["diag-signes", "Diagnostic par signes"], ["cas-pratique", "Cas cliniques"], ["tableaux-psy", "Tableaux Psy"]] },
     acupuncture: { nom: "Acupuncture", mods: [["points", "Points"], ["circuits", "Circuits"], ["tung", "Points Tung"]] },
     theorie: { nom: "Théorie", mods: [["psy", "Principes Taoïstes"]] }
@@ -371,8 +372,59 @@ const Fenetre = {
     return b;
   },
   cacher() { const b = document.getElementById("fenetre-bar"); if (b) b.hidden = true; },
+  // les quatre sections, en onglets sous l'en-tête
+  rendreSections(sec) {
+    const n = document.getElementById("sections-bar");
+    if (!n) return;
+    n.innerHTML = Object.entries(this.SECTIONS).map(([k, S]) => `<button type="button" class="sec-btn${k === sec ? " actif" : ""}" data-sec="${k}">${escapeHtml(S.nom)}</button>`).join("");
+    n.querySelectorAll("[data-sec]").forEach(b => b.addEventListener("click", () => this.aller(b.dataset.sec)));
+  },
+  // ouvre une section : le dernier module qu'on y avait, sinon le premier
+  aller(sec) {
+    const S = this.SECTIONS[sec];
+    let m = null; try { m = localStorage.getItem("fenetre_dernier_" + sec); } catch (e) { /* stockage indisponible */ }
+    if (!m || !S.mods.some(x => x[0] === m)) m = S.mods[0][0];
+    const b = document.querySelector('#menu-panneau .tab-btn[data-tab="' + m + '"]');
+    if (b) b.click();
+  },
+  // fiches qu'on peut ouvrir depuis le « + » de la section
+  sourcesPlus(sec) {
+    if (sec === "formules") return typeof Formules !== "undefined" && (Formules.index || []).length ? "formules" : null;
+    if (sec === "diagnostic") return typeof Syndromes !== "undefined" && (Syndromes.entries || []).length ? "syndromes" : null;
+    if (sec === "acupuncture") return typeof Points !== "undefined" && (Points.entries || []).length ? "points" : null;
+    return null;
+  },
+  menuPlus(e, sec) {
+    e.stopPropagation();
+    let p = document.getElementById("fen-plus-pop");
+    if (!p) {
+      p = document.createElement("div"); p.id = "fen-plus-pop"; p.hidden = true; document.body.appendChild(p);
+      document.addEventListener("click", ev => { if (!p.hidden && !ev.target.closest("#fen-plus-pop, .fen-plus")) p.hidden = true; });
+      document.addEventListener("keydown", ev => { if (ev.key === "Escape") p.hidden = true; });
+    }
+    if (!p.hidden) { p.hidden = true; return; }
+    const src = this.sourcesPlus(sec);
+    const norm = t => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const tous = src === "formules" ? Formules.index.map(f => ({ lib: (f.pinyin || f.id) + (f.nom_fr ? " — " + f.nom_fr : ""), ouvrir: () => Onglets.ouvrirFormule(f.id) }))
+      : src === "syndromes" ? Syndromes.entries.map(x => ({ lib: x.nom + (x.sousLabel ? " — " + x.sousLabel : ""), ouvrir: () => Onglets.ouvrirSyndrome(x) }))
+      : Points.entries.map(x => ({ lib: x.id + (x.data && x.data.pinyin ? " " + x.data.pinyin : ""), ouvrir: () => Onglets.ouvrirPoint(x.id) }));
+    p.innerHTML = `<input type="search" id="fen-plus-q" placeholder="Chercher une fiche à ouvrir dans un onglet" autocomplete="off"><div id="fen-plus-res"></div>`;
+    const res = p.querySelector("#fen-plus-res"), q = p.querySelector("#fen-plus-q");
+    const dessiner = () => {
+      const t = norm(q.value), l = tous.filter(x => !t || norm(x.lib).includes(t)).slice(0, 40);
+      res.innerHTML = l.map((x, i) => `<button type="button" class="mr-lien" data-i="${i}">${escapeHtml(x.lib)}</button>`).join("") || `<span class="muted">Aucune fiche.</span>`;
+      res.querySelectorAll("[data-i]").forEach(b => b.addEventListener("click", () => { p.hidden = true; l[+b.dataset.i].ouvrir(); }));
+    };
+    q.addEventListener("input", dessiner); dessiner();
+    const r = e.currentTarget.getBoundingClientRect();
+    p.style.left = Math.max(6, Math.min(r.left, innerWidth - 24 * 16 - 6)) + "px";
+    p.style.top = Math.round(r.bottom) + "px";
+    p.hidden = false;
+    q.focus();
+  },
   rendre(sec) {
     const b = this.barre(), S = this.SECTIONS[sec], mod = this.moduleCourant(), surModule = Onglets.actif === null;
+    if (surModule && mod) { try { localStorage.setItem("fenetre_dernier_" + sec, mod); } catch (e) { /* stockage indisponible */ } }
     const libelle = (id, nom) => {
       if (id === "circuits" && typeof Circuits !== "undefined" && Circuits.actif && surModule && mod === "circuits") { const c = Circuits.parId(Circuits.actif); if (c) return nom + " — " + Circuits.nomCourt(c); }
       return nom;
@@ -382,7 +434,9 @@ const Fenetre = {
       (surModule && mod === "circuits" ? `<button type="button" class="onglet-menu fen-liste-btn" title="Choisir un circuit" aria-label="Choisir un circuit">▾ Circuits</button>` : "") +
       (Onglets.liste.some(o => this.deItem(o) === sec) ? `<span class="onglet-sep"></span>` : "") +
       Onglets.liste.filter(o => this.deItem(o) === sec).map(o => `<span class="onglet-t${Onglets.actif === o.id ? " actif" : ""}" data-o="${escapeHtml(o.id)}"><button type="button" class="onglet-nom" data-o="${escapeHtml(o.id)}" title="${escapeHtml(o.titre)}">${escapeHtml(o.genre)} ${escapeHtml(o.titre)}</button><button type="button" class="onglet-x" data-x="${escapeHtml(o.id)}" aria-label="Fermer l'onglet">✕</button></span>`).join("") +
+      (this.sourcesPlus(sec) ? `<button type="button" class="onglet-menu fen-plus" title="Ouvrir une fiche dans un nouvel onglet" aria-label="Ouvrir une fiche dans un nouvel onglet">+</button>` : "") +
       (Onglets.enLigne() ? `<span class="onglet-sync" title="Onglets synchronisés avec tes autres appareils (via ton dépôt GitHub)">🔄</span>` : "");
+    const pl = b.querySelector(".fen-plus"); if (pl) pl.addEventListener("click", e => this.menuPlus(e, sec));
     b.querySelectorAll("[data-fm]").forEach(x => x.addEventListener("click", () => {
       const o = document.querySelector('#menu-panneau .tab-btn[data-tab="' + x.dataset.fm + '"]'); if (o) o.click();
     }));
@@ -400,6 +454,10 @@ const Fenetre = {
 })();
 
 Onglets.init();
+// liste d'un onglet majeur : chaque fiche choisie s'ouvre dans son propre onglet (les onglets majeurs restent toujours ouverts)
+if (typeof Formules !== "undefined") { Formules.showDetail = f => Onglets.ouvrirFormule(f.id); Formules.showVariation = v => Onglets.ouvrirFormule(v.id); }
+if (typeof Syndromes !== "undefined") Syndromes.showDetail = e => Onglets.ouvrirSyndrome(e);
+if (typeof Points !== "undefined") Points.showDetail = e => Onglets.ouvrirPoint(e.id);
 Onglets.restaurer();
 
 /* ============ Sections repliables : le titre (h3) de chaque section d'une fiche la replie ou la déplie ============

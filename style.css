@@ -1316,3 +1316,18 @@ section.replie > :not(h3:first-child) { display: none !important; }
 @media (max-width: 800px) { .circ-t2 { grid-template-columns: 1fr; } .circ-t2-g { position: static; } .circ-t2-g .circ-svg { max-width: 170px; } }
 .onglet-sep { width: 2px; background: var(--ink); align-self: stretch; margin: 0 0.4rem; flex: none; }
 .onglet-mod { font-weight: 700; }
+/* structure : en-tête (titre, recherche, boutons) > sections en onglets > onglets de la section > liste et fiche */
+.menu-onglets { display: none !important; }
+.sync-icone { padding: 0.35rem 0.6rem; font-size: 1.1rem; line-height: 1; }
+.sections-bar { display: flex; overflow-x: auto; border-bottom: 2px solid var(--ink); background: var(--bg); }
+.sec-btn { flex: 1 0 auto; border: 0; border-right: 1px solid var(--ink); background: none; color: var(--ink); font: inherit; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.85rem; padding: 0.7rem 1rem; cursor: pointer; white-space: nowrap; }
+.sec-btn:last-child { border-right: 0; }
+.sec-btn.actif { background: var(--ink); color: var(--bg); }
+.fen-plus { font-size: 1.1rem; padding: 0.15rem 0.7rem; }
+#fen-plus-pop { position: fixed; z-index: 60; width: min(24rem, calc(100vw - 0.8rem)); max-height: 70vh; overflow-y: auto; background: var(--bg); border: 2px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); padding: 0.5rem 0.6rem 0.7rem; }
+#fen-plus-pop[hidden] { display: none; }
+#fen-plus-pop input[type="search"] { width: 100%; box-sizing: border-box; margin-bottom: 0.3rem; }
+/* les fiches s'ouvrent chacune dans leur onglet : la liste de l'onglet majeur prend toute la largeur */
+#formule-detail, #syn-detail, #pts-detail { display: none; }
+.formules-layout:has(> #formule-detail), .formules-layout:has(> #syn-detail), .formules-layout:has(> #pts-detail) { grid-template-columns: 1fr; }
+.formules-layout:has(> #formule-detail) > .formules-sidebar, .formules-layout:has(> #syn-detail) > .formules-sidebar, .formules-layout:has(> #pts-detail) > .formules-sidebar { position: static; max-height: none; }

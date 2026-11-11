@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&family=Noto+Serif:wght@700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=140">
+<link rel="stylesheet" href="style.css?v=141">
 <script src="theme.js?v=2"></script>
 </head>
 <body>
@@ -21,15 +21,15 @@
     <input type="search" id="global-search" placeholder="Recherche globale : formules, syndromes, points, cas cliniques, Farrell...">
     <div id="global-search-results"></div>
   </div>
-  <button type="button" id="sync-settings-btn" class="sync-btn">⚙ Synchronisation</button>
-  <button type="button" id="theme-btn" class="sync-btn" aria-expanded="false" aria-controls="theme-panel">🎨 Thème</button>
+  <button type="button" id="sync-settings-btn" class="sync-btn sync-icone" title="Synchronisation" aria-label="Synchronisation">⚙</button>
+  <button type="button" id="theme-btn" class="sync-btn sync-icone" aria-expanded="false" aria-controls="theme-panel" title="Thème" aria-label="Thème">🎨</button>
   <nav class="tabs menu-onglets" aria-label="Sections de l'application">
     <button type="button" id="menu-btn" class="menu-btn" aria-expanded="false" aria-controls="menu-panneau"><span aria-hidden="true">☰</span> <span id="menu-courant">Formules</span> <span aria-hidden="true" class="menu-fleche">▾</span></button>
     <div id="menu-panneau" class="menu-panneau" hidden>
       <div class="menu-groupe"><div class="menu-titre">Formules</div>
         <button class="tab-btn active" data-tab="formules">Formules</button>
         <button class="tab-btn" data-tab="comparer">Comparer</button>
-        <button class="tab-btn" data-tab="proposer">Proposer une formule</button>
+        <button class="tab-btn" data-tab="proposer">Prescrire</button>
       </div>
       <div class="menu-groupe"><div class="menu-titre">Diagnostic</div>
         <button class="tab-btn" data-tab="syndromes">Syndromes</button>
@@ -48,6 +48,7 @@
     </div>
   </nav>
 </header>
+<nav id="sections-bar" class="sections-bar" aria-label="Sections de l'application"></nav>
 
 <div id="theme-panel" class="sync-panel" style="display:none;">
   <h2>Thèmes de couleurs</h2>
@@ -103,7 +104,7 @@
 
   <!-- ===================== ONGLET PROPOSER UNE FORMULE (diagnostic -> formules -> modifications) ===================== -->
   <section id="tab-proposer" class="tab-panel">
-    <h2>Proposer une formule</h2>
+    <h2>Prescrire</h2>
     <div class="prop-vues cat-chip-row" role="group" aria-label="Que proposer ?">
       <button type="button" class="cat-chip active" data-vue="formules">Formules</button>
       <button type="button" class="cat-chip" data-vue="circuits">Circuits thérapeutiques</button>
@@ -480,7 +481,7 @@
 <script src="app.js?v=139"></script>
 <script src="circuits.js?v=80"></script>
 <script src="tung.js?v=14"></script>
-<script src="onglets.js?v=14"></script>
+<script src="onglets.js?v=16"></script>
 <script src="reseau.js?v=10"></script>
 </body>
 </html>
