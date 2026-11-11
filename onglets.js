@@ -37,18 +37,19 @@ const Onglets = {
 
   // la barre est fixée en haut de l'écran : on décale la page de sa hauteur, et les éléments flottants (crayon, liste latérale) se placent dessous
   ajusterBarre() {
-    const h = this.barre && !this.barre.hidden ? Math.ceil(this.barre.getBoundingClientRect().height) : 0;
+    const vis = [this.barre, document.getElementById("fenetre-bar")].find(e => e && !e.hidden);
+    const h = vis ? Math.ceil(vis.getBoundingClientRect().height) : 0;
     document.documentElement.style.setProperty("--haut-onglets", h + "px");
     document.body.style.paddingTop = h ? h + "px" : "";
   },
 
   // ☰ de la barre fixe : menu de l'application et choix du circuit, accessibles où que l'on soit dans la page
-  basculerMenuRapide(e) {
+  basculerMenuRapide(e, seulCircuits) {
     e.stopPropagation();
     let p = document.getElementById("menu-rapide");
     if (!p) {
       p = document.createElement("div"); p.id = "menu-rapide"; p.hidden = true; document.body.appendChild(p);
-      document.addEventListener("click", ev => { if (!p.hidden && !ev.target.closest("#menu-rapide, #onglet-menu-btn")) p.hidden = true; });
+      document.addEventListener("click", ev => { if (!p.hidden && !ev.target.closest("#menu-rapide, #onglet-menu-btn, .fen-liste-btn")) p.hidden = true; });
       document.addEventListener("keydown", ev => { if (ev.key === "Escape") p.hidden = true; });
       p.addEventListener("click", ev => {
         const bc = ev.target.closest("[data-mr-circ]"), bt = ev.target.closest("[data-mr-tab]");
@@ -58,12 +59,14 @@ const Onglets = {
       });
     }
     if (!p.hidden) { p.hidden = true; return; }
-    this.remplirMenuRapide(p);
+    this.remplirMenuRapide(p, seulCircuits);
+    const r = e.currentTarget && e.currentTarget.getBoundingClientRect ? e.currentTarget.getBoundingClientRect() : null;
+    p.style.left = seulCircuits && r ? Math.max(6, Math.min(r.left, innerWidth - p.offsetWidth - 6)) + "px" : "";
     p.hidden = false;
   },
-  remplirMenuRapide(p) {
+  remplirMenuRapide(p, seulCircuits) {
     const circ = typeof Circuits !== "undefined" && Circuits.liste && Circuits.liste.length ? Circuits.liste : [];
-    const groupes = [...document.querySelectorAll("#menu-panneau .menu-groupe")].map(g => `<div class="mr-groupe"><div class="menu-titre">${escapeHtml(g.querySelector(".menu-titre").textContent)}</div>` +
+    const groupes = seulCircuits ? [] : [...document.querySelectorAll("#menu-panneau .menu-groupe")].map(g => `<div class="mr-groupe"><div class="menu-titre">${escapeHtml(g.querySelector(".menu-titre").textContent)}</div>` +
       [...g.querySelectorAll(".tab-btn")].map(b => `<button type="button" class="mr-lien" data-mr-tab="${escapeHtml(b.dataset.tab)}">${escapeHtml((b.title || b.textContent).trim())}</button>`).join("") + `</div>`).join("");
     p.innerHTML = (circ.length ? `<div class="mr-groupe"><div class="menu-titre">Circuits</div><input type="search" id="mr-filtre" placeholder="Chercher un circuit" autocomplete="off"><button type="button" class="mr-lien" data-mr-nouveau>+ Nouveau circuit</button><div class="mr-circuits" id="mr-circuits"></div></div>` : "") + groupes;
     const liste = p.querySelector("#mr-circuits"), filtre = p.querySelector("#mr-filtre");
@@ -76,9 +79,12 @@ const Onglets = {
 
   rendreBarre() {
     if (!this.barre) return;
+    const sec = Fenetre.courante();
+    if (sec) { this.barre.hidden = true; Fenetre.rendre(sec); this.ajusterBarre(); return; }
+    Fenetre.cacher();
     this.barre.hidden = false;                                  // toujours visible : le ☰ (menu, choix du circuit) doit rester accessible même sans onglet ouvert
     this.barre.innerHTML = `<button type="button" class="onglet-menu" id="onglet-menu-btn" title="Menu et choix du circuit" aria-label="Menu et choix du circuit">☰</button>` + `<button type="button" class="onglet-t${this.actif === null ? " actif" : ""}" data-o="" title="Retour à la vue du module">${escapeHtml(this.etiquetteModule())}</button>` +
-      this.liste.map(o => `<span class="onglet-t${this.actif === o.id ? " actif" : ""}" data-o="${escapeHtml(o.id)}"><button type="button" class="onglet-nom" data-o="${escapeHtml(o.id)}" title="${escapeHtml(o.titre)}">${escapeHtml(o.genre)} ${escapeHtml(o.titre)}</button><button type="button" class="onglet-x" data-x="${escapeHtml(o.id)}" aria-label="Fermer l'onglet">✕</button></span>`).join("") + (this.enLigne() ? `<span class="onglet-sync" title="Onglets synchronisés avec tes autres appareils (via ton dépôt GitHub)">🔄</span>` : "");
+      this.liste.filter(o => !Fenetre.deItem(o)).map(o => `<span class="onglet-t${this.actif === o.id ? " actif" : ""}" data-o="${escapeHtml(o.id)}"><button type="button" class="onglet-nom" data-o="${escapeHtml(o.id)}" title="${escapeHtml(o.titre)}">${escapeHtml(o.genre)} ${escapeHtml(o.titre)}</button><button type="button" class="onglet-x" data-x="${escapeHtml(o.id)}" aria-label="Fermer l'onglet">✕</button></span>`).join("") + (this.enLigne() ? `<span class="onglet-sync" title="Onglets synchronisés avec tes autres appareils (via ton dépôt GitHub)">🔄</span>` : "");
     document.getElementById("onglet-menu-btn").addEventListener("click", e => this.basculerMenuRapide(e));
     this.barre.querySelectorAll("[data-o]").forEach(b => b.addEventListener("click", () => { const id = b.dataset.o; if (!id) this.voirModule(); else this.activer(id); }));
     this.barre.querySelectorAll("[data-x]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); this.fermer(b.dataset.x); }));
@@ -133,7 +139,7 @@ const Onglets = {
     zone.hidden = true;
     zone.innerHTML = `<p class="muted">Chargement…</p>`;
     this.vues.appendChild(zone);
-    const o = { id, titre, genre, zone, charge, desc: { ...desc, titre }, pret: false };
+    const o = { id, titre, genre, zone, charge, desc: { ...desc, titre, fenetre: (desc && desc.fenetre) || Fenetre.courante() || null }, pret: false };
     o.recharger = async () => { zone.innerHTML = `<p class="muted">Chargement…</p>`; await charge(zone, o.recharger); };
     o.charger = async () => {
       if (o.pret) return;
@@ -210,10 +216,10 @@ const Onglets = {
     for (const v of voulus) {
       const x = v.x;
       try {
-        if (x.kind === "synd") await this.ouvrirSyndrome(x.entry, { differe: true });
-        else if (x.kind === "pt") await this.ouvrirPoint(x.id, { differe: true });
-        else if (x.kind === "tung") await this.ouvrirTung(x.id, { differe: true, titre: x.titre });
-        else if (x.kind === "form") await this.ouvrirFormule(x.id, { differe: true });
+        if (x.kind === "synd") await this.ouvrirSyndrome(x.entry, { differe: true, fenetre: x.fenetre });
+        else if (x.kind === "pt") await this.ouvrirPoint(x.id, { differe: true, fenetre: x.fenetre });
+        else if (x.kind === "tung") await this.ouvrirTung(x.id, { differe: true, titre: x.titre, fenetre: x.fenetre });
+        else if (x.kind === "form") await this.ouvrirFormule(x.id, { differe: true, fenetre: x.fenetre });
       } catch (e) { /* fiche disparue */ }
     }
     this._restauration = false;
@@ -249,10 +255,10 @@ const Onglets = {
     this._restauration = true;
     for (const d of (m.onglets || [])) {
       try {
-        if (d.kind === "synd") await this.ouvrirSyndrome(d.entry, { differe: true });
-        else if (d.kind === "pt") await this.ouvrirPoint(d.id, { differe: true });
-        else if (d.kind === "tung") await this.ouvrirTung(d.id, { differe: true, titre: d.titre });
-        else if (d.kind === "form") await this.ouvrirFormule(d.id, { differe: true });
+        if (d.kind === "synd") await this.ouvrirSyndrome(d.entry, { differe: true, fenetre: d.fenetre });
+        else if (d.kind === "pt") await this.ouvrirPoint(d.id, { differe: true, fenetre: d.fenetre });
+        else if (d.kind === "tung") await this.ouvrirTung(d.id, { differe: true, titre: d.titre, fenetre: d.fenetre });
+        else if (d.kind === "form") await this.ouvrirFormule(d.id, { differe: true, fenetre: d.fenetre });
       } catch (e) { /* fiche disparue : on l'ignore */ }
     }
     // retrouve le module et le circuit où l'on était
@@ -279,7 +285,7 @@ const Onglets = {
       const d = await Store.readJSON(`syndromes/${entry.domaine}/${entry.chemin}`);
       zone.innerHTML = Syndromes.renderSyndrome(d, entry.domaine);
       addEditControls(zone, "syndromes/" + entry.domaine + "/" + entry.chemin, d, { onSaved: async parsed => { await Syndromes.apresSauvegarde(entry, parsed); await recharger(); } });
-    }, { kind: "synd", entry: { id: entry.id, domaine: entry.domaine, chemin: entry.chemin, nom: entry.nom, sousLabel: entry.sousLabel } }, opt.differe);
+    }, { kind: "synd", fenetre: opt.fenetre, entry: { id: entry.id, domaine: entry.domaine, chemin: entry.chemin, nom: entry.nom, sousLabel: entry.sousLabel } }, opt.differe);
   },
 
   ouvrirPoint(texte, opt = {}) {
@@ -294,7 +300,7 @@ const Onglets = {
       zone.innerHTML = Points.htmlDetail(entry);
       Store.hydrateImages(zone);
       addEditControls(zone, "reference/points_canaux/" + entry.canal + ".json", entry.data, { arrayItem: true, matchField: "point", matchValue: entry.id, editorFn: openPointEditor, onSaved: async () => { await recharger(); } });
-    }, { kind: "pt", id: entry.id }, opt.differe);
+    }, { kind: "pt", fenetre: opt.fenetre, id: entry.id }, opt.differe);
   },
 
   ouvrirTung(id, opt = {}) {
@@ -302,7 +308,7 @@ const Onglets = {
       await Tung.ensureLoaded();
       Tung.rendreFicheDans(zone, id, false);       // avec les boutons de modification : ils écrivent dans cet onglet
       Store.hydrateImages(zone);
-    }, { kind: "tung", id }, opt.differe);
+    }, { kind: "tung", fenetre: opt.fenetre, id }, opt.differe);
   },
 
   ouvrirFormule(id, opt = {}) {
@@ -323,7 +329,55 @@ const Onglets = {
         zone.innerHTML = Formules.renderVariation(v, parent, fp);
         zone.querySelectorAll("[data-parent]").forEach(b => b.addEventListener("click", () => this.ouvrirFormule(parent.id)));
       }
-    }, { kind: "form", id }, opt.differe);
+    }, { kind: "form", fenetre: opt.fenetre, id }, opt.differe);
+  }
+};
+
+/* ============================= Fenêtres : une par section du menu =============================
+   Une fenêtre regroupe les modules d'une section (en onglets) et les fiches ouvertes depuis ces modules (aussi en onglets).
+   Pour l'instant : la section Acupuncture (Points, Circuits, Points Tung). Les autres sections gardent la barre d'avant. */
+const Fenetre = {
+  SECTIONS: { acupuncture: { nom: "Acupuncture", mods: [["points", "Points"], ["circuits", "Circuits"], ["tung", "Points Tung"]] } },
+  moduleCourant() { const p = document.querySelector(".tab-panel.active"); return p ? p.id.replace(/^tab-/, "") : null; },
+  deModule(m) { return Object.keys(this.SECTIONS).find(k => this.SECTIONS[k].mods.some(x => x[0] === m)) || null; },
+  // fenêtre d'une fiche ouverte (celle d'où elle a été ouverte ; à défaut : les points et les points Tung sont de l'Acupuncture)
+  deItem(o) {
+    const d = o.desc || {};
+    return d.fenetre || (d.kind === "pt" || d.kind === "tung" ? "acupuncture" : null);
+  },
+  // fenêtre affichée en ce moment (null = une section pas encore migrée)
+  courante() {
+    if (Onglets.actif === null) return this.deModule(this.moduleCourant());
+    const o = Onglets.liste.find(x => x.id === Onglets.actif);
+    return o ? this.deItem(o) : null;
+  },
+  barre() {
+    let b = document.getElementById("fenetre-bar");
+    if (!b) {
+      b = document.createElement("div"); b.id = "fenetre-bar"; b.className = "onglets-travail fenetre-bar"; b.setAttribute("role", "tablist"); b.hidden = true;
+      Onglets.barre.insertAdjacentElement("afterend", b);
+    }
+    return b;
+  },
+  cacher() { const b = document.getElementById("fenetre-bar"); if (b) b.hidden = true; },
+  rendre(sec) {
+    const b = this.barre(), S = this.SECTIONS[sec], mod = this.moduleCourant(), surModule = Onglets.actif === null;
+    const libelle = (id, nom) => {
+      if (id === "circuits" && typeof Circuits !== "undefined" && Circuits.actif && surModule && mod === "circuits") { const c = Circuits.parId(Circuits.actif); if (c) return nom + " — " + Circuits.nomCourt(c); }
+      return nom;
+    };
+    b.hidden = false;
+    b.innerHTML = S.mods.map(([id, nom]) => `<button type="button" class="onglet-t onglet-mod${surModule && mod === id ? " actif" : ""}" data-fm="${id}">${escapeHtml(libelle(id, nom))}</button>`).join("") +
+      (surModule && mod === "circuits" ? `<button type="button" class="onglet-menu fen-liste-btn" title="Choisir un circuit" aria-label="Choisir un circuit">▾ Circuits</button>` : "") +
+      (Onglets.liste.some(o => this.deItem(o) === sec) ? `<span class="onglet-sep"></span>` : "") +
+      Onglets.liste.filter(o => this.deItem(o) === sec).map(o => `<span class="onglet-t${Onglets.actif === o.id ? " actif" : ""}" data-o="${escapeHtml(o.id)}"><button type="button" class="onglet-nom" data-o="${escapeHtml(o.id)}" title="${escapeHtml(o.titre)}">${escapeHtml(o.genre)} ${escapeHtml(o.titre)}</button><button type="button" class="onglet-x" data-x="${escapeHtml(o.id)}" aria-label="Fermer l'onglet">✕</button></span>`).join("") +
+      (Onglets.enLigne() ? `<span class="onglet-sync" title="Onglets synchronisés avec tes autres appareils (via ton dépôt GitHub)">🔄</span>` : "");
+    b.querySelectorAll("[data-fm]").forEach(x => x.addEventListener("click", () => {
+      const o = document.querySelector('#menu-panneau .tab-btn[data-tab="' + x.dataset.fm + '"]'); if (o) o.click();
+    }));
+    b.querySelectorAll("[data-o]").forEach(x => x.addEventListener("click", () => Onglets.activer(x.dataset.o)));
+    b.querySelectorAll("[data-x]").forEach(x => x.addEventListener("click", e => { e.stopPropagation(); Onglets.fermer(x.dataset.x); }));
+    const l = b.querySelector(".fen-liste-btn"); if (l) l.addEventListener("click", e => Onglets.basculerMenuRapide(e, true));
   }
 };
 

@@ -301,7 +301,7 @@ const Circuits = {
   rendreFiche() {
     const zone = document.getElementById("circuit-detail"), c = this.parId(this.actif);
     document.getElementById("tab-circuits").classList.toggle("fiche-seule", !!c);          // fiche ouverte : la liste disparaît (on choisit un autre circuit avec le ☰ de la barre fixe)
-    if (!c) { zone.innerHTML = `<p class="muted">Sélectionne un circuit à gauche pour voir sa fiche.</p>`; return; }
+    if (!c) { zone.innerHTML = `<p class="muted">Choisis un circuit avec « ▾ Circuits » dans la barre du haut pour voir sa fiche.</p>`; return; }
     if (this.edition) { this.rendreEdition(c); return; }
         const niveaux = (c.niveaux || []).map(x => {
       const n = dsNorm(sansChinois(x));
