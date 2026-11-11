@@ -89,7 +89,7 @@ const Circuits = {
     const b = this.base.circuits.map(c => ({ ...vide, ...c, ...(surch[c.id] || {}), origine: "cours", modifie: !!surch[c.id], de_base: c }));
     const p = (this.perso.circuits || []).map(c => ({ ...vide, figure: 1, ...c, origine: "perso", modifie: false }));
     this.liste = [...b, ...p];
-    this.liste.forEach(x => { x.figure = this.figureDe(x.grille) || 3; });        // le schéma découle des connexions entre les canaux
+    this.liste.forEach(x => { x.figure = this.figureDe(x.grille) || 3; x.ajouts = (x.ajouts || []).map(a => this.reparserAjout(a)); });        // le schéma découle des connexions entre les canaux
   },
 
   parId(id) { return this.liste.find(c => c.id === id) || null; },
@@ -312,7 +312,7 @@ const Circuits = {
     const ajouts = (c.ajouts || []).map(a => {
       const prop = a.source && /^proposition/.test(a.source), txt = sansHanzi(a.texte || "");
       const fleches = this.ajoutFormat(c, a.canaux || [], txt);
-      const libre = !prop && txt ? ` <span class="muted">${escapeHtml(txt)}</span>` : "";
+      const libre = !prop && txt && !this.lireAjoutSeul(txt) ? ` <span class="muted">${escapeHtml(txt)}</span>` : "";
       const tag = prop && !/vérifié/.test(a.source) ? ` <span class="circ-pt-tag" title="Proposition à confirmer ou supprimer">à valider</span>` : (a.source && /correction/.test(a.source) ? ` <span class="muted" title="Selon ta correction">✓</span>` : "");
       return `<li>${fleches}${a.action ? ` <span class="muted">${escapeHtml(sansHanzi(a.action))}</span>` : ""}${libre}${tag}</li>`;
     }).join("");
@@ -1053,13 +1053,53 @@ const Circuits = {
 
   // ---------- création / modification
   lignes(t) { return String(t || "").split("\n").map(x => x.trim()).filter(Boolean); },
-  ajoutsEnTexte(a) { return (a || []).map(x => (x.action ? x.action + " : " : "") + (x.texte || "")).join("\n"); },
-  texteEnAjouts(t, originaux) {
+  CODES_CANAUX: ["P", "GI", "E", "Rt", "C", "IG", "V", "Rn", "EC", "TF", "VB", "F"],
+  codeCanal(s) { const u = String(s).toUpperCase(); return this.CODES_CANAUX.find(k => k.toUpperCase() === u) || null; },
+  // une ligne qui commence par des canaux (« F », « GI + Rn », « Rn ou V ») : ce sont les canaux ajoutés ; le reste (connexions, mouvements) se déduit
+  lireAjout(l) {
+    const code = "(?:P|GI|E|Rt|C|IG|V|Rn|EC|TF|VB|F)";
+    const m = String(l).match(new RegExp("^\\s*(" + code + "(?:\\s*(?:\\+|ou|,|/)\\s*" + code + ")*)\\s*(?:[—–-]\\s*(.*))?$", "i"));
+    if (!m) return null;
+    const canaux = [...new Set(m[1].split(/\s*(?:\+|\bou\b|,|\/)\s*/i).map(s => this.codeCanal(s.trim())).filter(Boolean))];
+    if (!canaux.length) return null;
+    let reste = (m[2] || "").trim();
+    reste = reste.replace(/^relié à[^;]*;?\s*/i, "").replace(/^\([^)]*\)\s*;?\s*/, "").trim();         // connexions et mouvements : déduits, pas stockés
+    return { canaux, ensemble: /\+/.test(m[1]), reste };
+  },
+  ajoutLigne(x, grille) {
+    const k = x.canaux || [], prop = x.source && /^proposition/.test(x.source);
+    if (!k.length) return (x.action ? x.action + " : " : "") + (x.texte || "");                  // ancien ajout sans canal reconnu : texte tel quel
+    let t = k.join(x.ensemble ? " + " : " ou ");
+    if (k.length === 1) {
+      const liens = (grille || []).filter(g => (this.SYSTEMES[k[0]] || []).includes(g));
+      if (liens.length) t += " — relié à " + (liens.length > 1 ? liens.slice(0, -1).join(", ") + " et " + liens[liens.length - 1] : liens[0]);
+    } else if (x.ensemble) {
+      const mv = [...new Set(k.map(q => this.NOM_MOUV[this.MOUV_CANAL[q]]).filter(Boolean))];
+      if (mv.length) t += " — (" + mv.join(" / ") + ")";
+    }
+    const reste = x.texte && !prop && !this.lireAjoutSeul(x.texte) ? x.texte : "";
+    return (x.action ? x.action + " : " : "") + t + (reste ? " ; " + reste : "");
+  },
+  lireAjoutSeul(t) { const r = this.lireAjout(t); return !!r && !r.reste && !/[—–-]/.test(t); },     // « Rn » ou « Rn + V » seuls : pas une remarque
+  ajoutsEnTexte(a, grille) { return (a || []).map(x => this.ajoutLigne(x, grille)).join("\n"); },
+  // anciens ajouts saisis avec le format « F — relié à P et IG » dans le texte : on relit les canaux au début de la ligne seulement
+  reparserAjout(x) {
+    if (!x || !x.texte || (x.source && /^proposition/.test(x.source))) return x;
+    const r = this.lireAjout(x.texte);
+    if (!r || !/[—–-]\s*(relié à|\()/i.test(x.texte)) return x;
+    return { ...x, canaux: r.canaux, ensemble: r.ensemble, texte: r.reste };
+  },
+  texteEnAjouts(t, originaux, grille) {
     return this.lignes(t).map(l => {
-      const o = (originaux || []).find(x => this.ajoutsEnTexte([x]) === l);       // ligne inchangée : on garde l'ajout tel quel (source, canaux)
+      const o = (originaux || []).find(x => this.ajoutLigne(x, grille) === l || (x.action ? x.action + " : " : "") + (x.texte || "") === l);       // ligne inchangée : on garde l'ajout tel quel (source, canaux)
       if (o) return o;
       const i = l.indexOf(" : ");
-      const action = i > 0 ? l.slice(0, i) : "", texte = i > 0 ? l.slice(i + 3) : l;
+      let action = "", rest = l;
+      if (i > 0 && this.lireAjout(l.slice(i + 3))) { action = l.slice(0, i); rest = l.slice(i + 3); }
+      const r = this.lireAjout(rest);
+      if (r) return { action, texte: r.reste, canaux: r.canaux, ensemble: r.ensemble || /ensemble/i.test(r.reste), source: "toi" };
+      // ancien format : « action : texte » libre, les canaux sont ceux qui y sont cités
+      action = i > 0 ? l.slice(0, i) : ""; const texte = i > 0 ? l.slice(i + 3) : l;
       const codes = [...new Set((texte.match(/\b(?:P|GI|E|Rt|C|IG|V|Rn|EC|TF|VB|F)\b/g) || []))];
       return { action, texte, canaux: codes, ensemble: /ensemble/i.test(texte), source: "toi" };
     });
@@ -1078,7 +1118,7 @@ const Circuits = {
   modifier(c) {
     this.actif = c.id;
     this.edition = { nouveau: false, nom: c.nom, alias: (c.alias || []).join("\n"), grille: [...c.grille], figure: c.figure, syndromes: (c.syndromes || []).join("\n"),
-                     actions: (c.actions || []).join("\n"), indications: this.indicationsEnTexte(c), ajouts: this.ajoutsEnTexte(c.ajouts),
+                     actions: (c.actions || []).join("\n"), indications: this.indicationsEnTexte(c), ajouts: this.ajoutsEnTexte(c.ajouts, c.grille),
                      notes: (c.notes || []).join("\n"), syndromes_lies: [...(c.syndromes_lies || [])], niveaux: (c.niveaux || []).join("\n"),
                      associations: (c.associations || []).map(a => ({ tableau: a.tableau, synd: a.synd, note: a.note || "", points: Object.fromEntries(Object.entries(a.points || {}).map(([k, v]) => [k, (v || []).join(", ")])) })),
                      formules: [...(c.formules || [])], formules_note: c.formules_note || "" };
@@ -1149,7 +1189,7 @@ const Circuits = {
     // associations de points : un champ par canal du circuit (et par canal ajouté)
     const assoc = () => {
       const cont = document.getElementById("ce-assoc");
-      const codes = [...new Set([...d.grille.filter(Boolean), ...this.texteEnAjouts(d.ajouts).flatMap(a => a.canaux), ...d.associations.flatMap(a => Object.keys(a.points)), ...this.AXE])];
+      const codes = [...new Set([...d.grille.filter(Boolean), ...this.texteEnAjouts(d.ajouts, null, d.grille.filter(Boolean)).flatMap(a => a.canaux), ...d.associations.flatMap(a => Object.keys(a.points)), ...this.AXE])];
       cont.innerHTML = d.associations.map((a, i) => `<div class="circ-assoc-ligne" data-i="${i}">
         <label>Tableau<input type="text" list="ce-synd-noms" data-champ="tableau" value="${escapeHtml(a.tableau)}" placeholder="nom d'un syndrome de ta base, ou ton intitulé"></label>
         <div class="circ-assoc-pts">${codes.map(k => `<label>${escapeHtml(k)}<input type="text" data-pt="${escapeHtml(k)}" value="${escapeHtml(a.points[k] || "")}" placeholder="P7, P9 (commentaire possible)" title="Entre parenthèses : un commentaire sur le point, par exemple TF5 (yáng wéi mài)"></label>`).join("")}</div>
@@ -1214,7 +1254,7 @@ const Circuits = {
     if (!d.nom.trim()) { statut.textContent = "Le nom du circuit est obligatoire."; return; }
     if (!g.every(Boolean) || new Set(g).size !== 4) { statut.textContent = "Choisis 4 canaux différents."; return; }
     const champs = { nom: d.nom.trim(), alias: this.lignes(d.alias), grille: [...g], figure: this.figureDe(g) || 3, syndromes: this.lignes(d.syndromes), actions: this.lignes(d.actions),
-                     ...this.texteEnIndications(d.indications), ajouts: this.texteEnAjouts(d.ajouts, c.ajouts), notes: this.lignes(d.notes), syndromes_lies: [...d.syndromes_lies], niveaux: this.lignes(d.niveaux),
+                     ...this.texteEnIndications(d.indications), ajouts: this.texteEnAjouts(d.ajouts, c.ajouts, (d.grille || c.grille || []).filter(Boolean)), notes: this.lignes(d.notes), syndromes_lies: [...d.syndromes_lies], niveaux: this.lignes(d.niveaux),
                      associations: (d.associations || []).map(a => {
                        const nom = dsNorm((a.tableau || "").trim()), e = (Syndromes.entries || []).find(x => dsNorm(x.nom) === nom);
                        const o = { tableau: (a.tableau || "").trim(), points: Object.fromEntries(Object.entries(a.points || {}).map(([k, v]) => [k, this.decouperPoints(v)]).filter(([, v]) => v.length)), note: (a.note || "").trim() };
