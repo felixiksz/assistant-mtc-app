@@ -123,11 +123,11 @@ const Circuits = {
     };
     // points dans un rond : pastilles empilées (4 au plus ; au-delà, « +n »), colorées selon le mouvement du point
     const contenu = (code, x, y, r) => {
-      const liste = [...new Set(((pts && pts[code]) || []).map(t => this.clePoint(t)).filter(Boolean))];
-      const aff = liste.length > 4 ? [...liste.slice(0, 3), "+" + (liste.length - 3)] : liste;
+      const liste = [...new Set(((pts && pts[code]) || []).map(t => this.clePoint(t)).filter(Boolean))], max = r < 20 ? 3 : 4;
+      const aff = liste.length > max ? [...liste.slice(0, max - 1), "+" + (liste.length - max + 1)] : liste;
       const hP = 8.4, ec = 1.4, tot = aff.length * hP + Math.max(0, aff.length - 1) * ec, yin = this.polarite(code) === "yin";
-      const code_ = aff.length <= 3 && code ? `<text x="${x}" y="${y - r + 8.5}" text-anchor="middle" font-size="6.4" font-weight="700" ${police} fill="${this.texteRond(code)}" opacity="0.9">${escapeHtml(code)}</text>` : "";
-      const y0 = aff.length <= 3 ? y - tot / 2 + 4.5 : y - tot / 2;
+      const code_ = aff.length <= (r < 20 ? 2 : 3) && code ? `<text x="${x}" y="${y - r + 8.5}" text-anchor="middle" font-size="6.4" font-weight="700" ${police} fill="${this.texteRond(code)}" opacity="0.9">${escapeHtml(code)}</text>` : "";
+      const y0 = aff.length <= (r < 20 ? 2 : 3) ? y - tot / 2 + 4.5 : y - tot / 2;
       const pil = aff.map((t, k) => {
         const mv = this._mouv ? this._mouv.get(this.cleP(t)) : "", fond = mv ? this.COULEUR_MOUV[mv] : "var(--bg)", w = Math.max(14, t.length * 4.2 + 5);
         return `<g><title>${escapeHtml(t + (mv ? " — " + this.NOM_MOUV[mv] : ""))}</title><rect x="${x - w / 2}" y="${y0 + k * (hP + ec)}" width="${w}" height="${hP}" rx="2.2" fill="${fond}" stroke="#1d1d1b" stroke-width="0.6"/>` +
@@ -156,12 +156,12 @@ const Circuits = {
     const groupes = o.ajouts ? (c.ajouts || []).filter(a => (a.canaux || []).length) : [];
     const grosse = a => !!pts && a.canaux.some(k => ((pts[k]) || []).length);
     // hauteur d'un groupe d'ajouts : « AJOUT POSSIBLE », les ronds (grosses bulles s'ils portent des points), la légende éventuelle
-    const hGroupe = a => grosse(a) ? (a.action ? 88 : 70) : (a.action ? 60 : 48);
+    const hGroupe = a => grosse(a) ? (a.action ? 69 : 55) : (a.action ? 60 : 48);
     const hautGroupe = k => 122 + marge + axeH + groupes.slice(0, k).reduce((s, a) => s + hGroupe(a), 0);
-    const yGroupe = k => hautGroupe(k) + 8 + (grosse(groupes[k]) ? 29 : 17);
-    const espGroupe = a => grosse(a) ? 52 : 30;
+    const yGroupe = k => hautGroupe(k) + 8 + (grosse(groupes[k]) ? 23 : 17);
+    const espGroupe = a => grosse(a) ? 40 : 30;
     // largeur : les groupes de grosses bulles (3 canaux par exemple) dépassent les 120 de la figure
-    const debGroupe = a => 60 - (a.canaux.length - 1) * espGroupe(a) / 2 - (grosse(a) ? 46 : 28), finGroupe = a => 60 + (a.canaux.length - 1) * espGroupe(a) / 2 + (grosse(a) ? 28 : 14);
+    const debGroupe = a => 60 - (a.canaux.length - 1) * espGroupe(a) / 2 - (grosse(a) ? 36 : 28), finGroupe = a => 60 + (a.canaux.length - 1) * espGroupe(a) / 2 + (grosse(a) ? 22 : 14);
     const debord = groupes.reduce((m, a) => Math.max(m, -debGroupe(a), finGroupe(a) - 120), 0);
     const aj = groupes.map((a, k) => {
       const n = a.canaux.length, big = grosse(a), esp = espGroupe(a), cy = yGroupe(k), x0 = 60 - (n - 1) * esp / 2;
@@ -171,12 +171,12 @@ const Circuits = {
       const noeuds = a.canaux.map((code, j) => {
         const x = x0 + j * esp;
         if (!big) return rond(x, cy, 11, code, { etiquette: true, pointille: true });
-        return rond(x, cy, 24, code, { etiquette: false, sansNom: true, pointille: true }) + (((pts[code]) || []).length ? contenu(code, x, cy, 24) : `<text x="${x}" y="${cy + 4}" text-anchor="middle" font-size="12" font-weight="700" ${police} fill="${this.texteRond(code)}">${escapeHtml(code)}</text>`);
+        return rond(x, cy, 18, code, { etiquette: false, sansNom: true, pointille: true }) + (((pts[code]) || []).length ? contenu(code, x, cy, 18) : `<text x="${x}" y="${cy + 4}" text-anchor="middle" font-size="11" font-weight="700" ${police} fill="${this.texteRond(code)}">${escapeHtml(code)}</text>`);
       }).join("");
       const legende = sansHanzi(a.action || "").slice(0, 34);
-      const marque = `<text x="60" y="${cy - (big ? 29 : 17)}" text-anchor="middle" font-size="6.6" font-weight="700" letter-spacing="0.6" ${police} fill="var(--ink)">AJOUT POSSIBLE</text>`;
-      return `${marque}${lien}${noeuds}<text x="${x0 - (big ? 38 : 22)}" y="${cy + 5}" text-anchor="middle" font-size="15" font-weight="700" ${police} fill="var(--ink)">+</text>` +
-        (legende ? `<text x="60" y="${cy + (big ? 38 : 25)}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)" opacity="0.8">${escapeHtml(legende)}</text>` : "");
+      const marque = `<text x="60" y="${cy - (big ? 23 : 17)}" text-anchor="middle" font-size="6.6" font-weight="700" letter-spacing="0.6" ${police} fill="var(--ink)">AJOUT POSSIBLE</text>`;
+      return `${marque}${lien}${noeuds}<text x="${x0 - (big ? 28 : 22)}" y="${cy + 5}" text-anchor="middle" font-size="15" font-weight="700" ${police} fill="var(--ink)">+</text>` +
+        (legende ? `<text x="60" y="${cy + (big ? 31 : 25)}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)" opacity="0.8">${escapeHtml(legende)}</text>` : "");
     }).join("");
     const cote = "";                                   // pas de mention « main » / « pied » : ça va de soi
     const L = 120, H = 120 + marge * 2 + axeH + (groupes.length ? 2 + groupes.reduce((s, a) => s + hGroupe(a), 0) + 4 : 0);
