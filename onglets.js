@@ -42,12 +42,44 @@ const Onglets = {
     document.body.style.paddingTop = h ? h + "px" : "";
   },
 
+  // ☰ de la barre fixe : menu de l'application et choix du circuit, accessibles où que l'on soit dans la page
+  basculerMenuRapide(e) {
+    e.stopPropagation();
+    let p = document.getElementById("menu-rapide");
+    if (!p) {
+      p = document.createElement("div"); p.id = "menu-rapide"; p.hidden = true; document.body.appendChild(p);
+      document.addEventListener("click", ev => { if (!p.hidden && !ev.target.closest("#menu-rapide, #onglet-menu-btn")) p.hidden = true; });
+      document.addEventListener("keydown", ev => { if (ev.key === "Escape") p.hidden = true; });
+      p.addEventListener("click", ev => {
+        const bc = ev.target.closest("[data-mr-circ]"), bt = ev.target.closest("[data-mr-tab]");
+        if (bc) { p.hidden = true; Circuits.ouvrirCircuit(bc.dataset.mrCirc); }
+        else if (bt) { p.hidden = true; const orig = document.querySelector('#menu-panneau .tab-btn[data-tab="' + bt.dataset.mrTab + '"]'); if (orig) orig.click(); }
+      });
+    }
+    if (!p.hidden) { p.hidden = true; return; }
+    this.remplirMenuRapide(p);
+    p.hidden = false;
+  },
+  remplirMenuRapide(p) {
+    const circ = typeof Circuits !== "undefined" && Circuits.liste && Circuits.liste.length ? Circuits.liste : [];
+    const groupes = [...document.querySelectorAll("#menu-panneau .menu-groupe")].map(g => `<div class="mr-groupe"><div class="menu-titre">${escapeHtml(g.querySelector(".menu-titre").textContent)}</div>` +
+      [...g.querySelectorAll(".tab-btn")].map(b => `<button type="button" class="mr-lien" data-mr-tab="${escapeHtml(b.dataset.tab)}">${escapeHtml((b.title || b.textContent).trim())}</button>`).join("") + `</div>`).join("");
+    p.innerHTML = (circ.length ? `<div class="mr-groupe"><div class="menu-titre">Circuits</div><input type="search" id="mr-filtre" placeholder="Chercher un circuit" autocomplete="off"><div class="mr-circuits" id="mr-circuits"></div></div>` : "") + groupes;
+    const liste = p.querySelector("#mr-circuits"), filtre = p.querySelector("#mr-filtre");
+    const dessiner = () => {
+      const t = (filtre ? filtre.value : "").toLowerCase();
+      liste.innerHTML = circ.filter(x => !t || (Circuits.nomCourt(x) + " " + x.grille.join(" ")).toLowerCase().includes(t)).map(x => `<button type="button" class="mr-lien${Circuits.actif === x.id ? " actif" : ""}" data-mr-circ="${escapeHtml(x.id)}">${escapeHtml(Circuits.nomCourt(x))} <span class="muted">${x.grille.join(" · ")}</span></button>`).join("") || `<span class="muted">Aucun circuit.</span>`;
+    };
+    if (filtre) { dessiner(); filtre.addEventListener("input", dessiner); }
+  },
+
   rendreBarre() {
     if (!this.barre) return;
     this.barre.hidden = !this.liste.length;
     if (!this.liste.length) { this.ajusterBarre(); return; }
-    this.barre.innerHTML = `<button type="button" class="onglet-t${this.actif === null ? " actif" : ""}" data-o="" title="Retour à la vue du module">${escapeHtml(this.etiquetteModule())}</button>` +
+    this.barre.innerHTML = `<button type="button" class="onglet-menu" id="onglet-menu-btn" title="Menu et choix du circuit" aria-label="Menu et choix du circuit">☰</button>` + `<button type="button" class="onglet-t${this.actif === null ? " actif" : ""}" data-o="" title="Retour à la vue du module">${escapeHtml(this.etiquetteModule())}</button>` +
       this.liste.map(o => `<span class="onglet-t${this.actif === o.id ? " actif" : ""}" data-o="${escapeHtml(o.id)}"><button type="button" class="onglet-nom" data-o="${escapeHtml(o.id)}" title="${escapeHtml(o.titre)}">${escapeHtml(o.genre)} ${escapeHtml(o.titre)}</button><button type="button" class="onglet-x" data-x="${escapeHtml(o.id)}" aria-label="Fermer l'onglet">✕</button></span>`).join("") + (this.enLigne() ? `<span class="onglet-sync" title="Onglets synchronisés avec tes autres appareils (via ton dépôt GitHub)">🔄</span>` : "");
+    document.getElementById("onglet-menu-btn").addEventListener("click", e => this.basculerMenuRapide(e));
     this.barre.querySelectorAll("[data-o]").forEach(b => b.addEventListener("click", () => { const id = b.dataset.o; if (!id) this.voirModule(); else this.activer(id); }));
     this.barre.querySelectorAll("[data-x]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); this.fermer(b.dataset.x); }));
     this.ajusterBarre();

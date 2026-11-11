@@ -55,7 +55,7 @@ const Circuits = {
   PAIRES: { H: [[0, 1], [2, 3]], V: [[0, 2], [1, 3]], D: [[0, 3], [1, 2]] },
   // RM et DM : l'axe du corps ; ils ne comptent pas parmi les quatre canaux du circuit mais s'associent à n'importe lequel
   AXE: ["RM", "DM"],
-  NOM_AXE: { RM: "Rèn mài (axe antérieur)", DM: "Dū mài (axe postérieur)", VX: "Points des vaisseaux ouverts, sur les autres canaux" },
+  NOM_AXE: { RM: "Rèn mài (axe antérieur)", DM: "Dū mài (axe postérieur)", VX: "Points des 8 merveilleux vaisseaux ouverts, hors des canaux du circuit" },
   nomCanalOuAxe(k) { return (this.canaux.get(k) || {}).nom || this.NOM_AXE[k] || ""; },
   // nom d'organe ou de canal (sans accent, en minuscules) -> code du canal
   NOM_CODE: { poumon: "P", "gros intestin": "GI", estomac: "E", rate: "Rt", coeur: "C", "intestin grele": "IG", vessie: "V", rein: "Rn", reins: "Rn",
@@ -291,7 +291,14 @@ const Circuits = {
       return co ? `<details class="circ-niveau"><summary>Fonctions de ${escapeHtml(co.nom)} <span class="muted">(cours p. ${co.page})</span></summary>${this.ul(co.fonctions)}</details>` : "";
     }).join("");
     const astuces = (this.base.astuces || []).filter(a => a.paires.some(p => p.every(k => c.grille.includes(k)))).map(a => `<li>${escapeHtml(sansHanzi(a.texte))}</li>`).join("");
-    const ajouts = (c.ajouts || []).map(a => `<li>${a.action ? escapeHtml(sansHanzi(a.action)) + " : " : ""}${escapeHtml(sansHanzi(a.texte || ""))} ${(a.canaux || []).map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")}${a.source && /^proposition/.test(a.source) ? (/vérifié/.test(a.source) ? ` <span class="circ-pt-tag circ-pt-base" title="Même place statique (polarité et membre) que le canal du circuit, et au moins deux connexions dynamiques (6 systèmes) avec les canaux du circuit : le circuit reste équilibré">équilibre vérifié</span>` : ` <span class="circ-pt-tag" title="Proposition à confirmer ou supprimer">à valider</span>`) : a.source && /correction/.test(a.source) ? ` <span class="muted">(selon ta correction)</span>` : ""}</li>`).join("");
+    const ajouts = (c.ajouts || []).map(a => {
+      const prop = a.source && /^proposition/.test(a.source), txt = sansHanzi(a.texte || "");
+      const liens = (a.canaux || []).map(k => c.grille.filter(g => (this.SYSTEMES[k] || []).includes(g)));
+      const fleches = (a.canaux || []).map((k, i) => `<span class="sx-code" title="${escapeHtml(txt)}">${escapeHtml(k)}</span>${liens[i].length ? ` <span class="circ-fleche" title="Connecté à ces canaux du circuit (6 systèmes)">→ ${liens[i].map(escapeHtml).join(" · ")}</span>` : ""}`).join(" ");
+      const libre = !prop && txt ? ` <span class="muted">${escapeHtml(txt)}</span>` : "";
+      const tag = prop && !/vérifié/.test(a.source) ? ` <span class="circ-pt-tag" title="Proposition à confirmer ou supprimer">à valider</span>` : (a.source && /correction/.test(a.source) ? ` <span class="muted" title="Selon ta correction">✓</span>` : "");
+      return `<li>${a.action ? escapeHtml(sansHanzi(a.action)) + " : " : ""}${fleches}${libre}${tag}</li>`;
+    }).join("");
     const lies = (c.syndromes_lies || []).map(k => { const e = this.entreeSynd(k); return e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(k)}">${escapeHtml(sansHanzi(e.nom))}</button>` : `<span class="muted">${escapeHtml(k)} (introuvable)</span>`; }).join(" ");
     const parCanal = c.grille.map(code => {
       const l = this.syndromesDuCanal(code);
@@ -315,7 +322,7 @@ const Circuits = {
         (niveaux ? this.section("Niveaux", niveaux) : "") +
         (astuces ? this.section("Astuces du Dr Tán Té Fū (cours, p. 41)", `<ul class="tcm-list">${astuces}</ul>`) : ""))}
       ${this.onglet(1, `<section><h3>Points des canaux</h3><div id="circ-pts" class="circ-pts"></div></section>
-        <section><h3>Ajouts possibles</h3>${ajouts ? `<ul class="tcm-list">${ajouts}</ul><p class="muted">Dessinés en pointillé sous le circuit.</p>` : ""}<div class="circ-barre"><button type="button" class="edit-toggle-btn" id="circ-aj-prop">💡 Proposer des canaux à ajouter</button></div><div id="circ-aj-zone"></div></section>
+        <section><h3>Ajouts possibles</h3>${ajouts ? `<ul class="tcm-list">${ajouts}</ul><p class="muted">Dessinés en pointillé sous le circuit.</p>` : ""}${this.candidatsAjout(c).length ? `<div class="circ-barre"><button type="button" class="edit-toggle-btn" id="circ-aj-prop">💡 Proposer des canaux à ajouter</button></div>` : ""}<div id="circ-aj-zone"></div></section>
         <section><h3>Points Tung compatibles</h3><div id="circ-tung" class="circ-tung"><p class="muted">Chargement…</p></div></section>`)}
       ${this.onglet(2, `<div class="circ-haut"><div class="circ-grand" id="circ-dessin">${this.dessin(c, { taille: 230, etiquettes: true, legende: true, ajouts: true })}</div></div>` +
         this.section("Associations de points", ((c.associations || []).length
@@ -339,7 +346,7 @@ const Circuits = {
     if (!this._mouvPret) this.chargerInter().then(() => { if (this.actif === c.id && document.getElementById("circ-dessin")) this.majAssoc(c); });
     this.crayonsChamps(zone, c);
     this.annoterCroisements(zone);
-    document.getElementById("circ-aj-prop").addEventListener("click", () => this.proposerAjouts(c));
+    const ajp = document.getElementById("circ-aj-prop"); if (ajp) ajp.addEventListener("click", () => this.proposerAjouts(c));
     document.getElementById("circ-edit").addEventListener("click", () => this.modifier(c));
     const s = document.getElementById("circ-suppr"); if (s) s.addEventListener("click", () => this.supprimer(c));
     const r = document.getElementById("circ-retablir"); if (r) r.addEventListener("click", () => this.retablir(c));
@@ -618,12 +625,12 @@ const Circuits = {
       const k = this.canaux.get(code) || { nom: this.NOM_AXE[code] }, l = this.ptsDe(code), axe = this.AXE.includes(code) || code === "VX", ajout = !axe && !c.grille.includes(code);
       const lis = l.map(x => ({ r: this.retenu(x), h: `<li><button type="button" class="circ-pt-etoile${this.retenu(x) ? " actif" : ""}" data-point="${escapeHtml(x.point)}" title="${this.retenu(x) ? "Favori : cliquer pour le retirer des favoris" : "Ajouter aux favoris"}" aria-label="Mettre ${escapeHtml(x.point)} en favori" aria-pressed="${this.retenu(x)}">${this.retenu(x) ? "★" : "☆"}</button> <button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: x.canal || code, raison: x.action || "", source: "points du canal " + code, circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ${escapeHtml(x.point)} pour le réseau de la patiente">✓</button> <strong>${this.pointHtml(x.point)}</strong>${x.canal ? ` <span class="sx-code" title="Canal du point">${escapeHtml(x.canal)}</span>` : ""}${x.commentaire ? ` <span class="circ-com" title="Ton commentaire">${escapeHtml(x.commentaire)}</span>` : ""}${x.categorie ? ` <span class="circ-cat">${escapeHtml(x.categorie)}</span>` : ""}${x.action || x.statut === "base" ? ` <button type="button" class="circ-info" aria-expanded="false" title="Afficher ou masquer les actions de ce point" aria-label="Afficher ou masquer les actions de ce point">ⓘ</button>` : ""}${x.statut === "propose" ? ` <span class="circ-pt-tag" title="Proposition de Claude : à confirmer ou corriger (modifier la ligne la valide)">à valider</span>` : ""}<span class="circ-act">${x.action ? escapeHtml(sansHanzi(x.action)) : ""}${x.statut === "base" ? ` <span class="circ-pt-tag circ-pt-base" title="Repris de ta base de points (Points des canaux)">base</span>` : ""}</span></li>` }));
       const ret = lis.filter(o => o.r), dis = lis.filter(o => !o.r), rend = a => a.map(o => o.h).join("");
-      return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}${axe ? " circ-pts-axe" : ""}${this.actionsVisibles()[code] ? " actions-visibles" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code === "VX" ? "Vaisseaux" : code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
+      return `<div class="circ-pts-carte${ajout ? " circ-pts-ajout" : ""}${axe ? " circ-pts-axe" : ""}${this.actionsVisibles()[code] ? " actions-visibles" : ""}" data-k="${escapeHtml(code)}"><div class="circ-pts-tete"><span><strong>${escapeHtml(code === "VX" ? "8MV" : code)}</strong> <span class="muted">${escapeHtml(k.nom || "")}${ajout ? " — ajout possible" : ""}</span></span>` +
         `<span class="circ-pts-btns"><button type="button" class="edit-toggle-btn" data-act="actions" title="Afficher ou masquer les actions de tous les points de ce canal" aria-label="Afficher ou masquer les actions de tous les points de ce canal">👁</button> <button type="button" class="edit-toggle-btn" data-act="edit" title="Modifier les points de ce canal" aria-label="Modifier les points de ce canal">✏️</button> <button type="button" class="edit-toggle-btn" data-act="prop" title="Proposer des points" aria-label="Proposer des points">💡</button></span></div>` +
         (lis.length ? (ret.length ? `<ul class="circ-pts-liste">${rend(ret)}</ul>` : `<p class="muted">Aucun point favori.</p>`) + (dis.length ? `<p class="circ-pts-sep">Disponibles (${dis.length})</p><ul class="circ-pts-liste circ-pts-dispo">${rend(dis)}</ul>` : "") : `<p class="muted">Aucun point pour l'instant.</p>`) + `<div class="circ-pts-zone"></div></div>`;
     });
     // les quatre canaux du circuit sont placés comme le schéma (carré) ; les ajouts possibles, RM, DM et les vaisseaux dessous
-    const vx = this.vaisseauxOuverts(c), bande = vx.length ? `<div class="circ-bande-vx" title="Vaisseaux ouverts par un point du circuit : leurs points se proposent dans la carte « Vaisseaux »"><span class="muted">Vaisseaux</span> ${vx.map(o => `<span class="circ-vx-puce"><strong>${escapeHtml(o.pt)}</strong> <span class="muted">${escapeHtml(o.vaisseau)}</span></span>`).join("")}</div>` : "";
+    const vx = this.vaisseauxOuverts(c), bande = vx.length ? `<div class="circ-bande-vx" title="Merveilleux vaisseaux ouverts par un point du circuit : leurs points se proposent dans la carte « 8MV »"><span class="muted">8MV</span> ${vx.map(o => `<span class="circ-vx-puce"><strong>${escapeHtml(o.pt)}</strong> <span class="muted">${escapeHtml(o.vaisseau)}</span></span>`).join("")}</div>` : "";
     z.innerHTML = `<div class="circ-pts-grille">${cartes.slice(0, c.grille.length).join("")}</div>` + bande + (cartes.length > c.grille.length ? `<div class="circ-pts-grille circ-pts-hors">${cartes.slice(c.grille.length).join("")}</div>` : "");
     z.querySelectorAll(".circ-pts-carte").forEach(carte => {
       const code = carte.dataset.k, zone = carte.querySelector(".circ-pts-zone");
@@ -643,6 +650,10 @@ const Circuits = {
         this.rendrePoints(c);
       }));
       if (ouvert[code]) this.proposerPoints(c, code, zone, true);
+      else this.propositionsCanal(code, c).then(l => {
+        const deja = new Set(this.ptsDe(code).map(x => this.cleP(x.point)));
+        if (!l.some(x => !deja.has(this.cleP(x.point)))) { const b = carte.querySelector('[data-act="prop"]'); if (b && carte.isConnected) b.hidden = true; }
+      });
     });
     this.marquerSaignees(z);
     this.marquerCategories(z);
@@ -824,7 +835,7 @@ const Circuits = {
     const ligne = (x, i) => `<li><strong>${this.pointHtml(x.point)}</strong>${x.canal && code !== x.canal ? ` <span class="sx-code" title="Canal du point">${escapeHtml(x.canal)}</span>` : ""} <span class="muted">${escapeHtml(x.categorie || "")}</span>${x.action ? " " + INFO : ""} <button type="button" class="edit-toggle-btn" data-i="${i}" title="Ajouter à la liste" aria-label="Ajouter à la liste">+</button> <button type="button" class="edit-toggle-btn" data-reseau="${escapeHtml(JSON.stringify({ point: x.point, canal: x.canal || code, raison: x.action || "", source: "proposition", circuit: c.id }))}" title="Choisir ce point pour le réseau de la patiente" aria-label="Choisir ce point pour le réseau de la patiente">✓</button>${x.action ? ` <span class="circ-act">${escapeHtml(sansHanzi(x.action))}</span>` : ""}` +
       (x.saignee.length ? `<details class="circ-sai"><summary>🩸 saignée</summary>${x.saignee.map(s => `<p>${escapeHtml(sansHanzi(s.texte)).slice(0, 400)} <span class="muted">(${escapeHtml(s.lib)})</span></p>`).join("")}</details>` : "") + `</li>`;
     const indexes = l.map((x, i) => ({ x, i })), normaux = indexes.filter(o => !o.x.inter), inters = indexes.filter(o => o.x.inter);
-    zone.innerHTML = `<p class="muted circ-pts-avert">${code === "VX" ? "Points des vaisseaux ouverts par un point du circuit, sur les autres canaux : il suffit que l'équilibre statique soit respecté." : code === "RM" || code === "DM" ? "Tous les points de la ligne médiane : neutres, ils peuvent entrer dans n'importe quel circuit." : repli ? "Base de points indisponible : propositions par catégorie classique, actions à valider (elles ne viennent pas de tes cours)." : "Points tirés de ta base de points (Points des canaux) : cinq points shu, yuán, luò, xī, hé… et points ayant des indications en saignée. Actions reprises de la base."}</p>` +
+    zone.innerHTML = `<p class="muted circ-pts-avert">${code === "VX" ? "Points des 8MV ouverts par un point du circuit, sur les autres canaux : il suffit que l'équilibre statique soit respecté." : code === "RM" || code === "DM" ? "Tous les points de la ligne médiane : neutres, ils peuvent entrer dans n'importe quel circuit." : repli ? "Base de points indisponible : propositions par catégorie classique, actions à valider (elles ne viennent pas de tes cours)." : "Points tirés de ta base de points (Points des canaux) : cinq points shu, yuán, luò, xī, hé… et points ayant des indications en saignée. Actions reprises de la base."}</p>` +
       (normaux.length ? `<ul class="circ-pts-prop">${normaux.map(o => ligne(o.x, o.i)).join("")}</ul>` : (inters.length ? "" : `<p class="muted">Rien à proposer de plus pour ce canal.</p>`)) +
       (inters.length ? `<details class="circ-inter"><summary>Points d'intersection (${inters.length}) : ils font partie de tous les canaux qu'ils croisent</summary><ul class="circ-pts-prop">${inters.map(o => ligne(o.x, o.i)).join("")}</ul></details>` : "");
     this.annoterCroisements(zone);

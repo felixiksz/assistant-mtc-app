@@ -1283,3 +1283,11 @@ li:hover > .circ-com-btn, .circ-com-btn:focus, .circ-com-btn:hover { opacity: 1;
 .circ-pts-btns .edit-toggle-btn:hover, .circ-pts-prop li .edit-toggle-btn[data-i]:hover, .circ-pts-prop li .edit-toggle-btn[data-reseau]:hover, .circ-pt-choisir:hover { background: var(--bg-soft, rgba(0,0,0,.08)) !important; color: var(--ink); }
 .circ-info { border: none !important; background: none !important; box-shadow: none !important; width: auto; height: auto; padding: 0 0.15rem; font-size: 0.95rem; }
 .circ-info:hover, .circ-info[aria-expanded="true"] { background: rgba(0,0,0,.08) !important; color: var(--ink); }
+.circ-fleche { color: var(--muted, #555); white-space: nowrap; }
+.onglet-menu { border: 2px solid var(--ink); border-bottom: 0; background: var(--bg); color: var(--ink); font: inherit; font-size: 1rem; padding: 0.2rem 0.6rem; cursor: pointer; flex: none; }
+#menu-rapide { position: fixed; z-index: 60; top: var(--haut-onglets, 0px); left: 0.4rem; width: min(26rem, calc(100vw - 0.8rem)); max-height: calc(100vh - var(--haut-onglets, 0px) - 1rem); overflow-y: auto; background: var(--bg); border: 2px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); padding: 0.5rem 0.6rem 0.7rem; display: grid; gap: 0.6rem; }
+#menu-rapide[hidden] { display: none; }
+#menu-rapide input[type="search"] { width: 100%; box-sizing: border-box; margin-bottom: 0.3rem; }
+.mr-circuits { max-height: 38vh; overflow-y: auto; display: grid; }
+.mr-lien { display: block; width: 100%; text-align: left; border: 0; border-left: 3px solid transparent; background: none; color: var(--ink); font: inherit; font-size: 0.9rem; padding: 0.4rem 0.5rem; cursor: pointer; }
+.mr-lien:hover, .mr-lien.actif { border-left-color: var(--accent, var(--ink)); background: rgba(0,0,0,.06); }
