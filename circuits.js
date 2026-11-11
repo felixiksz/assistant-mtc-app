@@ -625,7 +625,8 @@ const Circuits = {
         (lis.length ? (ret.length ? `<ul class="circ-pts-liste">${rend(ret)}</ul>` : `<p class="muted">Aucun point retenu.</p>`) + (dis.length ? `<p class="circ-pts-sep">Disponibles (${dis.length})</p><ul class="circ-pts-liste circ-pts-dispo">${rend(dis)}</ul>` : "") : `<p class="muted">Aucun point pour l'instant.</p>`) + `<div class="circ-pts-zone"></div></div>`;
     });
     // les quatre canaux du circuit sont placés comme le schéma (carré) ; les ajouts possibles, RM, DM et les vaisseaux dessous
-    z.innerHTML = `<div class="circ-pts-grille">${cartes.slice(0, c.grille.length).join("")}</div>` + (cartes.length > c.grille.length ? `<div class="circ-pts-grille circ-pts-hors">${cartes.slice(c.grille.length).join("")}</div>` : "");
+    const vx = this.vaisseauxOuverts(c), bande = vx.length ? `<div class="circ-bande-vx" title="Vaisseaux ouverts par un point du circuit : leurs points se proposent dans la carte « Vaisseaux »"><span class="muted">Vaisseaux</span> ${vx.map(o => `<span class="circ-vx-puce"><strong>${escapeHtml(o.pt)}</strong> <span class="muted">${escapeHtml(o.vaisseau)}</span></span>`).join("")}</div>` : "";
+    z.innerHTML = `<div class="circ-pts-grille">${cartes.slice(0, c.grille.length).join("")}</div>` + bande + (cartes.length > c.grille.length ? `<div class="circ-pts-grille circ-pts-hors">${cartes.slice(c.grille.length).join("")}</div>` : "");
     z.querySelectorAll(".circ-pts-carte").forEach(carte => {
       const code = carte.dataset.k, zone = carte.querySelector(".circ-pts-zone");
       carte.querySelector('[data-act="edit"]').addEventListener("click", () => this.editerPoints(c, code, carte, zone));
