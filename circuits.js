@@ -130,7 +130,9 @@ const Circuits = {
       const aff = liste.length > 3 ? [...liste.slice(0, 2), "+" + (liste.length - 2)] : liste;
       const hP = 11, ec = 1.6, tot = aff.length * hP + Math.max(0, aff.length - 1) * ec, yin = this.polarite(code) === "yin", col = this.couleurCanal(code);
       const wB = code.length * 5 + 7, yB = y - tot / 2 - 11.5;
-      const badge = code ? `<rect x="${x - wB / 2}" y="${yB}" width="${wB}" height="9" rx="4.5" fill="${yin ? col : "var(--bg)"}" stroke="${col}" stroke-width="1.3"${ajout ? ` stroke-dasharray="2.4 1.6"` : ""}/><text x="${x}" y="${yB + 7}" text-anchor="middle" font-size="6.6" font-weight="700" ${police} fill="${this.texteRond(code)}">${escapeHtml(code)}</text>` : "";
+      // le nom d'un point de canal contient déjà le canal (TF5, Rt3…) : l'étiquette ne sert que pour des points qui ne le disent pas (points Tung)
+      const dit = aff.filter(t => !t.startsWith("+")).every(t => new RegExp("^" + this.cleP(code) + "\\d").test(this.cleP(t)));
+      const badge = code && !dit ? `<rect x="${x - wB / 2}" y="${yB}" width="${wB}" height="9" rx="4.5" fill="${yin ? col : "var(--bg)"}" stroke="${col}" stroke-width="1.3"${ajout ? ` stroke-dasharray="2.4 1.6"` : ""}/><text x="${x}" y="${yB + 7}" text-anchor="middle" font-size="6.6" font-weight="700" ${police} fill="${this.texteRond(code)}">${escapeHtml(code)}</text>` : "";
       const y0 = y - tot / 2;
       const pil = aff.map((t, k) => {
         const mv = this._mouv ? this._mouv.get(this.cleP(t)) : "", fond = mv ? this.COULEUR_MOUV[mv] : "var(--bg)", w = Math.max(20, t.length * 5.4 + 8);
