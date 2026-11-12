@@ -343,7 +343,7 @@ const Circuits = {
         <section><h3>Points Tung compatibles</h3><div id="circ-tung" class="circ-tung"><p class="muted">Chargement…</p></div></section>`)}
       ${this.onglet(2, `<div class="circ-t2"><div class="circ-t2-g"><div class="circ-grand" id="circ-dessin">${this.dessin(c, { taille: 190, etiquettes: true, legende: true, ajouts: true })}</div></div><div class="circ-t2-d">` +
         this.section("Associations de points", this.assocTableHtml(c) + this.wjyChipsHtml(c) + `<div id="circ-assoc-detail" class="circ-assoc-detail"></div>`) +
-        this.section("Comparaison des associations et des ajouts", this.graphe(c)) + `</div></div>`)}
+        this.section("Comparaison des associations et des ajouts", this.grilleHtml(c)) + `</div></div>`)}
       ${this.onglet(3, `<section><h3>Syndromes de ta base rattachés à ce circuit</h3>${lies ? `<div class="circ-synd-liste">${lies}</div>` : ""}</section>` +
         this.section("Formule de pharmacopée équivalente", this.equivalent(c)) +
         `<section><h3>Syndromes de ta base portant sur ces canaux</h3><p class="muted">Syndromes des organes, des canaux et des six niveaux dont l'organe ou le niveau est un des quatre canaux.</p>${parCanal}</section>`)}`;
@@ -357,6 +357,7 @@ const Circuits = {
       this.majAssoc(c);
     }));
     this.majAssoc(c);
+    this.dessinerGrille(c);
     if (this.ongletFiche === 2) this.tracerGraphe();
     this.brancherNotes(zone);
     this.pointsTung(c);
@@ -962,6 +963,58 @@ const Circuits = {
     if (cur.trim()) out.push(cur.trim());
     return out;
   },
+  // ---------- grille de comparaison : une colonne par tableau (avec ses indications en tête), une ligne par canal ; on choisit l'indication qui intéresse
+  _grille: { sel: null, wjy: false },
+  indicationsDe(t) { return sansHanzi(t || "").split(/\s*[,;]\s*/).map(x => x.trim()).filter(Boolean); },
+  grilleHtml(c) {
+    if (!(c.associations || []).length && !(this._wjyListe || []).length && !(c.ajouts || []).length) return "";
+    return `<div class="circ-grille-zone" id="circ-grille-zone"></div>`;
+  },
+  colonnesGrille(c) {
+    const cols = (c.associations || []).map(a => ({ nom: sansHanzi(a.tableau || ""), wjy: false, ind: this.indicationsDe(a.tableau), note: a.note || "", pts: a.points || {} }));
+    if (this._grille.wjy) (this._wjyListe || []).forEach(w => {
+      const o = { ...w.r.canaux }; (w.r.axe || []).forEach(pt => { const k = (pt.match(/^[A-Za-z]+/) || [""])[0].toUpperCase(); (o[k] = o[k] || []).push(pt); });
+      cols.push({ nom: this.nomRecette(w.r), wjy: true, ind: (w.r.puces || []).slice(0, 1).map(x => sansHanzi(x)), note: "", pts: o });
+    });
+    return cols;
+  },
+  dessinerGrille(c) {
+    const z = document.getElementById("circ-grille-zone");
+    if (!z) return;
+    const G = this._grille, cols = this.colonnesGrille(c), nbW = (this._wjyListe || []).length;
+    const ajoutsK = [...new Set((c.ajouts || []).flatMap(a => a.canaux || []))].filter(k => !c.grille.includes(k));
+    const dans = k => cols.some(col => (col.pts[k] || []).length);
+    const lignes = [...c.grille.map(k => ({ k })), ...ajoutsK.map(k => ({ k, ajout: true })), ...this.AXE.filter(dans).map(k => ({ k, axe: true })),
+      ...[...new Set(cols.flatMap(col => Object.keys(col.pts)))].filter(k => !c.grille.includes(k) && !ajoutsK.includes(k) && !this.AXE.includes(k) && dans(k)).map(k => ({ k, autre: true }))];
+    const compte = {};
+    cols.forEach(col => new Set(Object.values(col.pts).flat().map(p => this.clePoint(p)).filter(Boolean)).forEach(k => { compte[k] = (compte[k] || 0) + 1; }));
+    const toutes = []; cols.forEach(col => col.ind.forEach(i => { if (!toutes.includes(i)) toutes.push(i); }));
+    const sel = G.sel && toutes.includes(G.sel) ? G.sel : null;
+    const puces = toutes.length > 1 ? `<div class="circ-g-choix"><span class="muted">Indication :</span> ${toutes.map((i, n) => `<button type="button" class="cat-chip${i === sel ? " active" : ""}" data-ind="${n}">${escapeHtml(i)}</button>`).join("")}</div>` : "";
+    const tete = cols.map((col, ti) => `<th class="${sel && !col.ind.includes(sel) ? "off" : ""}" data-t="${ti}">${col.wjy ? `<span class="circ-g-src">WJY</span><strong>${escapeHtml(col.nom)}</strong>` : ""}<div class="circ-g-ind">${col.ind.map(i => `<span class="${i === sel ? "hit" : ""}">${escapeHtml(i)}</span>`).join(" · ")}</div>${col.note ? `<div class="muted circ-g-note">${escapeHtml(col.note)}</div>` : ""}</th>`).join("");
+    const corps = lignes.map(l => `<tr class="${l.ajout ? "aj" : ""}"><td class="circ-g-canal">${this.pastilleCanal(l.k)}${l.ajout ? `<span class="circ-g-tag">ajout</span>` : l.axe ? `<span class="circ-g-tag">axe</span>` : ""}</td>` +
+      cols.map((col, ti) => `<td class="${sel && !col.ind.includes(sel) ? "off" : ""}" data-t="${ti}">${(col.pts[l.k] || []).map(p => {
+        const k = this.clePoint(p), rem = this.commentairesDe(p).join(" ; "), n = compte[k] || 1;
+        return `<span class="circ-pt${n > 1 ? " commun" : ""}" data-p="${escapeHtml(k)}">${escapeHtml(k)}${rem ? `<em class="rem" data-t="${ti}">(${escapeHtml(rem)})</em>` : ""}${n > 1 ? `<sup>×${n}</sup>` : ""}</span>`;
+      }).join("")}</td>`).join("") + `</tr>`).join("");
+    z.innerHTML = `${puces}<div class="circ-grille-scroll"><table class="circ-grille"><thead><tr><th class="circ-g-vide"></th>${tete}</tr></thead><tbody>${corps}</tbody></table></div>` +
+      (nbW ? `<label class="circ-g-wjy"><input type="checkbox" id="circ-g-wjy"${G.wjy ? " checked" : ""}> Ajouter les ${nbW} recettes de Wang Ju Yi</label>` : "");
+    z.querySelectorAll("[data-ind]").forEach(b => b.addEventListener("click", () => { const i = toutes[+b.dataset.ind]; G.sel = G.sel === i ? null : i; this.dessinerGrille(c); }));
+    const w = z.querySelector("#circ-g-wjy"); if (w) w.addEventListener("change", () => { G.wjy = w.checked; G.sel = null; this.dessinerGrille(c); });
+    z.querySelectorAll(".circ-pt").forEach(e => {
+      e.addEventListener("mouseenter", () => z.querySelectorAll('.circ-pt[data-p="' + e.dataset.p + '"]').forEach(x => x.classList.add("h")));
+      e.addEventListener("mouseleave", () => z.querySelectorAll(".circ-pt.h").forEach(x => x.classList.remove("h")));
+    });
+    // la remarque entre parenthèses d'un point n'apparaît que pour le tableau survolé (ou touché)
+    const tab = z.querySelector("table");
+    z.querySelectorAll("[data-t]").forEach(e => {
+      if (e.classList.contains("rem")) return;
+      const on = v => tab.querySelectorAll(".rem").forEach(r => r.classList.toggle("on", v !== null && r.dataset.t === v));
+      e.addEventListener("mouseenter", () => on(e.dataset.t));
+      e.addEventListener("mouseleave", () => on(null));
+      e.addEventListener("click", () => on(e.dataset.t));
+    });
+  },
   graphe(c) {
     const assoc = c.associations || [], ajouts = (c.ajouts || []).filter(a => (a.canaux || []).length);
     if (!assoc.length && !ajouts.length) return "";
@@ -1146,7 +1199,7 @@ const Circuits = {
         <label>Nom du circuit<input type="text" id="ce-nom" value="${escapeHtml(d.nom)}" placeholder="ex : tài yīn / yáng míng"></label>
         <label>Autres intitulés (un par ligne)<textarea id="ce-alias" rows="2">${escapeHtml(d.alias)}</textarea></label>
         <fieldset><legend>Les 4 canaux (ligne du haut : main ; ligne du bas : pied)</legend>
-          <div class="circ-selects">${this.PLACES.map((p, i) => `<label>${p}<select data-i="${i}">${opts(d.grille[i])}</select></label>`).join("")}</div>
+          <div class="circ-assoc-carre circ-selects">${this.PLACES.map((p, i) => `<div class="circ-assoc-pos"><div class="circ-assoc-place" data-place="${i}">${d.grille[i] ? this.pastilleCanal(d.grille[i]) : `<span class="circ-pastille circ-pastille-vide">?</span>`}<span>${p}</span></div><select data-i="${i}" aria-label="${p}">${opts(d.grille[i])}</select></div>`).join("")}</div>
           <p class="muted" id="ce-alerte"></p>
         </fieldset>
         <p class="muted" id="ce-schema" aria-live="polite"></p>
@@ -1154,7 +1207,11 @@ const Circuits = {
         <label>Syndromes du circuit (un par ligne)<textarea id="ce-syndromes" rows="3">${escapeHtml(d.syndromes)}</textarea></label>
         <label>Actions / fonctions (une par ligne)<textarea id="ce-actions" rows="5">${escapeHtml(d.actions)}</textarea></label>
         <label>Indications (une par ligne ; pour les ranger par catégories, écris le titre sur une ligne seule, terminé par « : » ou en majuscules, puis les indications dessous ; une ligne vide referme la catégorie)<textarea id="ce-indications" rows="12">${escapeHtml(d.indications)}</textarea></label>
-        <label>Ajouts possibles (un par ligne, « action : texte »)<textarea id="ce-ajouts" rows="2">${escapeHtml(d.ajouts)}</textarea></label>
+        <fieldset class="circ-aj-ed" id="ce-ajouts-bloc"><legend>Ajouts possibles</legend>
+          <textarea id="ce-ajouts" hidden>${escapeHtml(d.ajouts)}</textarea>
+          <div id="ce-aj-liste"></div>
+          <button type="button" class="edit-toggle-btn" id="ce-aj-add">+ Ajouter un ajout</button>
+        </fieldset>
         <label>Notes (une par ligne)<textarea id="ce-notes" rows="2">${escapeHtml(d.notes)}</textarea></label>
         <fieldset class="circ-assoc-form"><legend>Associations de points (un tableau = une association, à l'intérieur de ce circuit)</legend>
           <div id="ce-assoc"></div>
@@ -1180,8 +1237,42 @@ const Circuits = {
       ["alias", "syndromes", "actions", "indications", "ajouts", "notes"].forEach(k => { d[k] = document.getElementById("ce-" + k).value; });
       zone.querySelectorAll(".circ-selects select").forEach(s => { d.grille[+s.dataset.i] = s.value; });
     };
+    // ajouts possibles : on coche les canaux de chaque ajout (ils vont « ensemble » ou sont des alternatives) ; le texte enregistré est écrit pour toi
+    let ajl = this.texteEnAjouts(d.ajouts, null, d.grille.filter(Boolean)).map(x => ({ canaux: [...(x.canaux || [])], ensemble: !!x.ensemble || (x.canaux || []).length < 2, action: x.action || "", texte: x.texte || "", source: x.source, ancien: !(x.canaux || []).length }));
+    const ajUI = () => {
+      const grille = d.grille.filter(Boolean);
+      ajl.forEach(r => { r.canaux = r.canaux.filter(k => !grille.includes(k)); });
+      const bouton = (k, on, dis) => { const col = this.couleurCanal(k), yin = this.polarite(k) === "yin"; return `<button type="button" class="circ-pastille circ-aj-tog${on ? " on" : ""}" data-k="${k}" aria-pressed="${on}"${dis ? " disabled" : ""} style="border-color:${col};background:${yin ? col : "transparent"};color:${yin ? (this.COULEUR_CANAL[k] ? "#fff" : "var(--bg)") : col}">${k}</button>`; };
+      const liste = document.getElementById("ce-aj-liste");
+      liste.innerHTML = ajl.map((r, j) => r.ancien ? "" : `<div class="circ-aj-row" data-j="${j}">
+        <div class="circ-aj-canaux">${this.CODES_CANAUX.map(k => bouton(k, r.canaux.includes(k), grille.includes(k))).join("")}</div>
+        <div class="circ-aj-champs"><label class="circ-aj-ens"><input type="checkbox" data-ens${r.ensemble ? " checked" : ""}${r.canaux.length < 2 ? " disabled" : ""}> ensemble</label>
+          <input type="text" data-act value="${escapeHtml(r.action)}" placeholder="légende (facultatif), ex. calme le shén" aria-label="Légende de cet ajout">
+          <button type="button" class="edit-champ" data-del title="Retirer cet ajout" aria-label="Retirer cet ajout">✕</button></div>
+        <div class="circ-aj-apercu muted">${r.canaux.length ? escapeHtml(this.ajoutLigne({ canaux: r.canaux, ensemble: r.ensemble, action: "", texte: "" }, grille)) : "Coche les canaux de cet ajout."}</div></div>`).join("") || `<p class="muted">Aucun ajout.</p>`;
+      liste.querySelectorAll(".circ-aj-row").forEach(row => {
+        const r = ajl[+row.dataset.j];
+        row.querySelectorAll(".circ-aj-tog").forEach(b => b.addEventListener("click", () => {
+          const avant = r.canaux.length;
+          r.canaux = r.canaux.includes(b.dataset.k) ? r.canaux.filter(k => k !== b.dataset.k) : [...r.canaux, b.dataset.k];
+          if (avant < 2 && r.canaux.length >= 2) r.ensemble = true;                       // deux canaux ajoutés vont ensemble par défaut (décochable)
+          ajSer(); ajUI();
+        }));
+        row.querySelector("[data-ens]").addEventListener("change", ev => { r.ensemble = ev.target.checked; ajSer(); ajUI(); });
+        row.querySelector("[data-act]").addEventListener("input", ev => { r.action = ev.target.value; ajSer(); });
+        row.querySelector("[data-del]").addEventListener("click", () => { ajl.splice(+row.dataset.j, 1); ajSer(); ajUI(); });
+      });
+    };
+    const ajSer = () => {                                    // écrit les ajouts dans le champ enregistré (dans le même format que l'éditeur lisait avant)
+      const grille = d.grille.filter(Boolean);
+      d.ajouts = ajl.filter(r => r.ancien || r.canaux.length).map(r => r.ancien ? (r.action ? r.action + " : " : "") + r.texte : this.ajoutLigne({ canaux: r.canaux, ensemble: r.ensemble, action: r.action, texte: r.texte }, grille)).join("\n");
+      document.getElementById("ce-ajouts").value = d.ajouts;
+      assoc();
+    };
+    document.getElementById("ce-aj-add").addEventListener("click", () => { ajl.push({ canaux: [], ensemble: true, action: "", texte: "", ancien: false }); ajUI(); });
     const apercu = () => {
       lire();
+      zone.querySelectorAll(".circ-assoc-place[data-place]").forEach(el => { const k = d.grille[+el.dataset.place]; el.firstElementChild.outerHTML = k ? this.pastilleCanal(k) : `<span class="circ-pastille circ-pastille-vide">?</span>`; });
       const g = d.grille;
       const ok = g.every(Boolean) && new Set(g).size === 4;
       document.getElementById("ce-apercu").innerHTML = this.dessin({ grille: g.map(x => x || ""), figure: d.figure }, { taille: 160, etiquettes: true, legende: true });
@@ -1196,6 +1287,7 @@ const Circuits = {
       [0, 1].forEach(i => { if (g[i] && this.canaux.get(g[i]) && this.canaux.get(g[i]).membre !== "main") al.push(this.PLACES[i] + " : " + g[i] + " est un canal de pied."); });
       [2, 3].forEach(i => { if (g[i] && this.canaux.get(g[i]) && this.canaux.get(g[i]).membre !== "pied") al.push(this.PLACES[i] + " : " + g[i] + " est un canal de main."); });
       document.getElementById("ce-alerte").textContent = al.join(" ");
+      ajUI();
       assoc();
     };
     // associations de points : un champ par canal du circuit (et par canal ajouté)
@@ -1243,7 +1335,6 @@ const Circuits = {
       });
     };
     document.getElementById("ce-assoc-add").addEventListener("click", () => { d.associations.push({ tableau: "", note: "", points: {} }); assoc(); });
-    document.getElementById("ce-ajouts").addEventListener("change", () => { lire(); assoc(); });
     zone.querySelectorAll("select").forEach(el => el.addEventListener("change", apercu));
     document.getElementById("ce-nom").addEventListener("input", lire);
     apercu();
