@@ -14,6 +14,7 @@ const Reseau = {
   CLE_FENETRE: "reseau_fenetre_v1",
   etat: { patiente: "", circuit: null, verrou: false, points: [] },
   archives: [],
+  hist: [], futur: [],                 // annuler / rétablir (en mémoire seulement)
   fenetre: { ouvert: false, reduit: false, x: null, y: null },
 
   // ---------- mémoire locale
@@ -21,6 +22,22 @@ const Reseau = {
   ecrire(cle, v) { try { localStorage.setItem(cle, JSON.stringify(v)); } catch (e) { /* stockage indisponible */ } },
   sauver() { this.etat.maj = Date.now(); this.ecrire(this.CLE_ETAT, this.etat); this.majLanceur(); },
 
+  snap() { this.hist.push(JSON.stringify(this.etat)); if (this.hist.length > 60) this.hist.shift(); this.futur = []; },
+  annuler() { if (!this.hist.length) return; this.futur.push(JSON.stringify(this.etat)); this.etat = JSON.parse(this.hist.pop()); this.sauver(); this.rendre(); },
+  refaire() { if (!this.futur.length) return; this.hist.push(JSON.stringify(this.etat)); this.etat = JSON.parse(this.futur.pop()); this.sauver(); this.rendre(); },
+  // points favoris (★) des canaux du circuit, d'un clic : ils s'ajoutent tous, ceux déjà présents sont ignorés
+  ajouterFavoris() {
+    const c = this.etat.circuit && typeof Circuits !== "undefined" ? Circuits.parId(this.etat.circuit) : null;
+    if (!c) { this.avertir("Choisis d'abord un circuit."); return; }
+    if (this.etat.verrou) { this.avertir("Le réseau est arrêté."); return; }
+    const codes = [...new Set([...c.grille, ...(c.ajouts || []).flatMap(a => a.canaux || []), ...Circuits.AXE])];
+    const liste = codes.flatMap(k => Circuits.ptsAffiches(k, c).filter(x => Circuits.retenu(x)).map(x => ({ point: x.point, canal: x.canal || k, raison: x.action || "", source: "favoris" })));
+    const nouveaux = liste.filter(x => !this.etat.points.some(p => this.cleP(p.point) === this.cleP(x.point)));
+    if (!nouveaux.length) { this.avertir(liste.length ? "Tes favoris sont déjà tous dans le réseau." : "Aucun point favori (★) dans les canaux de ce circuit."); return; }
+    this.snap();
+    nouveaux.forEach(x => this.etat.points.push({ id: "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), point: String(x.point).replace(/\s+/g, ""), canal: x.canal || this.canalDe(x.point), cote: "", raison: x.raison, source: x.source, tung: false }));
+    this.sauver(); this.rendre(); this.avertir(nouveaux.length + " point(s) favori(s) ajouté(s).");
+  },
   cleP(s) { return String(s || "").toUpperCase().replace(/[\s.\-]/g, ""); },
   ALIAS: { SI: "IG", LI: "GI", SP: "RT", UB: "V", BL: "V", KI: "RN", LU: "P", HT: "C", ST: "E", GB: "VB", LR: "F", LV: "F", CV: "RM", GV: "DM", PC: "EC", SJ: "TF" },
   canalDe(point) {
@@ -61,12 +78,13 @@ const Reseau = {
     if (!this.etat.circuit && typeof Circuits !== "undefined" && document.getElementById("tab-circuits") && document.getElementById("tab-circuits").classList.contains("active") && Circuits.actif && Circuits.parId(Circuits.actif)) this.etat.circuit = Circuits.actif;
     if (deja) { this.ouvrir(); this.avertir(nom + " est déjà dans le réseau."); this.surligner(deja.id); return; }
     const id = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    this.snap();
     this.etat.points.push({ id, point: nom, canal: p.canal || this.canalDe(nom), cote: "", raison: p.raison || "", source: p.source || "", tung: !!p.tung });
     this.sauver();
     this.ouvrir();
     this.surligner(id);
   },
-  retirer(id) { this.etat.points = this.etat.points.filter(x => x.id !== id); this.sauver(); this.rendre(); },
+  retirer(id) { this.snap(); this.etat.points = this.etat.points.filter(x => x.id !== id); this.sauver(); this.rendre(); },
   maj(id, champs) { const x = this.etat.points.find(y => y.id === id); if (x) { Object.assign(x, champs); this.sauver(); } },
   surligner(id) { setTimeout(() => { const l = document.querySelector('#reseau-fenetre [data-id="' + id + '"]'); if (l) { l.classList.add("reseau-nouveau"); l.scrollIntoView({ block: "nearest" }); setTimeout(() => l.classList.remove("reseau-nouveau"), 1600); } }, 60); },
   avertir(t) { const a = document.getElementById("reseau-avis"); if (a) { a.textContent = t; setTimeout(() => { if (a.textContent === t) a.textContent = ""; }, 3500); } },
@@ -162,7 +180,7 @@ const Reseau = {
     const COTES = [["D", "D"], ["G", "G"], ["D + G", "D+G"]];
     const lignes = this.ordonne().map(p => `<li class="reseau-ligne" data-id="${escapeHtml(p.id)}">
         <div class="reseau-ligne-tete"><span class="sx-code">${escapeHtml(p.canal || "?")}</span> ${p.tung ? `<strong>${escapeHtml(p.point)}</strong>` : `<a href="#" class="circ-ptlien" data-pt-fiche="${escapeHtml(p.point)}" title="Ouvrir la fiche du point dans un nouvel onglet"><strong>${escapeHtml(p.point)}</strong></a>`}
-          <span class="reseau-cotes" role="group" aria-label="Côté">${COTES.map(([v, l]) => `<button type="button" class="reseau-cote-btn${p.cote === v ? " on" : ""}" data-cote="${v}" aria-pressed="${p.cote === v}"${dis}>${l}</button>`).join("")}</span>
+          ${p.canal === "RM" || p.canal === "DM" ? `<span class="muted reseau-median">ligne médiane</span>` : `<span class="reseau-cotes" role="group" aria-label="Côté">${COTES.map(([v, l]) => `<button type="button" class="reseau-cote-btn${p.cote === v ? " on" : ""}" data-cote="${v}" aria-pressed="${p.cote === v}"${dis}>${l}</button>`).join("")}</span>`}
           ${verrou ? "" : `<button type="button" class="reseau-x" data-x="${escapeHtml(p.id)}" title="Retirer du réseau" aria-label="Retirer ${escapeHtml(p.point)} du réseau">✕</button>`}</div>
         <textarea class="reseau-raison" rows="1" placeholder="Raison du choix…"${dis}>${escapeHtml(p.raison)}</textarea>
       </li>`).join("");
@@ -182,6 +200,10 @@ const Reseau = {
         <ul class="reseau-liste">${lignes || `<li class="muted reseau-vide">Aucun point : utilise le ✓ à côté d'un point, ou tape-le ci-dessous.</li>`}</ul>
         ${verrou ? "" : `<form id="reseau-ajout" class="reseau-ajout"><input type="text" id="reseau-point" placeholder="Ajouter un point (ex. TF5, Rt 4)" autocomplete="off"><button type="submit" class="reseau-ic2" title="Ajouter" aria-label="Ajouter ce point">＋</button></form>`}
         <div class="reseau-barre">
+          <button type="button" class="reseau-ic2" id="reseau-annuler" title="Annuler la dernière modification (Ctrl+Z)" aria-label="Annuler"${this.hist.length ? "" : " disabled"}>↶</button>
+          <button type="button" class="reseau-ic2" id="reseau-refaire" title="Rétablir (Ctrl+Y)" aria-label="Rétablir"${this.futur.length ? "" : " disabled"}>↷</button>
+          <button type="button" class="reseau-ic2" id="reseau-favoris" title="Ajouter d'un clic tes points favoris (★) des canaux du circuit" aria-label="Ajouter les points favoris"${verrou ? " disabled" : ""}>★</button>
+          <span class="reseau-barre-vide"></span>
           <button type="button" class="reseau-ic2" id="reseau-enreg" title="Enregistrer ce réseau" aria-label="Enregistrer ce réseau">💾</button>
           <button type="button" class="reseau-ic2" id="reseau-copier" title="Copier le résumé" aria-label="Copier le résumé">📄</button>
           <button type="button" class="reseau-ic2" id="reseau-verrou" title="${verrou ? "Rouvrir le réseau" : "Arrêter le réseau (définitif)"}" aria-label="${verrou ? "Rouvrir le réseau" : "Arrêter le réseau"}">${verrou ? "🔓" : "🔒"}</button>
@@ -247,10 +269,12 @@ const Reseau = {
     q("#reseau-circuit").addEventListener("change", ev => { this.etat.circuit = ev.target.value || null; this.sauver(); q("#reseau-schema").innerHTML = this.schema(); });
     const sd = q(".reseau-schema-d"); if (sd) sd.addEventListener("toggle", () => { this.fenetre.schemaFerme = !sd.open; this.ecrire(this.CLE_FENETRE, this.fenetre); });
     f.querySelectorAll(".reseau-ligne").forEach(l => {
-      const id = l.dataset.id, ta = l.querySelector(".reseau-raison");
-      ta.addEventListener("input", ev => { this.maj(id, { raison: ev.target.value }); ta.style.height = "auto"; ta.style.height = Math.max(ta.scrollHeight, 28) + "px"; });
+      const id = l.dataset.id, ta = l.querySelector(".reseau-raison"); ta.dataset.avant = ta.value;
+      let pris = false;
+      ta.addEventListener("input", ev => { if (!pris) { pris = true; const av = JSON.parse(JSON.stringify(this.etat)); const p0 = av.points.find(x => x.id === id); if (p0) p0.raison = ta.dataset.avant || ""; this.hist.push(JSON.stringify(av)); this.futur = []; } this.maj(id, { raison: ev.target.value }); ta.style.height = "auto"; ta.style.height = Math.max(ta.scrollHeight, 28) + "px"; });
       l.querySelectorAll(".reseau-cote-btn").forEach(b => b.addEventListener("click", () => {
         const p = this.etat.points.find(x => x.id === id); if (!p) return;
+        this.snap();
         this.maj(id, { cote: p.cote === b.dataset.cote ? "" : b.dataset.cote });                // un second clic retire le côté
         l.querySelectorAll(".reseau-cote-btn").forEach(c => { const on = c.dataset.cote === (this.etat.points.find(x => x.id === id) || {}).cote; c.classList.toggle("on", on); c.setAttribute("aria-pressed", String(on)); });
       }));
@@ -258,7 +282,10 @@ const Reseau = {
     f.querySelectorAll("[data-x]").forEach(b => b.addEventListener("click", () => this.retirer(b.dataset.x)));
     const form = q("#reseau-ajout");
     if (form) form.addEventListener("submit", ev => { ev.preventDefault(); const i = q("#reseau-point"); const v = i.value.trim(); if (!v) return; i.value = ""; this.ajouter({ point: v, source: "saisi" }); });
-    q("#reseau-verrou").addEventListener("click", () => { this.etat.verrou = !this.etat.verrou; this.sauver(); this.rendre(); });
+    q("#reseau-annuler").addEventListener("click", () => this.annuler());
+    q("#reseau-refaire").addEventListener("click", () => this.refaire());
+    q("#reseau-favoris").addEventListener("click", () => this.ajouterFavoris());
+    q("#reseau-verrou").addEventListener("click", () => { this.snap(); this.etat.verrou = !this.etat.verrou; this.sauver(); this.rendre(); });
     q("#reseau-copier").addEventListener("click", () => copier(this.resume()));
     q("#reseau-enreg").addEventListener("click", () => {
       if (!this.etat.points.length) { this.avertir("Rien à enregistrer."); return; }
@@ -284,6 +311,12 @@ const Reseau = {
       if (!b) return;
       ev.preventDefault();
       try { const d = JSON.parse(b.dataset.reseau); (Array.isArray(d) ? d : [d]).forEach(x => this.ajouter(x)); } catch (e) { /* attribut illisible */ }
+    });
+    document.addEventListener("keydown", ev => {
+      if (!this.fenetre.ouvert || !(ev.ctrlKey || ev.metaKey) || ev.target.closest("input, textarea, select, [contenteditable]")) return;
+      if (!ev.target.closest("#reseau-fenetre")) return;
+      const k = ev.key.toLowerCase();
+      if (k === "z" && !ev.shiftKey) { ev.preventDefault(); this.annuler(); } else if (k === "y" || (k === "z" && ev.shiftKey)) { ev.preventDefault(); this.refaire(); }
     });
     // la liste des circuits n'est connue qu'une fois Circuits chargé : on réaffiche alors
     if (typeof Circuits !== "undefined") Circuits.ensureLoaded().then(() => { if (this.fenetre.ouvert) this.rendre(); }).catch(() => {});

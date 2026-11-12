@@ -1516,3 +1516,6 @@ article.formule-detail, .vue-travail { border-radius: 12px !important; }
 .prescr-etoile { color: #BA7517; font-size: 1.1rem; }
 .sx-tab tr.conseille td { font-weight: 600; background: var(--panel); }
 .sx-tab tr.hors-budget td { opacity: 0.45; }
+.reseau-ic2:disabled { opacity: 0.3; cursor: default; }
+.reseau-barre-vide { flex: 1; }
+.reseau-median { margin-left: auto; font-size: 0.75rem; }
