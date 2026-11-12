@@ -558,6 +558,10 @@ const Circuits = {
   couleurCanal(code) { return this.COULEUR_CANAL[code] || "var(--ink)"; },
   // texte posé dans le rond d'un canal : blanc sur un rond plein (yīn), couleur du canal sur un rond cerclé (yáng)
   texteRond(code) { return this.polarite(code) === "yin" ? (this.COULEUR_CANAL[code] ? "#fff" : "var(--bg)") : this.couleurCanal(code); },
+  pastilleCanal(k) {
+    const col = this.couleurCanal(k), yin = this.polarite(k) === "yin";
+    return `<span class="circ-pastille" style="border-color:${col};background:${yin ? col : "transparent"};color:${yin ? (this.COULEUR_CANAL[k] ? "#fff" : "var(--bg)") : col}">${escapeHtml(k)}</span>`;
+  },
   mouvementDe(p) {
     for (const l of String(p.categories_point || "").split(/\n+/)) {
       const n = l.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -1195,17 +1199,46 @@ const Circuits = {
       assoc();
     };
     // associations de points : un champ par canal du circuit (et par canal ajouté)
+    const actifs = new WeakMap();
     const assoc = () => {
       const cont = document.getElementById("ce-assoc");
-      const codes = [...new Set([...d.grille.filter(Boolean), ...this.texteEnAjouts(d.ajouts, null, d.grille.filter(Boolean)).flatMap(a => a.canaux), ...d.associations.flatMap(a => Object.keys(a.points)), ...this.AXE])];
-      cont.innerHTML = d.associations.map((a, i) => `<div class="circ-assoc-ligne" data-i="${i}">
+      const grille = d.grille.filter(Boolean), PLACES = ["main, en haut à gauche", "main, en haut à droite", "pied, en bas à gauche", "pied, en bas à droite"];
+      // ajouts : ceux qui vont ensemble forment un groupe (une seule case) ; ceux qui sont des alternatives (« ou ») sont chacun leur case
+      const groupes = this.texteEnAjouts(d.ajouts, null, grille).filter(x => (x.canaux || []).length)
+        .flatMap(x => x.canaux.length > 1 && !x.ensemble ? x.canaux.map(k => ({ canaux: [k], ensemble: false })) : [{ canaux: x.canaux, ensemble: x.ensemble }]);
+      const connus = new Set([...grille, ...groupes.flatMap(g => g.canaux), ...this.AXE]);
+      cont.innerHTML = d.associations.map((a, i) => {
+        const plein = k => !!String(a.points[k] || "").trim();
+        if (!actifs.has(a)) actifs.set(a, new Set(groupes.map((g, gi) => gi).filter(gi => groupes[gi].canaux.some(plein))));
+        const act = actifs.get(a);
+        const champ = k => `<input type="text" data-pt="${escapeHtml(k)}" value="${escapeHtml(a.points[k] || "")}" placeholder="P7, P9 (commentaire possible)" title="Entre parenthèses : un commentaire sur le point, par exemple TF5 (yáng wéi mài)" aria-label="Points de ${escapeHtml(k)}">`;
+        const carre = d.grille.map((k, p) => k ? `<div class="circ-assoc-pos"><div class="circ-assoc-place">${this.pastilleCanal(k)}<span>${PLACES[p]}</span></div>${champ(k)}</div>` : "").join("");
+        const aj = groupes.map((g, gi) => `<div class="circ-assoc-aj${act.has(gi) ? " on" : ""}"><label><input type="checkbox" data-aj="${gi}"${act.has(gi) ? " checked" : ""}> ${this.ajoutFormat({ grille }, g.canaux, "")}</label>` +
+          (act.has(gi) ? `<div class="circ-assoc-ajchamps">${g.canaux.map(k => `<div class="circ-assoc-pos">${g.canaux.length > 1 ? `<div class="circ-assoc-place">${this.pastilleCanal(k)}</div>` : ""}${champ(k)}</div>`).join("")}</div>` : "") + `</div>`).join("");
+        const autres = Object.keys(a.points).filter(k => !connus.has(k) && plein(k));            // canaux saisis avant et qui ne sont plus dans ce circuit : on ne les perd pas
+        return `<div class="circ-assoc-ligne" data-i="${i}">
         <label>Tableau<input type="text" list="ce-synd-noms" data-champ="tableau" value="${escapeHtml(a.tableau)}" placeholder="nom d'un syndrome de ta base, ou ton intitulé"></label>
-        <div class="circ-assoc-pts">${codes.map(k => `<label>${escapeHtml(k)}<input type="text" data-pt="${escapeHtml(k)}" value="${escapeHtml(a.points[k] || "")}" placeholder="P7, P9 (commentaire possible)" title="Entre parenthèses : un commentaire sur le point, par exemple TF5 (yáng wéi mài)"></label>`).join("")}</div>
+        <div class="circ-assoc-titre">Les quatre canaux du circuit</div>
+        <div class="circ-assoc-carre">${carre}</div>
+        ${groupes.length ? `<div class="circ-assoc-titre">Ajouts possibles (cocher pour utiliser)</div>${aj}` : ""}
+        <div class="circ-assoc-titre">Axe du corps</div>
+        <div class="circ-assoc-axe">${this.AXE.map(k => `<div class="circ-assoc-pos"><div class="circ-assoc-place">${this.pastilleCanal(k)}</div>${champ(k)}</div>`).join("")}</div>
+        ${autres.length ? `<div class="circ-assoc-titre">Autres canaux (hors de ce circuit)</div><div class="circ-assoc-carre">${autres.map(k => `<div class="circ-assoc-pos"><div class="circ-assoc-place">${this.pastilleCanal(k)}</div>${champ(k)}</div>`).join("")}</div>` : ""}
         <label>Note<input type="text" data-champ="note" value="${escapeHtml(a.note || "")}"></label>
-        <button type="button" class="edit-toggle-btn" data-suppr="${i}">Retirer cette association</button></div>`).join("") || `<p class="muted">Aucune association.</p>`;
+        <button type="button" class="edit-toggle-btn" data-suppr="${i}">Retirer cette association</button></div>`;
+      }).join("") || `<p class="muted">Aucune association.</p>`;
       cont.querySelectorAll(".circ-assoc-ligne").forEach(l => {
         const a = d.associations[+l.dataset.i];
-        l.querySelectorAll("input").forEach(inp => inp.addEventListener("input", () => { if (inp.dataset.pt) a.points[inp.dataset.pt] = inp.value; else a[inp.dataset.champ] = inp.value; }));
+        l.querySelectorAll("input[data-pt], input[data-champ]").forEach(inp => inp.addEventListener("input", () => { if (inp.dataset.pt) a.points[inp.dataset.pt] = inp.value; else a[inp.dataset.champ] = inp.value; }));
+        l.querySelectorAll("input[data-aj]").forEach(cb => cb.addEventListener("change", () => {
+          const gi = +cb.dataset.aj, g = groupes[gi], act = actifs.get(a);
+          if (cb.checked) act.add(gi);
+          else {
+            if (g.canaux.some(k => String(a.points[k] || "").trim()) && !confirm("Retirer les points de " + g.canaux.join(" + ") + " de cette association ?")) { cb.checked = true; return; }
+            act.delete(gi); g.canaux.forEach(k => { delete a.points[k]; });
+          }
+          assoc();
+        }));
         l.querySelector("[data-suppr]").addEventListener("click", () => { d.associations.splice(+l.dataset.i, 1); assoc(); });
       });
     };
