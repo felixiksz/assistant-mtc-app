@@ -1503,3 +1503,16 @@ article.formule-detail, .vue-travail { border-radius: 12px !important; }
 .pal-item.sel .muted { color: inherit; opacity: 0.8; }
 .pal-vide { padding: 0.6rem; }
 .pal-aide { font-size: 0.72rem; margin: 0.5rem 0.3rem 0; }
+/* prescription directe */
+.prescr { max-width: 52rem; }
+.prescr-rang { margin: 0.6rem 0; }
+.prescr-rang label { display: block; font-weight: 600; font-size: 0.85rem; }
+.prescr-rang input[type="search"], .prescr-rang input[type="text"] { width: 100%; box-sizing: border-box; font: inherit; padding: 0.35rem 0.8rem; border-radius: 999px !important; margin-top: 0.2rem; }
+.prescr-ajout { display: flex; gap: 0.3rem; align-items: center; }
+.prescr-champs { display: flex; flex-wrap: wrap; gap: 0.6rem 1.2rem; align-items: end; }
+.prescr-champs input[type="number"], .prescr-champs select { font: inherit; padding: 0.3rem 0.5rem; border-radius: 8px !important; }
+.prescr-champs input[type="number"] { width: 5.5rem; }
+.prescr-reco { border: 2px solid var(--accent); border-radius: 12px !important; padding: 0.6rem 0.8rem; margin: 0.6rem 0; background: var(--panel); }
+.prescr-etoile { color: #BA7517; font-size: 1.1rem; }
+.sx-tab tr.conseille td { font-weight: 600; background: var(--panel); }
+.sx-tab tr.hors-budget td { opacity: 0.45; }

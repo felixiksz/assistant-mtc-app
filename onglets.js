@@ -170,6 +170,16 @@ const Onglets = {
     window.scrollTo(0, this._y[o.id] || 0);
     this.memoriser();
   },
+  // une prescription : un onglet à part (on peut en ouvrir plusieurs) ; son contenu reste dans ce navigateur
+  ouvrirPrescription(id, opt = {}) {
+    id = id || ("p" + Date.now().toString(36));
+    const cle = "presc:" + id, etat = { ...Prescription.defaut(), ...(opt.etat || {}), ajouts: [...((opt.etat || {}).ajouts || [])] };
+    const titre = () => { const f = etat.formule && Formules.byId.get(etat.formule); return "Prescription" + (f ? " — " + (f.pinyin || etat.formule) : ""); };
+    return this.ouvrir(cle, titre(), "℞", async zone => {
+      const o = this.liste.find(x => x.id === cle);
+      await Prescription.rendre(zone, etat, () => { if (o) { o.titre = titre(); o.desc.titre = o.titre; o.desc.etat = etat; } this.rendreBarre(); this.memoriser(); });
+    }, { kind: "presc", id, etat, fenetre: opt.fenetre }, opt.differe);
+  },
   async ouvrirCircuit(id, opt = {}) {
     await Circuits.ensureLoaded();
     const c = Circuits.parId(id);
@@ -245,6 +255,7 @@ const Onglets = {
     if (d.kind === "tung") return "tung:" + d.id;
     if (d.kind === "form") return "form:" + d.id;
     if (d.kind === "circ") return "circ:" + d.id;
+    if (d.kind === "presc") return "presc:" + d.id;
     return "";
   },
   etat() {
@@ -267,6 +278,7 @@ const Onglets = {
   async envoyer() {
     if (!this.enLigne()) return;
     const etat = this.etat();
+    etat.onglets = (etat.onglets || []).filter(d => d.kind !== "presc");            // poids, budget, formule d'une patiente : jamais synchronisés
     try { await Store.writeJSON(this.FICHIER_SYNCHRO, etat); }
     catch (e) {
       try { await Store._ghGet(this.FICHIER_SYNCHRO).catch(() => null); await Store.writeJSON(this.FICHIER_SYNCHRO, etat); }   // un autre appareil a écrit entre-temps : on relit et on réessaie une fois
@@ -282,7 +294,7 @@ const Onglets = {
     const voulus = (d.onglets || []).map(x => ({ x, id: this.idDesc(x) })).filter(v => v.id);
     const ids = new Set(voulus.map(v => v.id));
     this._restauration = true;
-    for (const o of [...this.liste]) if (!ids.has(o.id)) this.fermer(o.id);
+    for (const o of [...this.liste]) if (!ids.has(o.id) && !(o.desc && o.desc.kind === "presc")) this.fermer(o.id);
     for (const v of voulus) {
       const x = v.x;
       try {
@@ -325,9 +337,10 @@ const Onglets = {
     }
     // l'état le plus récent l'emporte : celui de ce navigateur ou celui qu'un autre appareil a enregistré dans le dépôt
     const distant = await this.lireDistant();
-    const m = distant && (!local || (distant.maj || 0) > (local.maj || 0)) ? distant : local;
+    let m = distant && (!local || (distant.maj || 0) > (local.maj || 0)) ? distant : local;
     this._maj = (m && m.maj) || 0;
     if (!m) { this.demarrerSynchro(); return; }
+    if (local && m !== local) m = { ...m, onglets: [...(m.onglets || []), ...(local.onglets || []).filter(d => d.kind === "presc")] };
     this._restauration = true;
     for (const d of (m.onglets || [])) {
       try {
@@ -336,6 +349,7 @@ const Onglets = {
         else if (d.kind === "tung") await this.ouvrirTung(d.id, { differe: true, titre: d.titre, fenetre: d.fenetre });
         else if (d.kind === "form") await this.ouvrirFormule(d.id, { differe: true, fenetre: d.fenetre });
         else if (d.kind === "circ") await this.ouvrirCircuit(d.id, { differe: true, fenetre: d.fenetre });
+        else if (d.kind === "presc") await this.ouvrirPrescription(d.id, { differe: true, etat: d.etat, fenetre: d.fenetre });
       } catch (e) { /* fiche disparue : on l'ignore */ }
     }
     // retrouve le module et le circuit où l'on était
@@ -487,7 +501,7 @@ const Fenetre = {
     if (!p.hidden) { p.hidden = true; return; }
     const src = this.sourcesPlus(sec);
     const norm = t => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    const tous = src === "formules" ? Formules.index.map(f => ({ lib: (f.pinyin || f.id) + (f.nom_fr ? " — " + f.nom_fr : ""), ouvrir: () => Onglets.ouvrirFormule(f.id) }))
+    const tous = src === "formules" ? [{ lib: "℞ Nouvelle prescription (formule, ajouts, budget)", ouvrir: () => Onglets.ouvrirPrescription() }, ...Formules.index.map(f => ({ lib: (f.pinyin || f.id) + (f.nom_fr ? " — " + f.nom_fr : ""), ouvrir: () => Onglets.ouvrirFormule(f.id) }))]
       : src === "syndromes" ? Syndromes.entries.map(x => ({ lib: x.nom + (x.sousLabel ? " — " + x.sousLabel : ""), ouvrir: () => Onglets.ouvrirSyndrome(x) }))
       : (typeof Circuits !== "undefined" && Circuits.liste ? Circuits.liste.map(c => ({ lib: "◎ " + Circuits.nomCourt(c) + " " + c.grille.join(" · "), ouvrir: () => Onglets.ouvrirCircuit(c.id) })) : []).concat(Points.entries.map(x => ({ lib: x.id + (x.data && x.data.pinyin ? " " + x.data.pinyin : ""), ouvrir: () => Onglets.ouvrirPoint(x.id) })));
     p.innerHTML = `<input type="search" id="fen-plus-q" placeholder="Chercher une fiche à ouvrir dans un onglet" autocomplete="off"><div id="fen-plus-res"></div>`;
@@ -619,6 +633,7 @@ const Palette = {
     Object.entries(Fenetre.SECTIONS).forEach(([k, S]) => S.mods.forEach(([m, nom]) => add("Aller à", S.nom + " › " + nom, "", "section module", () => { const b = document.querySelector('#menu-panneau .tab-btn[data-tab="' + m + '"]'); if (b) b.click(); })));
     try { if (typeof Circuits !== "undefined") { await Circuits.ensureLoaded(); Circuits.liste.forEach(c => add("Circuits", Circuits.nomCourt(c), c.grille.join(" · ") + ((c.mots_cles || []).length ? " — " + c.mots_cles.slice(0, 2).join(" ; ") : ""), Circuits.texteRecherche(c), () => Onglets.ouvrirCircuit(c.id))); } } catch (x) { /* circuits indisponibles */ }
     try { if (typeof Tung !== "undefined") { await Tung.ensureLoaded(); Tung.liste.forEach(f => add("Points Tung", f.nom + ((f.numeros || []).length ? " " + f.numeros.join("/") : ""), "", (f.alias || []).join(" "), () => Onglets.ouvrirTung(f.id))); } } catch (x) { /* Tung indisponible */ }
+    add("Aller à", "Nouvelle prescription", "formule, ajouts, budget", "prescrire ordonnance", () => Onglets.ouvrirPrescription());
     if (typeof Formules !== "undefined") (Formules.index || []).forEach(f => add("Formules", f.pinyin || f.id, f.nom_fr || "", f.indications_syndrome, () => Onglets.ouvrirFormule(f.id)));
     if (typeof Syndromes !== "undefined") (Syndromes.entries || []).forEach(s => add("Syndromes", s.nom, s.sousLabel || "", "", () => Onglets.ouvrirSyndrome(s)));
     if (typeof Points !== "undefined") (Points.entries || []).forEach(p => add("Points", p.id, (p.data && p.data.pinyin) || "", "", () => Onglets.ouvrirPoint(p.id)));
