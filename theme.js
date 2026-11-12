@@ -281,7 +281,7 @@
       if (invertOn()) sauve = { ...v, "--bg": v["--ink"], "--ink": v["--bg"], "--line": v["--bg"] };
       store.set(KEY_CUSTOM, JSON.stringify({ ...c, ...sauve }));
       current.index = "custom"; store.set(KEY_THEME, "custom");
-      applyTheme("custom"); refresh();
+      applyTheme("custom"); refresh(); planifier();
       const b = document.querySelector('#theme-grid button[data-theme="custom"]'); if (b) { const p = paletteCustom(); b.style.background = p["--bg"]; b.style.color = p["--ink"]; }
     }));
   }
@@ -296,17 +296,17 @@
     const boost = document.getElementById("theme-boost");
     if (boost) boost.checked = boostOn();
     const inv = document.getElementById("theme-invert");
-    if (inv) { inv.checked = invertOn(); inv.addEventListener("change", () => { store.set(KEY_INVERT, inv.checked ? "1" : "0"); applyTheme(current.index); renderGrid(); }); }
+    if (inv) { inv.checked = invertOn(); inv.addEventListener("change", () => { store.set(KEY_INVERT, inv.checked ? "1" : "0"); planifier(); applyTheme(current.index); renderGrid(); }); }
     const copie = document.getElementById("theme-custom-copie");
     if (copie) copie.addEventListener("click", () => {
       // part du thème affiché (sans l'inversion : elle reste réglable à part)
       const base = current.index === "custom" ? paletteCustom() : (paletteDe(current.index, true) || palette("#ffffff", "#000000", false));
       const v = {}; CHAMPS.forEach(([k]) => { v[k] = base[k]; });
       store.set(KEY_CUSTOM, JSON.stringify(v));
-      current.index = "custom"; store.set(KEY_THEME, "custom"); applyTheme("custom"); renderGrid();
+      current.index = "custom"; store.set(KEY_THEME, "custom"); applyTheme("custom"); renderGrid(); planifier();
     });
     const reinit = document.getElementById("theme-custom-reinit");
-    if (reinit) reinit.addEventListener("click", () => { store.del(KEY_CUSTOM); if (current.index === "custom") { current.index = null; store.del(KEY_THEME); } applyTheme(current.index); renderGrid(); });
+    if (reinit) reinit.addEventListener("click", () => { store.del(KEY_CUSTOM); if (current.index === "custom") { current.index = null; store.del(KEY_THEME); } planifier(); applyTheme(current.index); renderGrid(); });
 
     btn.addEventListener("click", () => {
       const open = panel.style.display === "none" || panel.style.display === "";
@@ -321,13 +321,66 @@
       if (current.index === null) store.del(KEY_THEME); else store.set(KEY_THEME, String(current.index));
       applyTheme(current.index);
       refresh();
+      planifier();
     });
     if (boost) boost.addEventListener("change", () => {
       store.set(KEY_BOOST, boost.checked ? "1" : "0");
+      planifier();
       applyTheme(current.index);
       renderGrid();   // les aperçus suivent le réglage
     });
   }
+
+  /* ---------- synchronisation avec tes autres appareils ET avec le jeu ----------
+     Le choix (thème, inversion, contraste, couleurs du thème perso) est écrit dans app/theme_synchro.json du dépôt de données GitHub
+     (le même que celui où le jeu écrit ses corrections). Le jeu lit et écrit le même fichier : le thème choisi d'un côté s'applique de l'autre.
+     Format : { maj: <ms>, theme: "" | "custom" | "#fond/#lettres" (en minuscules), inverse: bool, contraste: bool, perso: { "--bg": "#rrggbb", … } }.
+     Le plus récent (maj) l'emporte. */
+  const FICHIER_SYNCHRO = "app/theme_synchro.json", KEY_MAJ = "mtc_assistant_theme_maj";
+  const idTheme = i => i === null ? "" : i === "custom" ? "custom" : (THEMES[i][2] + "/" + THEMES[i][3]).toLowerCase();
+  const indexDe = id => id === "" ? null : id === "custom" ? "custom" : THEMES.findIndex(x => (x[2] + "/" + x[3]).toLowerCase() === id);
+  const enLigne = () => typeof Store !== "undefined" && Store.mode === "github";
+  let maj = +(store.get(KEY_MAJ) || 0), minuterie = null;
+
+  function etatSynchro() { return { maj, theme: idTheme(current.index), inverse: invertOn(), contraste: boostOn(), perso: lireCustom() }; }
+  function planifier() {
+    maj = Date.now(); store.set(KEY_MAJ, String(maj));
+    if (!enLigne()) return;
+    clearTimeout(minuterie); minuterie = setTimeout(envoyer, 2500);     // regroupe les changements rapprochés (un envoi = un enregistrement dans le dépôt)
+  }
+  async function envoyer() {
+    minuterie = null;
+    if (!enLigne()) return;
+    const etat = etatSynchro();
+    try { await Store.writeJSON(FICHIER_SYNCHRO, etat); }
+    catch (e) {
+      try { if (Store._ghGet) await Store._ghGet(FICHIER_SYNCHRO).catch(() => null); await Store.writeJSON(FICHIER_SYNCHRO, etat); }   // quelqu'un (le jeu) a écrit entre-temps : on relit et on réessaie une fois
+      catch (e2) { /* hors ligne ou droits insuffisants : le choix reste local */ }
+    }
+  }
+  function adopter(d) {
+    const idx = indexDe(d.theme === undefined ? "" : d.theme);
+    if (idx === -1) return;
+    current.index = idx;
+    if (idx === null) store.del(KEY_THEME); else store.set(KEY_THEME, String(idx));
+    store.set(KEY_INVERT, d.inverse ? "1" : "0"); store.set(KEY_BOOST, d.contraste === false ? "0" : "1");
+    if (d.perso && typeof d.perso === "object") store.set(KEY_CUSTOM, JSON.stringify(d.perso));
+    maj = d.maj || maj; store.set(KEY_MAJ, String(maj));
+    applyTheme(current.index);
+    const inv = document.getElementById("theme-invert"); if (inv) inv.checked = invertOn();
+    const bo = document.getElementById("theme-boost"); if (bo) bo.checked = boostOn();
+    renderGrid();
+  }
+  async function synchroniser() {
+    if (!enLigne() || minuterie) return;
+    try { const d = await Store.readJSON(FICHIER_SYNCHRO); if (d && typeof d === "object" && (d.maj || 0) > maj) adopter(d); } catch (e) { /* pas encore de fichier */ }
+  }
+  (async () => {
+    for (let i = 0; i < 40 && !enLigne(); i++) await new Promise(r => setTimeout(r, 500));      // attend que la connexion GitHub soit prête
+    await synchroniser();
+    setInterval(synchroniser, 60000);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") synchroniser(); });
+  })();
 
   window.MTCTheme = { THEMES, palette, contrast, apply: applyTheme };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", build, { once: true });
