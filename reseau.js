@@ -84,6 +84,50 @@ const Reseau = {
     this.ouvrir();
     this.surligner(id);
   },
+  // ---------- consultation : le diagnostic (syndromes) et les formules, à côté du circuit et des points
+  aContenu(e) { e = e || this.etat; return !!((e.points || []).length || (e.diagnostic || []).length || (e.formules || []).length); },
+  syndDe(k) { return typeof Syndromes !== "undefined" ? (Syndromes.entries || []).find(x => x.domaine + "/" + x.chemin === k) || null : null; },
+  formDe(id) { return typeof Formules !== "undefined" && Formules.byId ? Formules.byId.get(id) || null : null; },
+  ajouterA(champ, k, nom) {
+    if (this.etat.verrou) { this.ouvrir(); this.avertir("La consultation est arrêtée : déverrouille-la pour la modifier."); return; }
+    const l = this.etat[champ] = this.etat[champ] || [];
+    if (l.includes(k)) { this.ouvrir(); this.avertir(nom + " est déjà dans la consultation."); return; }
+    this.snap(); l.push(k); this.sauver(); this.ouvrir();
+  },
+  ajouterDiagnostic(entry) { if (entry) this.ajouterA("diagnostic", entry.domaine + "/" + entry.chemin, entry.nom); },
+  ajouterFormule(id) { const f = this.formDe(id); this.ajouterA("formules", id, f ? (f.pinyin || id) : id); },
+  choisirCircuit(id) {
+    if (this.etat.verrou) { this.ouvrir(); this.avertir("La consultation est arrêtée : déverrouille-la pour la modifier."); return; }
+    if (this.etat.circuit !== id) { this.snap(); this.etat.circuit = id; this.sauver(); }
+    this.ouvrir();
+  },
+  retirerDe(champ, k) { this.snap(); this.etat[champ] = (this.etat[champ] || []).filter(x => x !== k); this.sauver(); this.rendre(); },
+  // bouton « ＋ Consultation » des fiches
+  bouton(action, titre) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "cmp-add consult-add"; b.textContent = "＋ Consultation"; b.title = titre || "Ajouter à la consultation en cours";
+    b.addEventListener("click", ev => { ev.stopPropagation(); action(); });
+    return b;
+  },
+  // ce que le diagnostic suggère : les circuits que le traitement des syndromes désigne (ou que tu leur as rattachés), et les formules de leur pharmacopée
+  async suggestions() {
+    const diag = this.etat.diagnostic || [], res = { circuits: [], formules: [] };
+    if (!diag.length) return res;
+    try {
+      if (typeof Circuits !== "undefined") {
+        const m = await Circuits.syndromesParCircuit();
+        Circuits.liste.forEach(c => { if (diag.some(k => (m.get(c.id) || []).includes(k) || (c.syndromes_lies || []).includes(k))) res.circuits.push(c.id); });
+      }
+    } catch (e) { /* circuits indisponibles */ }
+    const cle = t => normalizeSearch(sansChinois(String(t || ""))), parNom = new Map();
+    (Formules.index || []).forEach(f => { if (f.pinyin) parNom.set(cle(f.pinyin), f.id); });
+    await Promise.all(diag.map(async k => {
+      let d; try { d = await Store.readJSON("syndromes/" + k); } catch (e) { return; }
+      (function marche(o) { if (Array.isArray(o)) o.forEach(marche); else if (o && typeof o === "object") { if (typeof o.nom_pinyin === "string") { const id = parNom.get(cle(o.nom_pinyin)); if (id && !res.formules.includes(id)) res.formules.push(id); } Object.values(o).forEach(marche); } })(d);
+    }));
+    return res;
+  },
+
   // ---------- points Tung : reconnus par leur nom, un alias ou un numéro (Shui Jin, 77.08…)
   codePoint(t) { return /^[A-Za-z]{1,3}\s?\.?\s?\d{1,2}$/.test(String(t).trim()); },
   nomTung(f) { return f.nom + ((f.numeros || []).length ? " " + f.numeros.join("/") : ""); },
@@ -119,16 +163,16 @@ const Reseau = {
     document.body.appendChild(bouton);
     const f = document.createElement("div");
     f.id = "reseau-fenetre"; f.className = "reseau-fenetre"; f.hidden = true;
-    f.setAttribute("role", "dialog"); f.setAttribute("aria-label", "Réseau de la patiente");
+    f.setAttribute("role", "dialog"); f.setAttribute("aria-label", "Consultation : diagnostic, circuit et points, formule");
     document.body.appendChild(f);
     this.majLanceur();
   },
   majLanceur() {
     const b = document.getElementById("reseau-lanceur");
     if (!b) return;
-    const n = this.etat.points.length, na = this.archives.length;
-    b.textContent = "📋 Réseau" + (n ? " · " + n + " pt" + (n > 1 ? "s" : "") : "") + (this.etat.verrou ? " 🔒" : "");
-    b.title = "Réseau de la patiente : " + n + " point(s) dans le réseau en cours" + (na ? " ; " + na + " réseau(x) enregistré(s)" : "");
+    const n = this.etat.points.length, na = this.archives.length, nd = (this.etat.diagnostic || []).length, nf = (this.etat.formules || []).length;
+    b.textContent = "📋 Consultation" + [nd ? nd + " synd." : "", n ? n + " pt" + (n > 1 ? "s" : "") : "", nf ? nf + " form." : ""].filter(Boolean).map(x => " · " + x).join("") + (this.etat.verrou ? " 🔒" : "");
+    b.title = "Consultation en cours : " + nd + " syndrome(s), " + n + " point(s), " + nf + " formule(s)" + (na ? " ; " + na + " consultation(s) enregistrée(s)" : "");
   },
   ouvrir() { this.fenetre.ouvert = true; this.ecrire(this.CLE_FENETRE, this.fenetre); this.rendre(); },
   fermer() { this.fenetre.ouvert = false; this.ecrire(this.CLE_FENETRE, this.fenetre); this.rendre(); },
@@ -139,8 +183,12 @@ const Reseau = {
     e = e || this.etat;
     const c = e.circuit && typeof Circuits !== "undefined" ? Circuits.parId(e.circuit) : null;
     const d = new Date().toLocaleDateString("fr-FR");
-    const l = ["Réseau — " + (e.patiente || "patiente") + " — " + d + (e.verrou ? " (arrêté)" : ""), c ? "Circuit : " + Circuits.nomCourt(c) + " (" + c.grille.join(", ") + ")" : "Circuit : non choisi", ""];
+    const l = ["Consultation — " + (e.patiente || "patiente") + " — " + d + (e.verrou ? " (arrêtée)" : "")];
+    if ((e.diagnostic || []).length) l.push("Diagnostic : " + e.diagnostic.map(k => { const s = this.syndDe(k); return s ? sansChinois(s.nom) : k; }).join(" ; "));
+    l.push(c ? "Circuit : " + Circuits.nomCourt(c) + " (" + c.grille.join(", ") + ")" : "Circuit : non choisi");
+    if ((e.points || []).length) l.push("");
     this.ordonne(e).forEach(p => l.push("• " + p.point + (p.cote ? " (" + p.cote + ")" : "") + (p.raison ? " : " + p.raison : "")));
+    if ((e.formules || []).length) l.push("", "Formule(s) : " + e.formules.map(id => { const f = this.formDe(id); return f ? (f.pinyin || id) : id; }).join(" ; "));
     return l.join("\n");
   },
 
@@ -175,7 +223,7 @@ const Reseau = {
   // garde le réseau en cours parmi les enregistrés (mis à jour s'il en vient déjà)
   archiver() {
     const e = this.etat;
-    if (!e.points.length) return null;
+    if (!this.aContenu(e)) return null;
     const existant = e.archiveId ? this.archives.find(a => a.id === e.archiveId) : null;
     if (existant && this.identique(existant.etat, e)) return existant;
     const id = e.archiveId || "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
@@ -208,32 +256,46 @@ const Reseau = {
     const nomCirc = a => { const c = a.circuit && typeof Circuits !== "undefined" ? Circuits.parId(a.circuit) : null; return c ? Circuits.nomCourt(c) : ""; };
     const arch = this.archives.map((a, i) => `<li class="reseau-arch${e.archiveId === a.id ? " en-cours" : ""}">
         <div class="reseau-arch-texte"><strong>${escapeHtml(a.nom)}</strong>${a.etat.verrou ? " 🔒" : ""}${e.archiveId === a.id ? ` <span class="reseau-arch-tag">en cours</span>` : ""}
-          <span class="muted">${escapeHtml(a.date)} · ${a.etat.points.length} point(s)${nomCirc(a.etat) ? " · " + escapeHtml(nomCirc(a.etat)) : ""}</span>
+          <span class="muted">${escapeHtml(a.date)} · ${(a.etat.diagnostic || []).length ? a.etat.diagnostic.length + " syndrome(s) · " : ""}${a.etat.points.length} point(s)${nomCirc(a.etat) ? " · " + escapeHtml(nomCirc(a.etat)) : ""}${(a.etat.formules || []).length ? " · " + a.etat.formules.length + " formule(s)" : ""}</span>
           <span class="reseau-arch-pts">${this.ordonne(a.etat).map(p => escapeHtml(p.point)).join(" · ")}</span></div>
         <div class="reseau-arch-btns"><button type="button" class="reseau-ic2" data-ouvrir="${i}" title="Ouvrir ce réseau" aria-label="Ouvrir ce réseau">↗</button><button type="button" class="reseau-ic2" data-copier="${i}" title="Copier le résumé" aria-label="Copier le résumé">📄</button><button type="button" class="reseau-ic2" data-suppr="${i}" title="Supprimer" aria-label="Supprimer ce réseau enregistré">🗑</button></div></li>`).join("");
+    const blocs = { diag: true, circ: true, form: true, ...(this.fenetre.blocs || {}) };
+    const diag = e.diagnostic || [], forms = e.formules || [];
+    const puceS = k => { const s = this.syndDe(k); return `<span class="consult-chip"><button type="button" class="consult-nom" data-diag-o="${escapeHtml(k)}" title="Ouvrir la fiche dans un onglet">${escapeHtml(s ? sansChinois(s.nom) : k)}</button>${verrou ? "" : `<button type="button" class="consult-x" data-diag-x="${escapeHtml(k)}" aria-label="Retirer du diagnostic">✕</button>`}</span>`; };
+    const puceF = id => { const fo = this.formDe(id); return `<span class="consult-chip"><button type="button" class="consult-nom" data-form-o="${escapeHtml(id)}" title="Ouvrir la fiche dans un onglet">${escapeHtml(fo ? (fo.pinyin || id) : id)}</button><button type="button" class="consult-x" data-form-rx="${escapeHtml(id)}" title="Prescrire : format et prix selon le budget" aria-label="Prescrire cette formule">℞</button>${verrou ? "" : `<button type="button" class="consult-x" data-form-x="${escapeHtml(id)}" aria-label="Retirer la formule">✕</button>`}</span>`; };
+    const bloc = (cle, titre, n, corps) => `<details class="consult-bloc" data-bloc="${cle}"${blocs[cle] ? " open" : ""}><summary>${titre} <span class="reseau-n">${n}</span></summary>${corps}</details>`;
     const corpsEnCours = `
         <div class="reseau-rang">
           <input type="text" id="reseau-nom" class="reseau-nom" value="${escapeHtml(e.patiente)}" placeholder="Patiente (initiales)" aria-label="Patiente (initiales ou repère)"${dis}>
-          <select id="reseau-circuit" aria-label="Circuit"${dis}><option value="">Circuit…</option>${circuits.map(c => `<option value="${escapeHtml(c.id)}"${e.circuit === c.id ? " selected" : ""}>${escapeHtml(Circuits.nomCourt(c))} (${c.grille.join(" ")})</option>`).join("")}</select>
         </div>
-        <details class="reseau-schema-d"${this.fenetre.schemaFerme ? "" : " open"}><summary>Schéma</summary><div id="reseau-schema">${this.schema()}</div></details>
+        ${bloc("diag", "1 · Diagnostic", diag.length, `
+          <div class="consult-chips">${diag.map(puceS).join("") || `<span class="muted">Aucun syndrome : cherche-le ci-dessous, ou utilise « ＋ Consultation » sur une fiche.</span>`}</div>
+          ${verrou ? "" : `<input type="search" id="consult-synd-q" class="consult-q" placeholder="Ajouter un syndrome…" autocomplete="off" aria-label="Ajouter un syndrome au diagnostic"><ul id="consult-synd-sugg" class="prop-sugg reseau-sugg"></ul>`}`)}
+        ${bloc("circ", "2 · Circuit et points", nbP, `
+          <div id="consult-sugg-circ" class="consult-sugg"></div>
+          <div class="reseau-rang"><select id="reseau-circuit" aria-label="Circuit"${dis}><option value="">Circuit…</option>${circuits.map(c => `<option value="${escapeHtml(c.id)}"${e.circuit === c.id ? " selected" : ""}>${escapeHtml(Circuits.nomCourt(c))} (${c.grille.join(" ")})</option>`).join("")}</select></div>
+          <details class="reseau-schema-d"${this.fenetre.schemaFerme ? "" : " open"}><summary>Schéma</summary><div id="reseau-schema">${this.schema()}</div></details>
+          <ul class="reseau-liste">${lignes || `<li class="muted reseau-vide">Aucun point : utilise le ✓ à côté d'un point, ou tape-le ci-dessous.</li>`}</ul>
+          ${verrou ? "" : `<form id="reseau-ajout" class="reseau-ajout"><input type="text" id="reseau-point" placeholder="Ajouter un point (ex. TF5, Rt 4, Shui Jin)" autocomplete="off"><button type="submit" class="reseau-ic2" title="Ajouter" aria-label="Ajouter ce point">＋</button></form><ul id="reseau-sugg" class="prop-sugg reseau-sugg"></ul>`}`)}
+        ${bloc("form", "3 · Formule", forms.length, `
+          <div id="consult-sugg-form" class="consult-sugg"></div>
+          <div class="consult-chips">${forms.map(puceF).join("") || `<span class="muted">Aucune formule.</span>`}</div>
+          ${verrou ? "" : `<input type="search" id="consult-form-q" class="consult-q" placeholder="Ajouter une formule…" autocomplete="off" aria-label="Ajouter une formule"><ul id="consult-form-sugg" class="prop-sugg reseau-sugg"></ul>`}`)}
         <p id="reseau-avis" class="muted reseau-avis" aria-live="polite"></p>
-        <ul class="reseau-liste">${lignes || `<li class="muted reseau-vide">Aucun point : utilise le ✓ à côté d'un point, ou tape-le ci-dessous.</li>`}</ul>
-        ${verrou ? "" : `<form id="reseau-ajout" class="reseau-ajout"><input type="text" id="reseau-point" placeholder="Ajouter un point (ex. TF5, Rt 4)" autocomplete="off"><button type="submit" class="reseau-ic2" title="Ajouter" aria-label="Ajouter ce point">＋</button></form><ul id="reseau-sugg" class="prop-sugg reseau-sugg"></ul>`}
         <div class="reseau-barre">
           <button type="button" class="reseau-ic2" id="reseau-annuler" title="Annuler la dernière modification (Ctrl+Z)" aria-label="Annuler"${this.hist.length ? "" : " disabled"}>↶</button>
           <button type="button" class="reseau-ic2" id="reseau-refaire" title="Rétablir (Ctrl+Y)" aria-label="Rétablir"${this.futur.length ? "" : " disabled"}>↷</button>
           <button type="button" class="reseau-ic2" id="reseau-favoris" title="Ajouter d'un clic tes points favoris (★) des canaux du circuit" aria-label="Ajouter les points favoris"${verrou ? " disabled" : ""}>★</button>
           <span class="reseau-barre-vide"></span>
-          <button type="button" class="reseau-ic2" id="reseau-enreg" title="Enregistrer ce réseau" aria-label="Enregistrer ce réseau">💾</button>
+          <button type="button" class="reseau-ic2" id="reseau-enreg" title="Enregistrer cette consultation" aria-label="Enregistrer cette consultation">💾</button>
           <button type="button" class="reseau-ic2" id="reseau-copier" title="Copier le résumé" aria-label="Copier le résumé">📄</button>
-          <button type="button" class="reseau-ic2" id="reseau-verrou" title="${verrou ? "Rouvrir le réseau" : "Arrêter le réseau (définitif)"}" aria-label="${verrou ? "Rouvrir le réseau" : "Arrêter le réseau"}">${verrou ? "🔓" : "🔒"}</button>
-          <button type="button" class="reseau-ic2" id="reseau-nouveau" title="Nouveau réseau (celui-ci est gardé dans les enregistrés)" aria-label="Nouveau réseau">🆕</button>
+          <button type="button" class="reseau-ic2" id="reseau-verrou" title="${verrou ? "Rouvrir la consultation" : "Arrêter la consultation (définitif)"}" aria-label="${verrou ? "Rouvrir la consultation" : "Arrêter la consultation"}">${verrou ? "🔓" : "🔒"}</button>
+          <button type="button" class="reseau-ic2" id="reseau-nouveau" title="Nouvelle consultation (celle-ci est gardée dans les enregistrées)" aria-label="Nouvelle consultation">🆕</button>
         </div>`;
-    const corpsArchives = `<ul class="reseau-archives-liste">${arch || `<li class="muted reseau-vide">Aucun réseau enregistré. Le bouton 💾 de l'onglet « En cours » garde le réseau, et « Nouveau » le garde aussi avant de repartir à zéro.</li>`}</ul>`;
+    const corpsArchives = `<ul class="reseau-archives-liste">${arch || `<li class="muted reseau-vide">Aucune consultation enregistrée. Le bouton 💾 de l'onglet « En cours » la garde, et « Nouveau » la garde aussi avant de repartir à zéro.</li>`}</ul>`;
     f.innerHTML = `
-      <div class="reseau-tete" id="reseau-tete"><strong>📋 Réseau${e.patiente ? " — " + escapeHtml(e.patiente) : ""}${verrou ? " 🔒" : ""}</strong>
-        <span><button type="button" class="reseau-ic" id="reseau-reduire" title="${this.fenetre.reduit ? "Agrandir" : "Réduire"}" aria-label="${this.fenetre.reduit ? "Agrandir" : "Réduire"}">${this.fenetre.reduit ? "▢" : "—"}</button><button type="button" class="reseau-ic" id="reseau-fermer" title="Fermer (le réseau est conservé)" aria-label="Fermer">✕</button></span></div>
+      <div class="reseau-tete" id="reseau-tete"><strong>📋 Consultation${e.patiente ? " — " + escapeHtml(e.patiente) : ""}${verrou ? " 🔒" : ""}</strong>
+        <span><button type="button" class="reseau-ic" id="reseau-reduire" title="${this.fenetre.reduit ? "Agrandir" : "Réduire"}" aria-label="${this.fenetre.reduit ? "Agrandir" : "Réduire"}">${this.fenetre.reduit ? "▢" : "—"}</button><button type="button" class="reseau-ic" id="reseau-fermer" title="Fermer (la consultation est conservée)" aria-label="Fermer">✕</button></span></div>
       <div class="reseau-onglets" role="tablist">
         <button type="button" role="tab" class="reseau-onglet${this.vue === "reseau" ? " actif" : ""}" data-vue="reseau">En cours <span class="reseau-n">${nbP}</span></button>
         <button type="button" role="tab" class="reseau-onglet${this.vue === "archives" ? " actif" : ""}" data-vue="archives">Enregistrés <span class="reseau-n">${nbA}</span></button>
@@ -273,7 +335,7 @@ const Reseau = {
         const cible = this.archives[+b.dataset.ouvrir];
         if (!cible) return;
         if (this.etat.archiveId !== cible.id) this.archiver();          // le réseau en cours n'est pas perdu
-        this.etat = { patiente: "", circuit: null, verrou: false, points: [], ...JSON.parse(JSON.stringify(cible.etat)), archiveId: cible.id };
+        this.etat = { patiente: "", circuit: null, verrou: false, points: [], diagnostic: [], formules: [], ...JSON.parse(JSON.stringify(cible.etat)), archiveId: cible.id };
         this.vue = "reseau"; this.sauver(); this.rendre();
       }));
       f.querySelectorAll("[data-copier]").forEach(b => b.addEventListener("click", () => { const a = this.archives[+b.dataset.copier]; if (a) copier(this.resume(a.etat)); }));
@@ -286,8 +348,45 @@ const Reseau = {
       }));
       return;
     }
-    q("#reseau-nom").addEventListener("input", ev => { this.etat.patiente = ev.target.value; this.sauver(); const t = q("#reseau-tete strong"); if (t) t.textContent = "📋 Réseau" + (this.etat.patiente ? " — " + this.etat.patiente : "") + (this.etat.verrou ? " 🔒" : ""); });
+    q("#reseau-nom").addEventListener("input", ev => { this.etat.patiente = ev.target.value; this.sauver(); const t = q("#reseau-tete strong"); if (t) t.textContent = "📋 Consultation" + (this.etat.patiente ? " — " + this.etat.patiente : "") + (this.etat.verrou ? " 🔒" : ""); });
     q("#reseau-circuit").addEventListener("change", ev => { this.etat.circuit = ev.target.value || null; this.sauver(); q("#reseau-schema").innerHTML = this.schema(); });
+    f.querySelectorAll(".consult-bloc").forEach(b => b.addEventListener("toggle", () => { this.fenetre.blocs = { ...(this.fenetre.blocs || {}), [b.dataset.bloc]: b.open }; this.ecrire(this.CLE_FENETRE, this.fenetre); }));
+    f.querySelectorAll("[data-diag-o]").forEach(b => b.addEventListener("click", () => { const s = this.syndDe(b.dataset.diagO); if (s) Onglets.ouvrirSyndrome(s); }));
+    f.querySelectorAll("[data-diag-x]").forEach(b => b.addEventListener("click", () => this.retirerDe("diagnostic", b.dataset.diagX)));
+    f.querySelectorAll("[data-form-o]").forEach(b => b.addEventListener("click", () => Onglets.ouvrirFormule(b.dataset.formO)));
+    f.querySelectorAll("[data-form-x]").forEach(b => b.addEventListener("click", () => this.retirerDe("formules", b.dataset.formX)));
+    f.querySelectorAll("[data-form-rx]").forEach(b => b.addEventListener("click", () => Onglets.ouvrirPrescription(null, { etat: { formule: b.dataset.formRx } })));
+    const chercher = (champId, listeId, trouver, ajouter) => {
+      const ch = q(champId), ul = q(listeId);
+      if (!ch) return;
+      ch.addEventListener("input", () => {
+        const mots = dsNorm(ch.value.trim()).split(/\s+/).filter(Boolean);
+        if (!mots.length) { ul.innerHTML = ""; return; }
+        const l = trouver(mots).slice(0, 8);
+        ul.innerHTML = l.map((x, i) => `<li data-i="${i}"><strong>${escapeHtml(x.titre)}</strong> <span class="muted">${escapeHtml(x.sous || "")}</span></li>`).join("") || `<li class="muted">Aucun résultat.</li>`;
+        ul.querySelectorAll("li[data-i]").forEach(li => li.addEventListener("click", () => ajouter(l[+li.dataset.i])));
+      });
+      ch.addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); const p = ul.querySelector("li[data-i]"); if (p) p.click(); } });
+    };
+    chercher("#consult-synd-q", "#consult-synd-sugg",
+      mots => (Syndromes.entries || []).filter(s => !(this.etat.diagnostic || []).includes(s.domaine + "/" + s.chemin) && mots.every(m => dsNorm(s.nom + " " + (s.sousLabel || "")).includes(m))).map(s => ({ titre: sansChinois(s.nom), sous: (Syndromes.domaineLabels[s.domaine] || "") + (s.sousLabel ? " · " + s.sousLabel : ""), s })),
+      x => this.ajouterDiagnostic(x.s));
+    chercher("#consult-form-q", "#consult-form-sugg",
+      mots => (Formules.index || []).filter(fo => !(this.etat.formules || []).includes(fo.id) && mots.every(m => dsNorm([fo.pinyin, fo.nom_fr, fo.indications_syndrome].join(" ")).includes(m))).map(fo => ({ titre: fo.pinyin || fo.id, sous: fo.nom_fr || fo.categorie_nom || "", fo })),
+      x => this.ajouterFormule(x.fo.id));
+    // suggestions tirées du diagnostic
+    const zc = q("#consult-sugg-circ"), zf = q("#consult-sugg-form");
+    if ((this.etat.diagnostic || []).length && !this.etat.verrou) this.suggestions().then(s => {
+      const circ = s.circuits.filter(id => id !== this.etat.circuit), form = s.formules.filter(id => !(this.etat.formules || []).includes(id));
+      if (zc && zc.isConnected && circ.length) {
+        zc.innerHTML = `<span class="muted">Suggéré par le diagnostic :</span> ` + circ.map(id => `<button type="button" class="cat-chip" data-sugg-circ="${escapeHtml(id)}">${escapeHtml(Circuits.nomCourt(Circuits.parId(id)))}</button>`).join(" ");
+        zc.querySelectorAll("[data-sugg-circ]").forEach(b => b.addEventListener("click", () => this.choisirCircuit(b.dataset.suggCirc)));
+      }
+      if (zf && zf.isConnected && form.length) {
+        zf.innerHTML = `<span class="muted">Suggéré par le diagnostic :</span> ` + form.map(id => `<button type="button" class="cat-chip" data-sugg-form="${escapeHtml(id)}">＋ ${escapeHtml((this.formDe(id) || {}).pinyin || id)}</button>`).join(" ");
+        zf.querySelectorAll("[data-sugg-form]").forEach(b => b.addEventListener("click", () => this.ajouterFormule(b.dataset.suggForm)));
+      }
+    }).catch(() => {});
     const sd = q(".reseau-schema-d"); if (sd) sd.addEventListener("toggle", () => { this.fenetre.schemaFerme = !sd.open; this.ecrire(this.CLE_FENETRE, this.fenetre); });
     f.querySelectorAll(".reseau-ligne").forEach(l => {
       const id = l.dataset.id, ta = l.querySelector(".reseau-raison"); ta.dataset.avant = ta.value;
@@ -332,19 +431,19 @@ const Reseau = {
     q("#reseau-verrou").addEventListener("click", () => { this.snap(); this.etat.verrou = !this.etat.verrou; this.sauver(); this.rendre(); });
     q("#reseau-copier").addEventListener("click", () => copier(this.resume()));
     q("#reseau-enreg").addEventListener("click", () => {
-      if (!this.etat.points.length) { this.avertir("Rien à enregistrer."); return; }
-      this.archiver(); this.rendre(); this.avertir("Réseau enregistré.");
+      if (!this.aContenu()) { this.avertir("Rien à enregistrer."); return; }
+      this.archiver(); this.rendre(); this.avertir("Consultation enregistrée.");
     });
     q("#reseau-nouveau").addEventListener("click", () => {
-      const garde = this.etat.points.length ? this.archiver() : null;                      // le réseau en cours est gardé dans les enregistrés
-      this.etat = { patiente: "", circuit: null, verrou: false, points: [] };
+      const garde = this.aContenu() ? this.archiver() : null;                               // la consultation en cours est gardée dans les enregistrées
+      this.etat = { patiente: "", circuit: null, verrou: false, points: [], diagnostic: [], formules: [] };
       this.sauver(); this.rendre();
-      if (garde) this.avertir("Réseau précédent gardé dans « Enregistrés ».");
+      if (garde) this.avertir("Consultation précédente gardée dans « Enregistrés ».");
     });
   },
 
   init() {
-    this.etat = { patiente: "", circuit: null, verrou: false, points: [], ...this.lire(this.CLE_ETAT, {}) };
+    this.etat = { patiente: "", circuit: null, verrou: false, points: [], diagnostic: [], formules: [], ...this.lire(this.CLE_ETAT, {}) };
     this.archives = this.lire(this.CLE_ARCHIVES, []);
     this.fenetre = { ouvert: false, reduit: false, x: null, y: null, ...this.lire(this.CLE_FENETRE, {}) };
     this.creer();

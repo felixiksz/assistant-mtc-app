@@ -692,6 +692,7 @@ const Formules = {
       ProchesFormules.remplir(detail, f);
       ModifArbre.remplir(detail, f);
       detail.prepend(Comparateur.bouton("", () => Comparateur.ajouterFormule(entry.id)));
+      if (typeof Reseau !== "undefined") detail.prepend(Reseau.bouton(() => Reseau.ajouterFormule(entry.id)));
       addEditControls(detail, "formules/" + entry.chemin, f, {
         onSaved: async (parsed) => { await this.apresSauvegarde(entry, parsed); await this.showDetail(entry, liEl); }
       });
@@ -2111,6 +2112,7 @@ const Syndromes = {
       const d = await Store.readJSON(`syndromes/${entry.domaine}/${entry.chemin}`);
       detail.innerHTML = this.renderSyndrome(d, entry.domaine);
       detail.prepend(Comparateur.bouton("", () => Comparateur.ajouterSyndrome(entry)));
+      if (typeof Reseau !== "undefined") detail.prepend(Reseau.bouton(() => Reseau.ajouterDiagnostic(entry)));
       this.surligner(detail, document.getElementById("syn-search").value);
       addEditControls(detail, "syndromes/" + entry.domaine + "/" + entry.chemin, d, {
         onSaved: async (parsed) => { await this.apresSauvegarde(entry, parsed); await this.showDetail(entry, liEl); }
@@ -6030,7 +6032,8 @@ const GlobalSearch = {
         group: "Formules", title: f.pinyin || f.id, sub: f.indications_syndrome || f.categorie_nom || "",
         go: () => { this.gotoTab("formules"); Formules.showDetail(f); },
         onglet: () => Onglets.ouvrirFormule(f.id),
-        comparer: () => Comparateur.ajouterFormule(f.id)
+        comparer: () => Comparateur.ajouterFormule(f.id),
+        reseau: () => Reseau.ajouterFormule(f.id)
       });
     });
 
@@ -6048,7 +6051,8 @@ const GlobalSearch = {
         group: "Syndromes", title: e.nom, sub: (Syndromes.domaineLabels[e.domaine] || "") + (e.sousLabel ? " · " + e.sousLabel : ""),
         go: () => { this.gotoTab("syndromes"); Syndromes.showDetail(e); },
         onglet: () => Onglets.ouvrirSyndrome(e),
-        comparer: () => Comparateur.ajouterSyndrome(e)
+        comparer: () => Comparateur.ajouterSyndrome(e),
+        reseau: () => Reseau.ajouterDiagnostic(e)
       });
     });
 
@@ -6141,7 +6145,8 @@ const GlobalSearch = {
       if (ok(Circuits.texteRecherche(c))) out.push({
         group: "Circuits", title: Circuits.nomCourt(c), sub: c.grille.join(" · ") + ((c.mots_cles || []).length ? " — " + c.mots_cles.slice(0, 2).join(" · ") : ""),
         go: () => Onglets.ouvrirCircuit(c.id),
-        comparer: () => Comparateur.ajouterCircuit(c.id)
+        comparer: () => Comparateur.ajouterCircuit(c.id),
+        reseau: () => Reseau.choisirCircuit(c.id)
       });
     });
     if (typeof Tung !== "undefined" && (Tung.liste || []).length) Tung.liste.forEach(f => {
@@ -6195,7 +6200,7 @@ const GlobalSearch = {
       list.slice(0, max).forEach(it => {
         const i = flat.push(it) - 1;
         html += `<li data-i="${i}"><span class="gsr-txt"><span class="gsr-title">${dsMarque(it.title, q)}</span>${it.sub ? `<span class="gsr-sub">${dsMarque(it.sub, q)}</span>` : ""}</span>` +
-          `<span class="gsr-actions">${it.comparer ? `<button type="button" data-act="comparer" title="Mettre sur le plateau de comparaison" aria-label="Mettre sur le plateau de comparaison">⇄</button>` : ""}${it.onglet ? `<button type="button" data-act="onglet" title="Ouvrir dans un onglet de travail" aria-label="Ouvrir dans un onglet de travail">⧉</button>` : ""}${it.reseau ? `<button type="button" data-act="reseau" title="Ajouter au réseau de la patiente" aria-label="Ajouter au réseau de la patiente">＋</button>` : ""}</span></li>`;
+          `<span class="gsr-actions">${it.comparer ? `<button type="button" data-act="comparer" title="Mettre sur le plateau de comparaison" aria-label="Mettre sur le plateau de comparaison">⇄</button>` : ""}${it.onglet ? `<button type="button" data-act="onglet" title="Ouvrir dans un onglet de travail" aria-label="Ouvrir dans un onglet de travail">⧉</button>` : ""}${it.reseau ? `<button type="button" data-act="reseau" title="Ajouter à la consultation en cours" aria-label="Ajouter à la consultation en cours">＋</button>` : ""}</span></li>`;
       });
       if (list.length > max) html += `<li class="gsr-plus" data-f="${list[0].type}">Voir les ${list.length} résultats…</li>`;
       html += `</ul>`;

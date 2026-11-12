@@ -390,6 +390,8 @@ const Onglets = {
     return this.ouvrir("synd:" + entry.domaine + "/" + entry.chemin, entry.nom, "🩺", async (zone, recharger) => {
       const d = await Store.readJSON(`syndromes/${entry.domaine}/${entry.chemin}`);
       zone.innerHTML = Syndromes.renderSyndrome(d, entry.domaine);
+      zone.prepend(Comparateur.bouton("", () => Comparateur.ajouterSyndrome(entry)));
+      zone.prepend(Reseau.bouton(() => Reseau.ajouterDiagnostic(entry)));
       addEditControls(zone, "syndromes/" + entry.domaine + "/" + entry.chemin, d, { onSaved: async parsed => { await Syndromes.apresSauvegarde(entry, parsed); await recharger(); } });
     }, { kind: "synd", fenetre: opt.fenetre, entry: { id: entry.id, domaine: entry.domaine, chemin: entry.chemin, nom: entry.nom, sousLabel: entry.sousLabel } }, opt.differe);
   },
@@ -434,6 +436,8 @@ const Onglets = {
         Store.hydrateImages(zone);
         ProchesFormules.remplir(zone, d);
         ModifArbre.remplir(zone, d);
+        zone.prepend(Comparateur.bouton("", () => Comparateur.ajouterFormule(f.id)));
+        zone.prepend(Reseau.bouton(() => Reseau.ajouterFormule(f.id)));
         addEditControls(zone, "formules/" + f.chemin, d, { onSaved: async parsed => { await Formules.apresSauvegarde(f, parsed); await recharger(); } });
       } else {
         const parent = Formules.byId.get(v.parent), fp = await Store.readJSON("formules/" + parent.chemin);

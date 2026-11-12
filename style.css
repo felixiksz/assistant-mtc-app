@@ -1575,3 +1575,18 @@ body:has(#tab-comparer.active) #cmp-pastille { display: inline-block; }
 .cmpc-tete { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.4rem; }
 @media (max-width: 700px) { #cmp-plateau { bottom: 7rem; } }
 @media print { #cmp-plateau { display: none !important; } }
+/* consultation : trois blocs dans la fenêtre du réseau */
+.consult-bloc { border: 1.5px solid var(--ink); border-radius: 12px !important; padding: 0.4rem 0.6rem; margin: 0.45rem 0; background: var(--panel); }
+.consult-bloc > summary { cursor: pointer; font-weight: 700; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.consult-bloc[open] > summary { margin-bottom: 0.4rem; }
+.consult-chips, .cmp-pl-items { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.2rem 0 0.4rem; font-size: 0.88rem; }
+.consult-chip, .cmp-pl-items .chosen-item { display: inline-flex; align-items: center; border: 1.5px solid var(--ink); border-radius: 999px !important; padding: 0.1rem 0.25rem 0.1rem 0.65rem; background: var(--bg); font-size: 0.86rem; }
+.consult-nom { font: inherit; border: 0; background: none; color: inherit; cursor: pointer; padding: 0; text-align: left; }
+.consult-nom:hover { text-decoration: underline; }
+.consult-x, .cmp-pl-items .chosen-item button { font: inherit; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 0.3rem; }
+.consult-x:hover, .cmp-pl-items .chosen-item button:hover { color: var(--ink); }
+.consult-q { width: 100%; box-sizing: border-box; font: inherit; padding: 0.3rem 0.8rem; border-radius: 999px !important; }
+.consult-sugg { font-size: 0.82rem; margin: 0 0 0.4rem; display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+.consult-sugg:empty { display: none; }
+.consult-sugg .cat-chip { font-size: 0.78rem; padding: 0.15rem 0.55rem; }
+.consult-add { margin-right: 0.4rem; }
