@@ -1549,3 +1549,15 @@ article.formule-detail, .vue-travail { border-radius: 12px !important; }
 .circ-lien-couple { font: inherit; font-weight: inherit; color: inherit; background: none; border: 0; border-bottom: 2px dotted var(--accent); padding: 0; cursor: pointer; }
 .circ-lien-couple:hover { background: var(--accent-soft, transparent); }
 .circ-lies-auto { margin: 0.4rem 0; }
+/* recherche unique : filtres par type, actions par résultat */
+.gsr-filtres { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0.5rem 0.6rem; position: sticky; top: 0; background: var(--panel); border-bottom: 1px solid var(--line); z-index: 1; }
+.gsr-filtres .cat-chip { font-size: 0.78rem; padding: 0.2rem 0.6rem; }
+.gsr-nb { opacity: 0.7; font-size: 0.72rem; }
+#global-search-results li[data-i] { display: flex; align-items: center; gap: 0.5rem; }
+#global-search-results .gsr-txt { flex: 1; min-width: 0; }
+#global-search-results .gsr-actions { display: flex; gap: 0.25rem; flex: none; }
+#global-search-results .gsr-actions button { font: inherit; width: 2rem; height: 2rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; border-radius: 999px !important; }
+#global-search-results .gsr-actions button:hover { background: var(--ink); color: var(--bg); }
+#global-search-results li.gsr-plus { color: var(--muted); font-size: 0.82rem; }
+@media (min-width: 900px) { .global-search-wrap { max-width: 560px; } }
+#global-search-results { z-index: 60; }

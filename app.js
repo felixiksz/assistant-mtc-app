@@ -5952,7 +5952,8 @@ const GlobalSearch = {
     this.input = document.getElementById("global-search");
     this.results = document.getElementById("global-search-results");
     this.input.addEventListener("input", () => this.runSearch());
-    this.input.addEventListener("focus", () => { if (this.input.value.trim()) this.runSearch(); });
+    this.input.addEventListener("focus", () => { this.preparer(); if (this.input.value.trim()) this.runSearch(); });
+    setTimeout(() => this.preparer(), 5000);                 // circuits, points Tung et texte des syndromes : prêts avant la première recherche
     document.addEventListener("click", (e) => {
       if (!e.target.closest(".global-search-wrap")) this.close();
     });
@@ -5973,19 +5974,21 @@ const GlobalSearch = {
   collect(query) {
     const q = normalizeSearch(query);
     if (!q) return [];
+    const mots = q.split(" ").filter(Boolean), ok = hay => { const h = normalizeSearch(hay); return mots.every(m => h.includes(m)); };
     const out = [];
 
     (Formules.index || []).forEach(f => {
       const hay = [f.pinyin, f.nom_fr, f.indications_syndrome, f.categorie_nom].filter(Boolean).join(" ");
-      if (normalizeSearch(hay).includes(q)) out.push({
+      if (ok(hay)) out.push({
         group: "Formules", title: f.pinyin || f.id, sub: f.indications_syndrome || f.categorie_nom || "",
-        go: () => { this.gotoTab("formules"); Formules.showDetail(f); }
+        go: () => { this.gotoTab("formules"); Formules.showDetail(f); },
+        onglet: () => Onglets.ouvrirFormule(f.id)
       });
     });
 
     (Psy.entries || []).forEach(e => {
       const hay = [e.nom, e.categorie_source, e.resume_court, e._searchText].filter(Boolean).join(" ");
-      if (normalizeSearch(hay).includes(q)) out.push({
+      if (ok(hay)) out.push({
         group: "Principes Taoïstes", title: e.nom, sub: e.kind === "niveau" ? "Farrell — Niveau de latence" : e.kind === "vaisseau" ? "Farrell — Vaisseau / confluence" : e.kind === "yuen" ? "Jeffrey Yuen — " + (e.categorie_source || "") : "Sterman — " + (e.categorie_source || ""),
         go: () => { this.gotoTab("psy"); Psy.showDetail(e); }
       });
@@ -5993,15 +5996,16 @@ const GlobalSearch = {
 
     (Syndromes.entries || []).forEach(e => {
       const hay = [e.nom, e.sousLabel, e._searchText].filter(Boolean).join(" ");
-      if (normalizeSearch(hay).includes(q)) out.push({
+      if (ok(hay)) out.push({
         group: "Syndromes", title: e.nom, sub: (Syndromes.domaineLabels[e.domaine] || "") + (e.sousLabel ? " · " + e.sousLabel : ""),
-        go: () => { this.gotoTab("syndromes"); Syndromes.showDetail(e); }
+        go: () => { this.gotoTab("syndromes"); Syndromes.showDetail(e); },
+        onglet: () => Onglets.ouvrirSyndrome(e)
       });
     });
 
     (CasPratique.cas || []).forEach(c => {
       const hay = [c.titre_original, c.resume_court, c._searchText].filter(Boolean).join(" ");
-      if (normalizeSearch(hay).includes(q)) out.push({
+      if (ok(hay)) out.push({
         group: "Exemples de cas cliniques", title: c.titre_original || c.id, sub: CasPratique.sources[c.source_id] || "",
         go: () => { this.gotoTab("cas-pratique"); CasPratique.showDetail(c); }
       });
@@ -6009,8 +6013,10 @@ const GlobalSearch = {
 
     (Points.entries || []).forEach(e => {
       const hay = [e.id, e.data.pinyin, e.data.nom_fr, e._searchText].filter(Boolean).join(" ");
-      if (normalizeSearch(hay).includes(q)) out.push({
+      if (ok(hay)) out.push({
         group: "Points", title: e.id + (e.data.pinyin ? " — " + e.data.pinyin : ""), sub: e.canalNom,
+        onglet: () => Onglets.ouvrirPoint(e.id),
+        reseau: () => Reseau.ajouter({ point: e.id, source: "recherche" }),
         go: () => {
           this.gotoTab("points");
           const fichesBtn = document.getElementById("pts-view-fiches");
@@ -6022,7 +6028,7 @@ const GlobalSearch = {
 
     ((window.TdahData && window.TdahData.types) || []).forEach(t => {
       const hay = [t.nom, t.mecanisme, t.approche, ...(t.signes_cles || [])].filter(Boolean).join(" ");
-      if (normalizeSearch(hay).includes(q)) out.push({
+      if (ok(hay)) out.push({
         group: "TDAH", title: t.nom, sub: t.approche || "",
         go: () => {
           this.gotoTab("tableaux-psy");
@@ -6038,7 +6044,7 @@ const GlobalSearch = {
     const PSY_THEME_LABELS = { depression: "Dépression", anxiete: "Anxiété", insomnie: "Insomnie" };
     ((window.DepressionAnxieteInsomnieData && window.DepressionAnxieteInsomnieData.types) || []).forEach(t => {
       const hay = [t.nom, t.mecanisme, t.approche, ...(t.signes_cles || [])].filter(Boolean).join(" ");
-      if (!normalizeSearch(hay).includes(q)) return;
+      if (!ok(hay)) return;
       (t.themes || []).forEach(theme => {
         out.push({
           group: PSY_THEME_LABELS[theme] || theme, title: t.nom, sub: t.approche || "",
@@ -6057,7 +6063,7 @@ const GlobalSearch = {
     ((Croisement.data && Croisement.data.points) || []).forEach(p => {
       const hay = [p.point, p.canal_principal, ...(p.canaux_recoupes || []).map(c => c.canal + " " + c.nom),
         ...(p.vaisseaux_extraordinaires_recoupes || []).map(v => v.vaisseau)].filter(Boolean).join(" ");
-      if (normalizeSearch(hay).includes(q)) out.push({
+      if (ok(hay)) out.push({
         group: "Croisements de canaux", title: p.point,
         sub: [...(p.canaux_recoupes || []).map(c => c.canal), ...(p.vaisseaux_extraordinaires_recoupes || []).map(v => v.vaisseau)].join(", "),
         go: () => {
@@ -6072,7 +6078,7 @@ const GlobalSearch = {
     ((CanauxDistincts.data && CanauxDistincts.data.confluences) || []).forEach(conf => conf.canaux.forEach(can => {
       const hay = [can.nom, can.code, ...Object.values(can.champs).filter(Boolean).map(x => x.texte),
         ...Object.values(conf.champs || {}).filter(Boolean).map(x => x.texte)].join(" ");
-      if (normalizeSearch(hay).includes(q)) out.push({
+      if (ok(hay)) out.push({
         group: "Canaux distincts", title: `${can.nom} (${can.code}) — ${conf.rang}${conf.rang === 1 ? "ʳᵉ" : "ᵉ"} confluence`, sub: "Tableaux pathologiques · " + conf.paire,
         go: () => {
           this.gotoTab("points");
@@ -6082,7 +6088,36 @@ const GlobalSearch = {
       });
     }));
 
-    return out.slice(0, 80);
+    if (typeof Circuits !== "undefined" && (Circuits.liste || []).length) Circuits.liste.forEach(c => {
+      if (ok(Circuits.texteRecherche(c))) out.push({
+        group: "Circuits", title: Circuits.nomCourt(c), sub: c.grille.join(" · ") + ((c.mots_cles || []).length ? " — " + c.mots_cles.slice(0, 2).join(" · ") : ""),
+        go: () => Onglets.ouvrirCircuit(c.id)
+      });
+    });
+    if (typeof Tung !== "undefined" && (Tung.liste || []).length) Tung.liste.forEach(f => {
+      if (f._rech === undefined) f._rech = Tung.texteRecherche(f);
+      if (ok(f._rech)) out.push({
+        group: "Points Tung", title: f.nom + ((f.numeros || []).length ? " " + f.numeros.join("/") : ""), sub: [((f.canaux || {}).codes || []).join("+"), sansHanzi(Tung.action(f) || "")].filter(Boolean).join(" — "),
+        go: () => Onglets.ouvrirTung(f.id),
+        reseau: () => Reseau.ajouterTung(f)
+      });
+    });
+    // dans chaque groupe : d'abord les résultats dont le titre contient les mots cherchés
+    const sc = it => { const t = normalizeSearch(it.title); return mots.every(m => t.includes(m)) ? 0 : mots.some(m => t.includes(m)) ? 1 : 2; };
+    out.forEach((it, i) => { it._s = sc(it); it._i = i; it.type = this.TYPE_GROUPE[it.group] || "autres"; });
+    return out.sort((x, y) => x._s - y._s || x._i - y._i);
+  },
+
+  // un seul champ pour tout : filtres par type, et sur chaque résultat ⧉ (onglet de travail) et ＋ (réseau de la patiente)
+  TYPES: [["tout", "Tout"], ["syndromes", "Syndromes"], ["formules", "Formules"], ["circuits", "Circuits"], ["points", "Points"], ["tung", "Points Tung"], ["autres", "Théorie et cas"]],
+  TYPE_GROUPE: { "Formules": "formules", "Syndromes": "syndromes", "Circuits": "circuits", "Points": "points", "Croisements de canaux": "points", "Canaux distincts": "points", "Points Tung": "tung" },
+  filtre: "tout",
+  preparer() {
+    if (this._pret) return;
+    this._pret = true;
+    const relance = () => { if (this.input.value.trim() && this.results.classList.contains("open")) this.runSearch(); };
+    [typeof Circuits !== "undefined" && Circuits.ensureLoaded && Circuits.ensureLoaded(), typeof Tung !== "undefined" && Tung.ensureLoaded && Tung.ensureLoaded(),
+      Syndromes.ensureDeepIndexed && Syndromes.ensureDeepIndexed()].filter(Boolean).forEach(p => Promise.resolve(p).then(relance).catch(() => {}));
   },
 
   runSearch() {
@@ -6090,37 +6125,41 @@ const GlobalSearch = {
   },
 
   render(items) {
-    if (!items.length) {
-      const q = this.input.value.trim();
-      this.results.innerHTML = q ? `<p class="gsr-empty">Aucun résultat pour « ${escapeHtml(q)} ».</p>` : "";
-      this.results.classList.toggle("open", !!q);
-      return;
-    }
+    const q = this.input.value.trim();
+    if (!q) { this.results.innerHTML = ""; this.results.classList.remove("open"); return; }
+    if (!items.length) { this.results.innerHTML = `<p class="gsr-empty">Aucun résultat pour « ${escapeHtml(q)} ».</p>`; this.results.classList.add("open"); return; }
+    const nb = {}; items.forEach(it => { nb[it.type] = (nb[it.type] || 0) + 1; });
+    if (this.filtre !== "tout" && !nb[this.filtre]) this.filtre = "tout";
+    const tout = this.filtre === "tout", max = tout ? 5 : 80;
+    const chips = `<div class="gsr-filtres">` + this.TYPES.filter(([k]) => k === "tout" || nb[k]).map(([k, lib]) =>
+      `<button type="button" class="cat-chip${k === this.filtre ? " active" : ""}" data-f="${k}">${lib} <span class="gsr-nb">${k === "tout" ? items.length : nb[k]}</span></button>`).join("") + `</div>`;
     const groups = new Map();
-    items.forEach(it => {
-      if (!groups.has(it.group)) groups.set(it.group, []);
-      groups.get(it.group).push(it);
-    });
-    const qBrut = this.input.value;          // mot cherché, surligné dans les titres et sous-titres
-    let html = "";
-    let flat = [];
-    groups.forEach((list, group) => {
+    items.filter(it => tout || it.type === this.filtre).forEach(it => { if (!groups.has(it.group)) groups.set(it.group, []); groups.get(it.group).push(it); });
+    const ordre = ["Syndromes", "Formules", "Circuits", "Points", "Points Tung"];
+    const cles = [...groups.keys()].sort((x, y) => (ordre.indexOf(x) < 0 ? 99 : ordre.indexOf(x)) - (ordre.indexOf(y) < 0 ? 99 : ordre.indexOf(y)));
+    const flat = [];
+    let html = chips;
+    cles.forEach(group => {
+      const list = groups.get(group);
       html += `<div class="gsr-group-label">${escapeHtml(group)} (${list.length})</div><ul>`;
-      list.forEach(it => {
-        html += `<li><span class="gsr-title">${dsMarque(it.title, qBrut)}</span>${it.sub ? `<span class="gsr-sub">${dsMarque(it.sub, qBrut)}</span>` : ""}</li>`;
+      list.slice(0, max).forEach(it => {
+        const i = flat.push(it) - 1;
+        html += `<li data-i="${i}"><span class="gsr-txt"><span class="gsr-title">${dsMarque(it.title, q)}</span>${it.sub ? `<span class="gsr-sub">${dsMarque(it.sub, q)}</span>` : ""}</span>` +
+          `<span class="gsr-actions">${it.onglet ? `<button type="button" data-act="onglet" title="Ouvrir dans un onglet de travail" aria-label="Ouvrir dans un onglet de travail">⧉</button>` : ""}${it.reseau ? `<button type="button" data-act="reseau" title="Ajouter au réseau de la patiente" aria-label="Ajouter au réseau de la patiente">＋</button>` : ""}</span></li>`;
       });
+      if (list.length > max) html += `<li class="gsr-plus" data-f="${list[0].type}">Voir les ${list.length} résultats…</li>`;
       html += `</ul>`;
-      flat = flat.concat(list);
     });
     this.results.innerHTML = html;
     this.results.classList.add("open");
-    Array.from(this.results.querySelectorAll("li")).forEach((li, i) => {
-      li.addEventListener("click", () => {
-        flat[i].go();
-        this.close();
-        this.input.value = "";
-      });
-    });
+    this.results.querySelectorAll("[data-f]").forEach(x => x.addEventListener("click", ev => { ev.stopPropagation(); this.filtre = x.dataset.f; this.results.scrollTop = 0; this.runSearch(); }));
+    this.results.querySelectorAll("li[data-i]").forEach(li => li.addEventListener("click", ev => {
+      const it = flat[+li.dataset.i], act = ev.target.closest("[data-act]");
+      if (act && act.dataset.act === "reseau") { ev.stopPropagation(); it.reseau(); return; }      // la liste reste ouverte : on peut en ajouter plusieurs
+      if (act && act.dataset.act === "onglet") it.onglet(); else it.go();
+      this.close();
+      this.input.value = "";
+    }));
   }
 };
 GlobalSearch.init();
