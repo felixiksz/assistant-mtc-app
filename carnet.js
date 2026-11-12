@@ -1,137 +1,244 @@
 "use strict";
 
 /* ============================= Carnet des circuits (PDF A5) =============================
-   Met en page tous les circuits, avec toutes leurs informations, dans le style des carnets aide-mémoire :
-   A5 portrait, Archivo, noir et blanc, tableaux à filets noirs, intitulés sur fond gris clair, pied de page alterné.
-   Pensé en doubles pages : p. 1 = couverture, chaque circuit commence sur une page de gauche, total multiple de 4.
-   Le carnet s'ouvre dans une nouvelle fenêtre ; « Imprimer » puis « Enregistrer au format PDF » donne le fichier.
-   Dépend de app.js (escapeHtml, sansChinois, Syndromes, Formules), circuits.js (Circuits), tung.js (Tung). */
+   Met en page les circuits dans le style des carnets aide-mémoire : A5 portrait, Archivo, noir et blanc,
+   tableaux à filets noirs, intitulés sur fond gris clair, pied de page alterné.
+   Le carnet s'ouvre dans une nouvelle fenêtre, avec un panneau de réglages : pour chaque rubrique, on choisit de l'inclure ou non
+   et sa mise en page (tableau, texte suivi, colonnes…) ; le nombre de pages se recalcule à chaque changement.
+   « Imprimer » puis « Enregistrer au format PDF » donne le fichier.
+   Dépend de app.js (escapeHtml, sansHanzi, Syndromes, Formules), circuits.js (Circuits), tung.js (Tung). */
 
 const CarnetCircuits = {
+  CLE: "carnet_circuits_options_v1",
+
+  // ---------- réglages : pour chaque rubrique, plusieurs mises en page (la dernière la retire)
+  CHAMPS: [
+    { k: "mode", lib: "Enchaînement des circuits", choix: [["double", "Chaque circuit commence sur une page de gauche (doubles pages)"], ["page", "Chaque circuit commence sur une nouvelle page"], ["suite", "À la suite, sans saut de page (le plus court)"]] },
+    { k: "taille", lib: "Taille du texte", choix: [["8.6", "Normale (8,6 pt)"], ["8", "Petite (8 pt)"], ["7.4", "Très petite (7,4 pt)"]] },
+    { k: "schema", lib: "Schéma et usage le plus courant", choix: [["cote", "Schéma à gauche, usage encadré à droite"], ["titre", "Petit schéma à côté du titre, usage sur une ligne"], ["sans", "Sans schéma, usage sur une ligne"]] },
+    { k: "indications", lib: "Indications", choix: [["tableau", "Tableau par rubrique"], ["suivi", "Texte suivi, rubriques en gras"], ["colonnes", "Liste sur deux colonnes"], ["non", "Ne pas inclure"]] },
+    { k: "actions", lib: "Actions", choix: [["liste", "Liste, une action par ligne"], ["colonnes", "Liste sur deux colonnes"], ["suivi", "Texte suivi"], ["non", "Ne pas inclure"]] },
+    { k: "ajouts", lib: "Ajouts possibles", choix: [["liste", "Liste, un ajout par ligne"], ["suivi", "Texte suivi"], ["non", "Ne pas inclure (ils restent sur le schéma)"]] },
+    { k: "assoc", lib: "Associations de points", choix: [["tableau", "Tableau : indication à gauche, points par canal à droite"], ["lignes", "Une ligne par association : indication, puis les points"], ["non", "Ne pas inclure"]] },
+    { k: "wjy", lib: "Recettes de Wang Ju Yi", choix: [["complet", "Tableau avec toutes les indications"], ["premiere", "Une ligne par recette : points et première indication"], ["points", "Les couples de points seulement"], ["non", "Ne pas inclure"]] },
+    { k: "points", lib: "Points retenus (★)", choix: [["tableau", "Tableau par canal, une ligne par point avec son action"], ["courtes", "Par canal, points à la suite avec action abrégée"], ["noms", "Noms des points seulement, sur quelques lignes"], ["non", "Ne pas inclure"]] },
+    { k: "tung", lib: "Points Tung", choix: [["tableau", "Tableau (dans le circuit, avec un ajout)"], ["ligne", "Sur une ligne"], ["non", "Ne pas inclure"]] },
+    { k: "sf", lib: "Syndromes et formules", choix: [["tableau", "Tableau"], ["suivi", "Texte suivi"], ["non", "Ne pas inclure"]] },
+  ],
+  BOOLS: [["couverture", "Couverture"], ["legende", "Page « Lire un schéma »"], ["sommaire", "Sommaire"], ["multiple4", "Compléter à un multiple de 4 pages (carnet agrafé)"],
+          ["assocNotes", "Notes des associations de points"], ["syndCanaux", "Syndromes des canaux (texte du cours)"], ["notes", "Notes des circuits"]],
+  PRESETS: {
+    complet: { nom: "Complet", o: { mode: "double", taille: "8.6", schema: "cote", indications: "tableau", actions: "liste", ajouts: "liste", assoc: "tableau", wjy: "complet", points: "tableau", tung: "tableau", sf: "tableau",
+      couverture: true, legende: true, sommaire: true, multiple4: true, assocNotes: true, syndCanaux: true, notes: true } },
+    compact: { nom: "Compact", o: { mode: "page", taille: "8", schema: "cote", indications: "suivi", actions: "colonnes", ajouts: "suivi", assoc: "lignes", wjy: "premiere", points: "courtes", tung: "ligne", sf: "suivi",
+      couverture: true, legende: true, sommaire: true, multiple4: true, assocNotes: true, syndCanaux: false, notes: true } },
+    minimal: { nom: "Le moins de pages", o: { mode: "suite", taille: "7.4", schema: "titre", indications: "suivi", actions: "suivi", ajouts: "non", assoc: "lignes", wjy: "points", points: "noms", tung: "non", sf: "suivi",
+      couverture: true, legende: false, sommaire: true, multiple4: true, assocNotes: false, syndCanaux: false, notes: false } },
+  },
+  o: null,
+  lireOptions() {
+    let s = null; try { s = JSON.parse(localStorage.getItem(this.CLE) || "null"); } catch (e) { /* réglages illisibles */ }
+    this.o = { ...this.PRESETS.complet.o, exclus: [], ...(s || {}) };
+  },
+  garderOptions() { try { localStorage.setItem(this.CLE, JSON.stringify(this.o)); } catch (e) { /* stockage indisponible */ } },
+
   CSS: `
     @page { size: 148mm 210mm; margin: 0; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: #6f6f6f; }
-    body { font-family: "Archivo", "Archivo Variable", Arial, Helvetica, sans-serif; font-size: 8.6pt; line-height: 1.24; color: #000;
+    body { font-family: "Archivo", "Archivo Variable", Arial, Helvetica, sans-serif; color: #000;
       --ink: #000; --bg: #fff; --accent: #000; --font-body: "Archivo", Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .barre { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 16px; background: #222; color: #fff; font-size: 13px; }
     .barre button { font: inherit; font-weight: 700; padding: 6px 14px; border: 0; border-radius: 999px; background: #fff; color: #000; cursor: pointer; }
+    .barre strong { font-size: 15px; }
     .barre span { opacity: 0.85; }
-    #pages { display: grid; grid-template-columns: 148mm 148mm; gap: 8mm 0; justify-content: center; padding: 10mm 0 20mm; }
-    #pages .page:first-child { grid-column: 2; }
-    .page { width: 148mm; height: 210mm; background: #fff; position: relative; padding: 11mm 9mm 0; overflow: hidden; break-after: page; page-break-after: always; outline: 0.2mm solid #999; }
+    .ecran { display: flex; align-items: flex-start; }
+    #reglages { flex: none; width: 310px; position: sticky; top: 46px; max-height: calc(100vh - 46px); overflow-y: auto; background: #f3f3f3; padding: 12px 14px 30px; font-size: 13px; line-height: 1.35; }
+    #reglages h4 { margin: 14px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+    #reglages label { display: block; margin: 0 0 8px; font-weight: 600; }
+    #reglages label.case { font-weight: 400; margin: 0 0 3px; }
+    #reglages select { display: block; width: 100%; margin-top: 2px; font: inherit; font-weight: 400; padding: 4px 6px; border: 1px solid #000; border-radius: 8px; background: #fff; }
+    #reglages .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+    #reglages .presets button { font: inherit; font-weight: 700; padding: 5px 10px; border: 1.5px solid #000; border-radius: 999px; background: #fff; cursor: pointer; }
+    #reglages .presets button:hover { background: #000; color: #fff; }
+    #reglages details { margin-top: 10px; } #reglages summary { cursor: pointer; font-weight: 700; }
+    #reglages .petit { font-weight: 400; font-size: 12px; color: #444; }
+    #pages { flex: 1; min-width: 0; display: grid; grid-template-columns: 148mm 148mm; gap: 8mm 0; justify-content: center; padding: 10mm 0 20mm; }
+    #pages.impaire .page:first-child { grid-column: 2; }
+    .page { width: 148mm; height: 210mm; background: #fff; position: relative; padding: 11mm 9mm 0; overflow: hidden; break-after: page; page-break-after: always; outline: 0.2mm solid #999; font-size: var(--corps, 8.6pt); line-height: 1.24; }
     .corps { height: 183mm; overflow: hidden; }
     .pied { position: absolute; left: 9mm; right: 9mm; bottom: 6.5mm; display: flex; align-items: baseline; gap: 9mm; font-size: 7.4pt; }
     .pied .num { font-size: 10pt; font-weight: 500; }
     .page.droite .pied { justify-content: flex-end; }
     #mesure { position: absolute; left: -400mm; top: 0; visibility: hidden; height: auto; }
     #mesure .corps { height: auto; overflow: visible; display: flow-root; }
-    h2.titre { display: flex; justify-content: space-between; align-items: baseline; gap: 4mm; font-size: 11.5pt; font-weight: 800; text-transform: uppercase; margin: 0 0 2.5mm; }
+    h2.titre { display: flex; justify-content: space-between; align-items: baseline; gap: 4mm; font-size: 1.34em; font-weight: 800; text-transform: uppercase; margin: 0 0 2.5mm; }
     h2.titre span + span { white-space: nowrap; text-transform: none; }
-    h3 { font-size: 8.6pt; font-weight: 800; text-transform: uppercase; margin: 2.6mm 0 0.9mm; }
+    .sepc { border-top: 1.2pt solid #000; margin: 3mm 0 2.5mm; }
+    .corps > .sepc:first-child { display: none; }
+    h3 { font-size: 1em; font-weight: 800; text-transform: uppercase; margin: 2.4mm 0 0.9mm; }
     p { margin: 0 0 1mm; }
-    table { width: 100%; border-collapse: collapse; margin: 0 0 2.6mm; }
-    td, th { border: 0.8pt solid #000; padding: 1.2mm 1.6mm; vertical-align: middle; text-align: left; }
-    th { font-weight: 800; text-transform: uppercase; font-size: 8pt; }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 2.4mm; }
+    td, th { border: 0.8pt solid #000; padding: 1.1mm 1.5mm; vertical-align: middle; text-align: left; }
+    th { font-weight: 800; text-transform: uppercase; font-size: 0.93em; }
     td.lib { background: #ededed; width: 31%; font-weight: 600; }
-    td.lib small { display: block; font-weight: 400; font-size: 7.4pt; margin-top: 0.6mm; }
-    tr.grp td { background: #ededed; font-weight: 800; text-transform: uppercase; font-size: 7.6pt; text-align: center; }
+    td.lib small, p.lg small { display: block; font-weight: 400; font-size: 0.87em; margin-top: 0.5mm; }
+    tr.grp td { background: #ededed; font-weight: 800; text-transform: uppercase; font-size: 0.88em; text-align: center; padding: 0.7mm 1.5mm; }
     ul.t { list-style: none; margin: 0 0 1mm; padding: 0; }
-    ul.t li { padding-left: 2.2mm; text-indent: -2.2mm; }
+    ul.t li { padding-left: 2.2mm; text-indent: -2.2mm; break-inside: avoid; }
     ul.t li::before { content: "- "; }
+    ul.t.col2 { columns: 2; column-gap: 5mm; }
+    p.suivi { text-align: left; }
+    p.lg { margin: 0 0 0.8mm; padding-left: 2.2mm; text-indent: -2.2mm; }
+    p.lg small { text-indent: 0; }
+    p.sgrp { font-weight: 800; text-transform: uppercase; font-size: 0.88em; margin: 1.2mm 0 0.5mm; }
     .tete { display: flex; gap: 5mm; align-items: flex-start; margin: 0 0 1mm; }
     .tete .schema { flex: none; line-height: 0; }
     .tete .usage { flex: 1; border: 0.8pt solid #000; }
-    .tete .usage h3 { margin: 0; padding: 1.2mm 1.6mm; background: #ededed; border-bottom: 0.8pt solid #000; }
-    .tete .usage ul { padding: 1.2mm 1.6mm; margin: 0; }
+    .tete .usage h3 { margin: 0; padding: 1.1mm 1.5mm; background: #ededed; border-bottom: 0.8pt solid #000; }
+    .tete .usage ul { padding: 1.1mm 1.5mm; margin: 0; }
+    .tete2 { display: flex; gap: 4mm; align-items: flex-start; justify-content: space-between; margin: 0 0 1mm; }
+    .tete2 h2.titre { margin-bottom: 1mm; }
+    .tete2 .schema { flex: none; line-height: 0; }
     .couv-titre { text-align: right; font-size: 25pt; font-weight: 700; line-height: 1.05; text-transform: uppercase; margin: 2mm 4mm 0 0; }
     .couv-sous { position: absolute; left: 0; right: 0; top: 148mm; text-align: center; font-size: 11pt; font-weight: 500; }
     .couv-bas { position: absolute; left: 9mm; top: 166mm; font-size: 8.6pt; line-height: 1.3; }
     .somm { display: flex; align-items: baseline; gap: 2mm; margin: 0 0 1.5mm; }
-    .somm b { font-weight: 700; text-transform: uppercase; font-size: 8.4pt; }
+    .somm b { font-weight: 700; text-transform: uppercase; font-size: 0.98em; }
     .somm i { flex: 1; border-bottom: 0.6pt dotted #000; transform: translateY(-1mm); }
-    .somm span { font-size: 7.6pt; white-space: nowrap; }
+    .somm span { font-size: 0.9em; white-space: nowrap; }
     .legende { display: flex; align-items: center; gap: 3mm; margin: 0 0 1.6mm; }
     .legende svg { flex: none; }
     .lignes { height: 172mm; background: repeating-linear-gradient(to bottom, transparent 0, transparent 7.6mm, #9a9a9a 7.6mm, #9a9a9a 7.8mm); margin-top: 2mm; }
-    @media (max-width: 310mm) { #pages { grid-template-columns: 148mm; } #pages .page:first-child { grid-column: 1; } }
-    @media print { html, body { background: #fff; } .barre, #mesure { display: none !important; } #pages { display: block; padding: 0; } .page { outline: 0; } }
+    @media (max-width: 1250px) { #pages { grid-template-columns: 148mm; } #pages.impaire .page:first-child { grid-column: 1; } }
+    @media (max-width: 900px) { .ecran { display: block; } #reglages { position: static; width: auto; max-height: none; } }
+    @media print { html, body { background: #fff; } .barre, #mesure, #reglages { display: none !important; } .ecran { display: block; } #pages { display: block; padding: 0; } .page { outline: 0; } }
   `,
 
   h(t) { return escapeHtml(sansHanzi(String(t == null ? "" : t))).replace(/\s+/g, " ").trim(); },
-  liste(items) { const l = (items || []).map(x => this.h(x)).filter(Boolean); return l.length ? `<ul class="t">${l.map(x => `<li>${x}</li>`).join("")}</ul>` : ""; },
+  liste(items, classe) { const l = (items || []).map(x => this.h(x)).filter(Boolean); return l.length ? `<ul class="t${classe ? " " + classe : ""}">${l.map(x => `<li>${x}</li>`).join("")}</ul>` : ""; },
+  suivi(items) { const l = (items || []).map(x => this.h(x)).filter(Boolean); return l.length ? `<p class="suivi">${l.join(" · ")}</p>` : ""; },
   titre(t) { return `<h3>${this.h(t)}</h3>`; },
+  // blocs sécables : une liste (coupée entre deux lignes) ou un texte suivi (coupé entre deux éléments)
+  blocListe(titre, items, classe) { const l = (items || []).map(x => this.h(x)).filter(Boolean); return l.length ? { titre, env: [`<ul class="t${classe ? " " + classe : ""}">`, "</ul>"], rows: l.map(x => `<li>${x}</li>`) } : null; },
+  blocSuivi(titre, fragments) { const l = (fragments || []).filter(Boolean); return l.length ? { titre, env: ['<p class="suivi">', "</p>"], rows: l.map((x, i) => x + (i < l.length - 1 ? " · " : "")) } : null; },
+  court(t, n) { t = sansHanzi(String(t || "")).split(/\s*;\s*/)[0].trim(); return t.length > n ? t.slice(0, n - 1).replace(/\s+\S*$/, "") + "…" : t; },
 
-  // ---------- les blocs d'un circuit : { html } (insécable) ou { titre, tete, rows } (tableau, coupé entre deux lignes si la page est pleine)
-  async blocsCircuit(c, parCircuit) {
-    const C = Circuits, b = [];
-    b.push({ html: `<h2 class="titre"><span>${this.h(C.nomCourt(c))}</span><span>${c.grille.join(" · ")}</span></h2>` });
-    const svg = C.dessin(c, { taille: 118, etiquettes: true, ajouts: true });
-    b.push({ html: `<div class="tete"><div class="schema">${svg}</div>${(c.mots_cles || []).length ? `<div class="usage"><h3>Usage le plus courant</h3>${this.liste(c.mots_cles)}</div>` : ""}</div>` });
+  // ---------- les blocs d'un circuit, selon les réglages : { html } (insécable) ou { titre, tete, rows, env } (coupé entre deux lignes si la page est pleine)
+  blocsCircuit(c, parCircuit, entree) {
+    const C = Circuits, o = this.o, b = [], P = ["<div>", "</div>"];                 // P : lignes en paragraphes (sans tableau)
+    const aj = x => { if (x) b.push(x); };
+    const nom = this.h(C.nomCourt(c)), usage = (c.mots_cles || []).length ? c.mots_cles : null;
+    const sep = `<div class="sepc"></div>`;
+    if (o.schema === "cote") {
+      const svg = C.dessin(c, { taille: 118, etiquettes: true, ajouts: true });
+      b.push({ html: `${sep}<h2 class="titre"><span>${nom}</span><span>${c.grille.join(" · ")}</span></h2><div class="tete"><div class="schema">${svg}</div>${usage ? `<div class="usage"><h3>Usage le plus courant</h3>${this.liste(usage)}</div>` : ""}</div>`, debut: entree, avecSuivant: true });
+    } else {
+      const ligne = usage ? `<p class="suivi"><strong>Usage :</strong> ${usage.map(x => this.h(x)).join(" · ")}</p>` : "";
+      const svg = o.schema === "titre" ? `<div class="schema">${C.dessin(c, { taille: 62, etiquettes: true })}</div>` : "";
+      b.push({ html: `${sep}<div class="tete2"><div><h2 class="titre"><span>${nom}</span></h2><p><strong>${c.grille.join(" · ")}</strong></p>${ligne}</div>${svg}</div>`, debut: entree, avecSuivant: true });
+    }
+    // indications
     const groupes = (c.indications_groupes || []).filter(g => (g.items || []).length);
-    if (groupes.length) b.push({ titre: "Indications", rows: groupes.map(g => `<tr><td class="lib">${this.h(g.titre)}</td><td>${g.items.map(x => this.h(x)).join(" · ")}</td></tr>`) });
-    else if ((c.indications || []).length) b.push({ html: this.titre("Indications") + this.liste(c.indications) });
-    if ((c.actions || []).length) b.push({ html: this.titre("Actions") + this.liste(c.actions) });
+    if (o.indications !== "non") {
+      if (o.indications === "tableau" && groupes.length) b.push({ titre: "Indications", rows: groupes.map(g => `<tr><td class="lib">${this.h(g.titre)}</td><td>${g.items.map(x => this.h(x)).join(" · ")}</td></tr>`) });
+      else if (o.indications === "suivi" && groupes.length) aj(this.blocSuivi("Indications", groupes.map(g => `<strong>${this.h(g.titre)} :</strong> ${g.items.map(x => this.h(x)).join(", ")}`)));
+      else if (o.indications === "suivi") aj(this.blocSuivi("Indications", (c.indications || []).map(x => this.h(x))));
+      else aj(this.blocListe("Indications", c.indications, o.indications === "colonnes" ? "col2" : ""));
+    }
+    if (o.actions !== "non") aj(o.actions === "suivi" ? this.blocSuivi("Actions", (c.actions || []).map(x => this.h(x))) : this.blocListe("Actions", c.actions, o.actions === "colonnes" ? "col2" : ""));
     const ajouts = (c.ajouts || []).map(a => (a.canaux || []).length ? C.ajoutLigne(a, c.grille) : (a.texte || a.action || "")).filter(Boolean);
-    if (ajouts.length) b.push({ html: this.titre("Ajouts possibles") + this.liste(ajouts) });
-    // associations de points : l'indication à gauche, les points à droite (une ligne par canal)
-    const ptsHtml = pts => { const ordre = [...c.grille, ...Object.keys(pts).filter(k => !c.grille.includes(k))]; return ordre.filter(k => (pts[k] || []).length).map(k => pts[k].map(p => this.h(p)).join(" · ")).join("<br>"); };
-    if ((c.associations || []).length) b.push({ titre: "Associations de points", tete: `<tr><th>Pour…</th><th>Points</th></tr>`,
-      rows: c.associations.map(a => `<tr><td class="lib">${this.h(a.tableau)}${a.note ? `<small>${this.h(a.note)}</small>` : ""}</td><td>${ptsHtml(a.points || {})}</td></tr>`) });
+    if (o.ajouts !== "non") aj(o.ajouts === "suivi" ? this.blocSuivi("Ajouts possibles", ajouts.map(x => this.h(x))) : this.blocListe("Ajouts possibles", ajouts));
+    // associations de points
+    const ordre = pts => [...c.grille, ...Object.keys(pts).filter(k => !c.grille.includes(k))].filter(k => (pts[k] || []).length);
+    if (o.assoc !== "non" && (c.associations || []).length) {
+      const note = a => o.assocNotes && a.note ? `<small>${this.h(a.note)}</small>` : "";
+      if (o.assoc === "tableau") b.push({ titre: "Associations de points", tete: `<tr><th>Pour…</th><th>Points</th></tr>`,
+        rows: c.associations.map(a => `<tr><td class="lib">${this.h(a.tableau)}${note(a)}</td><td>${ordre(a.points || {}).map(k => a.points[k].map(p => this.h(p)).join(" · ")).join("<br>")}</td></tr>`) });
+      else b.push({ titre: "Associations de points", env: P,
+        rows: c.associations.map(a => `<p class="lg"><strong>${this.h(a.tableau)}</strong> : ${ordre(a.points || {}).flatMap(k => a.points[k].map(p => this.h(C.clePoint(p)))).join(" · ")}${note(a)}</p>`) });
+    }
     // recettes de Wang Ju Yi, rangées par condition d'ajout
-    const wjy = C.recettesWjy(c).liste;
+    const wjy = o.wjy !== "non" ? C.recettesWjy(c).liste : [];
     if (wjy.length) {
-      const rows = [];
-      C.wjyGroupes(wjy).forEach(g => {
-        rows.push(`<tr class="grp"><td colspan="2">${g.ajout.length ? "Avec ajout : " + g.ajout.join(" + ") : "Dans les quatre canaux, sans ajout"}</td></tr>`);
-        g.items.forEach(({ w }) => rows.push(`<tr><td class="lib">${w.r.points.map(p => this.h(p)).join(" – ")}${w.r.vaisseaux ? `<small>${this.h(w.r.vaisseaux)}</small>` : ""}</td><td>${this.liste(w.r.puces)}</td></tr>`));
-      });
-      b.push({ titre: "Recettes de Wang Ju Yi", tete: `<tr><th>Points</th><th>Indications</th></tr>`, rows });
+      const grp = g => g.ajout.length ? "Avec ajout : " + g.ajout.join(" + ") : "Dans les quatre canaux, sans ajout";
+      const couple = w => w.r.points.map(p => this.h(p)).join(" – ");
+      if (o.wjy === "complet") {
+        const rows = [];
+        C.wjyGroupes(wjy).forEach(g => {
+          rows.push(`<tr class="grp"><td colspan="2">${grp(g)}</td></tr>`);
+          g.items.forEach(({ w }) => rows.push(`<tr><td class="lib">${couple(w)}${w.r.vaisseaux ? `<small>${this.h(w.r.vaisseaux)}</small>` : ""}</td><td>${this.liste(w.r.puces)}</td></tr>`));
+        });
+        b.push({ titre: "Recettes de Wang Ju Yi", tete: `<tr><th>Points</th><th>Indications</th></tr>`, rows });
+      } else if (o.wjy === "premiere") {
+        const rows = [];
+        C.wjyGroupes(wjy).forEach(g => { rows.push(`<p class="sgrp grp">${grp(g)}</p>`); g.items.forEach(({ w }) => rows.push(`<p class="lg"><strong>${couple(w)}</strong> : ${this.h(w.r.puces[0] || w.r.groupe || "")}</p>`)); });
+        b.push({ titre: "Recettes de Wang Ju Yi", env: P, rows });
+      } else b.push({ titre: "Recettes de Wang Ju Yi", env: P, rows: C.wjyGroupes(wjy).map(g => `<p class="suivi"><strong>${grp(g)} :</strong> ${g.items.map(({ w }) => couple(w).replace(/ – /g, "–")).join(" · ")}</p>`) });
     }
     // points retenus (★), canal par canal
-    const codes = [...new Set([...c.grille, ...(c.ajouts || []).flatMap(a => a.canaux || [])])];
-    const retenus = codes.map(k => ({ k, l: C.ptsAffiches(k, c).filter(x => C.retenu(x)) })).filter(x => x.l.length);
-    if (retenus.length) b.push({ titre: "Points retenus", rows: retenus.map(x => `<tr><td class="lib">${this.h((C.canaux.get(x.k) || {}).nom || x.k)} (${x.k})</td><td>${x.l.map(p => `<strong>${this.h(p.point)}</strong>${p.action ? " : " + this.h(p.action) : ""}${p.commentaire ? " (" + this.h(p.commentaire) + ")" : ""}`).join("<br>")}</td></tr>`) });
+    if (o.points !== "non") {
+      const codes = [...new Set([...c.grille, ...(c.ajouts || []).flatMap(a => a.canaux || [])])];
+      const retenus = codes.map(k => ({ k, l: C.ptsAffiches(k, c).filter(x => C.retenu(x)) })).filter(x => x.l.length);
+      const canal = k => this.h((C.canaux.get(k) || {}).nom || k);
+      if (retenus.length && o.points === "tableau") b.push({ titre: "Points retenus", rows: retenus.map(x => `<tr><td class="lib">${canal(x.k)} (${x.k})</td><td>${x.l.map(p => `<strong>${this.h(p.point)}</strong>${p.action ? " : " + this.h(p.action) : ""}${p.commentaire ? " (" + this.h(p.commentaire) + ")" : ""}`).join("<br>")}</td></tr>`) });
+      else if (retenus.length && o.points === "courtes") b.push({ titre: "Points retenus", env: P, rows: retenus.map(x => `<p class="lg"><strong>${canal(x.k)}</strong> : ${x.l.map(p => `<strong>${this.h(p.point)}</strong>${p.action ? " " + escapeHtml(this.court(p.action, 38)) : ""}`).join(" · ")}</p>`) });
+      else aj(this.blocSuivi("Points retenus", retenus.map(x => `<strong>${x.k} :</strong> ${x.l.map(p => this.h(p.point)).join(" ")}`)));
+    }
     // points Tung compatibles avec le circuit
-    try {
+    if (o.tung !== "non") try {
       const r = Tung.compatibles(c.grille, (c.ajouts || []).map(a => a.canaux || []));
-      const nom = f => this.h(f.nom + ((f.numeros || []).length ? " " + f.numeros.join("/") : "")) + ` (${f.canaux.codes.join("+")})`;
+      const nomT = f => this.h(f.nom + ((f.numeros || []).length ? " " + f.numeros.join("/") : "")) + ` (${f.canaux.codes.join("+")})`;
       const lignes = [["Dans le circuit", r.ok], ["Avec un ajout", r.avec]].filter(x => (x[1] || []).length);
-      if (lignes.length) b.push({ titre: "Points Tung", rows: lignes.map(([t, l]) => `<tr><td class="lib">${t}</td><td>${l.map(nom).join(" · ")}</td></tr>`) });
+      if (lignes.length && o.tung === "tableau") b.push({ titre: "Points Tung", rows: lignes.map(([t, l]) => `<tr><td class="lib">${t}</td><td>${l.map(nomT).join(" · ")}</td></tr>`) });
+      else aj(this.blocSuivi("Points Tung", lignes.map(([t, l]) => `<strong>${t} :</strong> ${l.map(nomT).join(", ")}`)));
     } catch (e) { /* points Tung indisponibles */ }
     // syndromes et formules
-    const cles = [...new Set([...(c.syndromes_lies || []), ...((parCircuit && parCircuit.get(c.id)) || [])])];
-    const synd = cles.map(k => C.libelleLie(k)).filter(l => !l.introuvable).map(l => this.h(l.nom));
-    const formules = (c.formules || []).map(id => C.nomFormule(id)).filter(Boolean).map(n => this.h(n.nom) + (n.fr ? " — " + this.h(n.fr) : ""));
-    const rowsSF = [];
-    if ((c.syndromes || []).length) rowsSF.push(`<tr><td class="lib">Syndromes des canaux</td><td>${c.syndromes.map(x => this.h(x)).join(" · ")}</td></tr>`);
-    if (synd.length) rowsSF.push(`<tr><td class="lib">Syndromes rattachés</td><td>${synd.join(" · ")}</td></tr>`);
-    if (formules.length) rowsSF.push(`<tr><td class="lib">Pharmacopée</td><td>${formules.join("<br>")}${c.formules_note ? "<br>" + this.h(c.formules_note) : ""}</td></tr>`);
-    if (rowsSF.length) b.push({ titre: "Syndromes et formules", rows: rowsSF });
-    const notes = [...(c.notes || []), ...(c.notes_cours || [])];
-    if (notes.length) b.push({ html: this.titre("Notes") + this.liste(notes) });
+    if (o.sf !== "non") {
+      const cles = [...new Set([...(c.syndromes_lies || []), ...((parCircuit && parCircuit.get(c.id)) || [])])];
+      const synd = cles.map(k => C.libelleLie(k)).filter(l => !l.introuvable).map(l => this.h(l.nom));
+      const formules = (c.formules || []).map(id => C.nomFormule(id)).filter(Boolean).map(n => this.h(n.nom) + (n.fr && o.sf === "tableau" ? " — " + this.h(n.fr) : ""));
+      const lignes = [];
+      if (o.syndCanaux && (c.syndromes || []).length) lignes.push(["Syndromes des canaux", c.syndromes.map(x => this.h(x)).join(" · ")]);
+      if (synd.length) lignes.push(["Syndromes rattachés", synd.join(" · ")]);
+      if (formules.length) lignes.push(["Pharmacopée", formules.join(o.sf === "tableau" ? "<br>" : " · ") + (c.formules_note ? (o.sf === "tableau" ? "<br>" : " ; ") + this.h(c.formules_note) : "")]);
+      if (lignes.length && o.sf === "tableau") b.push({ titre: "Syndromes et formules", rows: lignes.map(([t, x]) => `<tr><td class="lib">${t}</td><td>${x}</td></tr>`) });
+      else if (lignes.length) b.push({ titre: "Syndromes et formules", env: P, rows: lignes.map(([t, x]) => `<p class="suivi"><strong>${t} :</strong> ${x}</p>`) });
+    }
+    const notes = o.notes ? [...(c.notes || []), ...(c.notes_cours || [])] : [];
+    aj(this.blocListe("Notes", notes));
+    b.forEach(x => { x.c = nom; });
     return b;
   },
 
-  table(bloc, rows, suite) { return `<h3>${this.h(bloc.titre)}${suite ? " (suite)" : ""}</h3><table>${bloc.tete || ""}${rows.join("")}</table>`; },
+  morceau(bloc, rows, suite) { const e = bloc.env || ["<table>", "</table>"]; return `<h3>${this.h(bloc.titre)}${suite ? " (suite)" : ""}</h3>${e[0]}${bloc.env ? "" : (bloc.tete || "")}${rows.join("")}${e[1]}`; },
 
-  // ---------- mise en pages : les blocs sont posés l'un après l'autre ; un tableau trop long continue page suivante, intitulé répété
+  // ---------- mise en pages : les blocs sont posés l'un après l'autre ; un tableau ou une liste trop longs continuent page suivante, intitulé répété.
+  // Rend [{ corps, courant }] ; l'entrée de sommaire d'un bloc « debut » reçoit l'indice de sa page.
   paginer(doc, blocs) {
     const mes = doc.querySelector("#mesure .corps"), ref = doc.createElement("div");
     ref.className = "corps"; ref.style.cssText = "position:absolute;visibility:hidden"; doc.body.appendChild(ref);
     const H = ref.getBoundingClientRect().height - 1; ref.remove();
     const tient = l => { mes.innerHTML = l.join(""); return mes.scrollHeight <= H; };
-    const pages = []; let cur = [];
-    const tourner = () => { pages.push(cur.join("")); cur = []; };
-    blocs.forEach(b => {
-      if (!b.rows) { if (cur.length && !tient([...cur, b.html])) tourner(); cur.push(b.html); return; }
+    const pages = []; let cur = [], courant = "";
+    const tourner = () => { pages.push({ corps: cur.join(""), courant }); cur = []; courant = ""; };
+    const poser = (html, b) => { if (!cur.length) courant = b.c || ""; cur.push(html); };
+    blocs.forEach((b, i) => {
+      if (!b.rows) {
+        const suivant = b.avecSuivant ? blocs[i + 1] : null;                     // un titre ne reste pas seul en bas de page
+        const sonde = suivant ? (suivant.rows ? this.morceau(suivant, suivant.rows.slice(0, 1)) : suivant.html) : "";
+        if (cur.length && !tient([...cur, b.html, sonde])) tourner();
+        if (b.debut) b.debut.page = pages.length;
+        poser(b.html, b);
+        return;
+      }
       let reste = b.rows.slice(), suite = false;
       while (reste.length) {
         let n = 0;
-        while (n < reste.length && tient([...cur, this.table(b, reste.slice(0, n + 1), suite)])) n++;
-        if (n && n < reste.length && /class="grp"/.test(reste[n - 1])) n--;        // un intitulé de groupe ne reste pas seul en bas de page
-        if (!n) { if (cur.length) { tourner(); continue; } n = 1; }               // une ligne plus haute que la page : elle passe quand même
-        cur.push(this.table(b, reste.slice(0, n), suite));
+        while (n < reste.length && tient([...cur, this.morceau(b, reste.slice(0, n + 1), suite)])) n++;
+        if (n && n < reste.length && /class="[^"]*grp/.test(reste[n - 1])) n--;      // un intitulé de groupe ne reste pas seul en bas de page
+        if (!n) { if (cur.length) { tourner(); continue; } n = 1; }                 // une ligne plus haute que la page : elle passe quand même
+        poser(this.morceau(b, reste.slice(0, n), suite), b);
         reste = reste.slice(n);
         if (reste.length) { tourner(); suite = true; }
       }
@@ -140,7 +247,7 @@ const CarnetCircuits = {
     return pages;
   },
 
-  // la page 1 (couverture) est à droite ; numéro à l'extérieur : à droite sur les pages impaires, à gauche sur les paires
+  // numéro à l'extérieur : à droite sur les pages impaires, à gauche sur les paires
   page(i, p) {
     const n = i + 1, droite = n % 2 === 1;
     const pied = p.sansPied ? "" : droite ? `<span>${p.courant || ""}</span><span class="num">${n}</span>` : `<span class="num">${n}</span><span>Circuits thérapeutiques</span>`;
@@ -159,6 +266,59 @@ const CarnetCircuits = {
       (regles.length ? `<h3>Règles</h3>${this.liste(regles)}` : "");
   },
 
+  // ---------- compose toutes les pages selon les réglages, et les écrit dans la fenêtre
+  composer(doc) {
+    const o = this.o, NOTES = { corps: `<h3>Notes</h3><div class="lignes"></div>` };
+    doc.body.style.setProperty("--corps", o.taille + "pt");
+    Circuits._nb = true;                                     // schémas en noir et blanc pour l'impression
+    try {
+      const pages = [], sommaire = [];
+      const d = new Date(), date = [d.getDate(), d.getMonth() + 1].map(x => String(x).padStart(2, "0")).join(".") + "." + d.getFullYear();
+      if (o.couverture) pages.push({ corps: `<div class="couv-titre">Circuits<br>thérapeutiques</div><div class="couv-sous">aide-mémoire</div><div class="couv-bas">Réseaux en acupuncture : équilibre global<br>aide-mémoire v.${date}</div>`, sansPied: true });
+      if (o.legende) pages.push({ corps: this.pageLegende() });
+      const iSomm = o.sommaire ? pages.push({ corps: "" }) - 1 : -1;
+      const circuits = Circuits.liste.filter(c => !(o.exclus || []).includes(c.id));
+      const entree = c => { const e = { nom: this.h(Circuits.nomCourt(c)), grille: c.grille.join(" · "), page: 0 }; sommaire.push(e); return e; };
+      if (o.mode === "suite") {
+        const base = pages.length;
+        this.paginer(doc, circuits.flatMap(c => this.blocsCircuit(c, this._parCircuit, entree(c)))).forEach(p => pages.push(p));
+        sommaire.forEach(e => { e.page += base + 1; });
+      } else circuits.forEach(c => {
+        if (o.mode === "double" && pages.length % 2 === 0) pages.push(NOTES);      // le circuit commence sur une page de gauche
+        const e = entree(c), base = pages.length;
+        this.paginer(doc, this.blocsCircuit(c, this._parCircuit, e)).forEach(p => pages.push(p));
+        e.page += base + 1;
+      });
+      if (o.multiple4) {
+        if (o.couverture) { while ((pages.length + 1) % 4 !== 0) pages.push(NOTES); pages.push({ corps: "", sansPied: true }); }   // la dernière page est la quatrième de couverture
+        else while (pages.length % 4 !== 0) pages.push(NOTES);
+      }
+      if (iSomm >= 0) pages[iSomm] = { corps: `<h2 class="titre"><span>Sommaire</span></h2>` + sommaire.map(s => `<div class="somm"><b>${s.nom}</b><span>${s.grille}</span><i></i><span>${s.page}</span></div>`).join("") };
+      const z = doc.getElementById("pages");
+      z.className = "impaire";                               // à l'écran : la page 1 est seule à droite, puis les doubles pages
+      z.innerHTML = pages.map((p, i) => this.page(i, p)).join("");
+      const feuilles = Math.ceil(pages.length / 4);
+      doc.getElementById("etat").innerHTML = `<strong>${pages.length} pages</strong> <span>(${circuits.length} circuit${circuits.length > 1 ? "s" : ""}, ${feuilles} feuille${feuilles > 1 ? "s" : ""} A4 en carnet). À l'impression : format A5, marges « Aucune », « Graphiques d'arrière-plan » coché.</span>`;
+    } finally { Circuits._nb = false; }
+  },
+
+  panneau(doc) {
+    const o = this.o, z = doc.getElementById("reglages");
+    z.innerHTML = `<h4>Modèles</h4><div class="presets">${Object.entries(this.PRESETS).map(([k, p]) => `<button type="button" data-preset="${k}">${p.nom}</button>`).join("")}</div>
+      <p class="petit">Un modèle règle tout d'un coup ; chaque rubrique peut ensuite être changée.</p>
+      <h4>Mise en page</h4>${this.CHAMPS.slice(0, 2).map(c => this.champ(c)).join("")}
+      <h4>Rubriques de chaque circuit</h4>${this.CHAMPS.slice(2).map(c => this.champ(c)).join("")}
+      <h4>Pages et compléments</h4>${this.BOOLS.map(([k, lib]) => `<label class="case"><input type="checkbox" data-bool="${k}"${o[k] ? " checked" : ""}> ${lib}</label>`).join("")}
+      <details><summary>Circuits inclus (${Circuits.liste.length - (o.exclus || []).filter(id => Circuits.parId(id)).length} sur ${Circuits.liste.length})</summary>
+        ${Circuits.liste.map(c => `<label class="case"><input type="checkbox" data-circ="${escapeHtml(c.id)}"${(o.exclus || []).includes(c.id) ? "" : " checked"}> ${this.h(Circuits.nomCourt(c))} <span class="petit">${c.grille.join(" ")}</span></label>`).join("")}</details>`;
+    const maj = panneauAussi => { this.garderOptions(); if (panneauAussi) this.panneau(doc); clearTimeout(this._t); this._t = setTimeout(() => { try { this.composer(doc); } catch (e) { doc.getElementById("etat").textContent = "Mise en page impossible : " + e.message; } }, 120); };
+    z.querySelectorAll("[data-preset]").forEach(b => b.addEventListener("click", () => { this.o = { ...this.o, ...this.PRESETS[b.dataset.preset].o }; maj(true); }));
+    z.querySelectorAll("select[data-k]").forEach(s => s.addEventListener("change", () => { this.o[s.dataset.k] = s.value; maj(); }));
+    z.querySelectorAll("[data-bool]").forEach(x => x.addEventListener("change", () => { this.o[x.dataset.bool] = x.checked; maj(); }));
+    z.querySelectorAll("[data-circ]").forEach(x => x.addEventListener("change", () => { const s = new Set(this.o.exclus || []); if (x.checked) s.delete(x.dataset.circ); else s.add(x.dataset.circ); this.o.exclus = [...s]; maj(); }));
+  },
+  champ(c) { return `<label>${c.lib}<select data-k="${c.k}">${c.choix.map(([v, lib]) => `<option value="${v}"${String(this.o[c.k]) === v ? " selected" : ""}>${lib}</option>`).join("")}</select></label>`; },
+
   async ouvrir() {
     const w = window.open("", "_blank");
     if (!w) { alert("Le navigateur a bloqué la nouvelle fenêtre. Autorise les fenêtres pour ce site, puis recommence."); return; }
@@ -167,37 +327,19 @@ const CarnetCircuits = {
     doc.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Circuits thérapeutiques — aide-mémoire</title>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap"><style>${this.CSS}</style></head>
       <body><div class="barre"><button type="button" id="imprimer">Imprimer / Enregistrer en PDF</button><span id="etat">Mise en page en cours…</span></div>
-      <div id="mesure" class="page"><div class="corps"></div></div><div id="pages"></div></body></html>`);
+      <div class="ecran"><div id="reglages"></div><div id="pages"></div></div><div id="mesure" class="page"><div class="corps"></div></div></body></html>`);
     doc.close();
-    const etat = t => { const e = doc.getElementById("etat"); if (e) e.textContent = t; };
+    doc.getElementById("imprimer").addEventListener("click", () => w.print());
     try {
+      this.lireOptions();
       await Circuits.ensureLoaded();
       try { await Tung.ensureLoaded(); } catch (e) { /* le carnet se fait sans les points Tung */ }
-      let parCircuit = null; try { parCircuit = await Circuits.syndromesParCircuit(); } catch (e) { /* sans les syndromes déduits */ }
+      this._parCircuit = null; try { this._parCircuit = await Circuits.syndromesParCircuit(); } catch (e) { /* sans les syndromes déduits */ }
       try { if (doc.fonts && doc.fonts.ready) await Promise.race([doc.fonts.ready, new Promise(r => setTimeout(r, 2500))]); } catch (e) { /* police de secours */ }
       await new Promise(r => setTimeout(r, 150));
-      Circuits._nb = true;                                   // schémas en noir et blanc pour l'impression
-      const pages = [];                                      // { corps, courant, classe } ; l'indice + 1 = numéro de page
-      const d = new Date(), date = [d.getDate(), d.getMonth() + 1].map(x => String(x).padStart(2, "0")).join(".") + "." + d.getFullYear();
-      pages.push({ corps: `<div class="couv-titre">Circuits<br>thérapeutiques</div><div class="couv-sous">aide-mémoire</div><div class="couv-bas">Réseaux en acupuncture : équilibre global<br>aide-mémoire v.${date}</div>`, sansPied: true });
-      pages.push({ corps: this.pageLegende() });
-      pages.push({ corps: "", sommaire: true });
-      const sommaire = [];
-      for (const c of Circuits.liste) {
-        if (pages.length % 2 === 0) pages.push({ corps: `<h3>Notes</h3><div class="lignes"></div>` });      // chaque circuit commence sur une page de gauche
-        const nom = this.h(Circuits.nomCourt(c));
-        sommaire.push({ nom, grille: c.grille.join(" · "), page: pages.length + 1 });
-        this.paginer(doc, await this.blocsCircuit(c, parCircuit)).forEach(corps => pages.push({ corps, courant: nom }));
-      }
-      while ((pages.length + 1) % 4 !== 0) pages.push({ corps: `<h3>Notes</h3><div class="lignes"></div>` });
-      pages.push({ corps: "", sansPied: true });               // quatrième de couverture
-      pages[2].corps = `<h2 class="titre"><span>Sommaire</span></h2>` + sommaire.map(s => `<div class="somm"><b>${s.nom}</b><span>${s.grille}</span><i></i><span>${s.page}</span></div>`).join("");
-      doc.getElementById("pages").innerHTML = pages.map((p, i) => this.page(i, p)).join("");
-      etat(pages.length + " pages A5 (" + Circuits.liste.length + " circuits). Dans la fenêtre d'impression : format A5, marges « Aucune », et « Graphiques d'arrière-plan » coché.");
-    } catch (e) {
-      etat("Mise en page impossible : " + e.message);
-    } finally { Circuits._nb = false; }
-    doc.getElementById("imprimer").addEventListener("click", () => w.print());
+      this.panneau(doc);
+      this.composer(doc);
+    } catch (e) { doc.getElementById("etat").textContent = "Mise en page impossible : " + e.message; }
   },
 
   init() {
