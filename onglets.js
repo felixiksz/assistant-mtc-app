@@ -446,10 +446,22 @@ const Fenetre = {
   SECTIONS: {
     formules: { nom: "Formules", mods: [["formules", "Formules"], ["comparer", "Comparer"], ["proposer", "Prescrire"]] },
     diagnostic: { nom: "Diagnostic", mods: [["syndromes", "Syndromes"], ["diag-signes", "Diagnostic par signes"], ["cas-pratique", "Cas cliniques"], ["tableaux-psy", "Tableaux Psy"]] },
-    acupuncture: { nom: "Acupuncture", mods: [["points", "Points"], ["circuits", "Circuits"], ["tung", "Points Tung"]] },
+    acupuncture: { nom: "Acupuncture", mods: [["points", "Points"], ["circuits", "Circuits"], ["tung", "Points Tung"], ["proposer-circuits", "Proposer un circuit"]] },
     theorie: { nom: "Théorie", mods: [["psy", "Principes Taoïstes"]] }
   },
-  moduleCourant() { const p = document.querySelector(".tab-panel.active"); return p ? p.id.replace(/^tab-/, "") : null; },
+  moduleCourant() {
+    const p = document.querySelector(".tab-panel.active"), m = p ? p.id.replace(/^tab-/, "") : null;
+    return m === "proposer" && typeof Proposer !== "undefined" && Proposer.vue === "circuits" ? "proposer-circuits" : m;      // la proposition de circuits est un onglet d'Acupuncture
+  },
+  // ouvre un module : « proposer-circuits » est le module Prescrire réglé sur la proposition de circuits
+  allerModule(m) {
+    const reel = m === "proposer-circuits" ? "proposer" : m;
+    const b = document.querySelector('#menu-panneau .tab-btn[data-tab="' + reel + '"]');
+    if (!b) return;
+    if (reel === "proposer") { const v = m === "proposer-circuits" ? "circuits" : "formules"; if (typeof Proposer !== "undefined" && Proposer.vue !== v) { const t = document.querySelector('#tab-proposer .prop-vues [data-vue="' + v + '"]'); if (t) t.click(); } }
+    b.click();
+    Onglets.rendreBarre();
+  },
   deModule(m) { return Object.keys(this.SECTIONS).find(k => this.SECTIONS[k].mods.some(x => x[0] === m)) || null; },
   // fenêtre d'une fiche ouverte (celle d'où elle a été ouverte ; à défaut : les points et les points Tung sont de l'Acupuncture)
   deItem(o) {
@@ -493,8 +505,7 @@ const Fenetre = {
     const S = this.SECTIONS[sec];
     let m = null; try { m = localStorage.getItem("fenetre_dernier_" + sec); } catch (e) { /* stockage indisponible */ }
     if (!m || !S.mods.some(x => x[0] === m)) m = S.mods[0][0];
-    const b = document.querySelector('#menu-panneau .tab-btn[data-tab="' + m + '"]');
-    if (b) b.click();
+    this.allerModule(m);
   },
   // fiches qu'on peut ouvrir depuis le « + » de la section
   sourcesPlus(sec) {
@@ -544,9 +555,7 @@ const Fenetre = {
       (this.sourcesPlus(sec) ? `<button type="button" class="onglet-menu fen-plus" title="Ouvrir une fiche dans un nouvel onglet" aria-label="Ouvrir une fiche dans un nouvel onglet">+</button>` : "") +
       (Onglets.enLigne() ? `<span class="onglet-sync" title="Onglets synchronisés avec tes autres appareils (via ton dépôt GitHub)">🔄</span>` : "");
     const pl = b.querySelector(".fen-plus"); if (pl) pl.addEventListener("click", e => this.menuPlus(e, sec));
-    b.querySelectorAll("[data-fm]").forEach(x => x.addEventListener("click", () => {
-      const o = document.querySelector('#menu-panneau .tab-btn[data-tab="' + x.dataset.fm + '"]'); if (o) o.click();
-    }));
+    b.querySelectorAll("[data-fm]").forEach(x => x.addEventListener("click", () => this.allerModule(x.dataset.fm)));
     b.querySelectorAll("[data-o]").forEach(x => x.addEventListener("click", () => Onglets.activer(x.dataset.o)));
     // onglets de fiches : glisser pour réordonner, clic droit (ou appui long) pour épingler ou fermer
     b.querySelectorAll(".onglet-t[data-o]").forEach(t => {

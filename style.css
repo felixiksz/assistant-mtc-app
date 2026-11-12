@@ -1531,3 +1531,12 @@ article.formule-detail, .vue-travail { border-radius: 12px !important; }
 .cmpc-canaux { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; font-size: 0.85rem; }
 .cmpc-canaux .commun .circ-pastille { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cmpc-vide { padding: 1rem; }
+/* syndromes rattachés : pastilles détachables, ajout en place */
+.circ-lie { display: inline-flex; align-items: center; gap: 0.1rem; margin: 0.15rem 0.3rem 0.15rem 0; }
+.circ-lie-libre { border: 1px dashed var(--ink); border-radius: 999px !important; padding: 0.15rem 0.2rem 0.15rem 0.7rem; font-size: 0.9rem; }
+.circ-lie-x { border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; padding: 0 0.3rem; }
+.circ-lie-x:hover { color: var(--ink); }
+.circ-lies-ajout { margin: 0.6rem 0; max-width: 34rem; }
+.circ-lies-ajout input { width: 100%; box-sizing: border-box; font: inherit; padding: 0.35rem 0.9rem; border-radius: 999px !important; }
+/* le choix Formules / Circuits de Prescrire est remplacé par les onglets des fenêtres */
+#tab-proposer .prop-vues { display: none; }

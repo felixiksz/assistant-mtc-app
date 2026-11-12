@@ -155,10 +155,13 @@ const Circuits = {
       const y0 = i < 2 ? y - 22 - (l.length - 1) * 8.5 : y + 29;
       return l.map((t, k) => `<text x="${x}" y="${y0 + k * 8.5}" text-anchor="middle" font-size="7.8" font-weight="700" ${police} fill="var(--ink)">${escapeHtml(t)}</text>`).join("");
     }).join("") : "";
-    // points de l'axe (RM, DM) : une ligne chacun sous la figure
+    // points de l'axe (RM, DM) : juste les noms, de haut en bas, comme les autres points mais en couleur neutre ; RM à gauche, DM à droite
     const axe = pts ? this.AXE.filter(k => (pts[k] || []).length) : [];
-    const axeH = axe.length ? axe.length * 10 + 6 : 0;
-    const axeSvg = axe.map((k, i) => `<text x="60" y="${120 + marge + 4 + i * 10}" text-anchor="middle" font-size="7.8" font-weight="700" ${police} fill="var(--ink)">${k} : ${escapeHtml(this.lignesPoints(pts[k]).join(" "))}</text>`).join("");
+    const axeCols = axe.map(k => [...new Set((pts[k] || []).map(t => this.clePoint(t)).filter(Boolean))]);
+    const hAx = 11, ecAx = 1.6, nAx = axeCols.length ? Math.max(...axeCols.map(l => l.length)) : 0;
+    const axeH = axe.length ? nAx * (hAx + ecAx) + 8 : 0;
+    const axeSvg = axeCols.map((l, ci) => { const x = axeCols.length === 1 ? 60 : (ci === 0 ? 33 : 87); return l.map((t, r) => { const w = Math.max(20, t.length * 5.4 + 8), y = 122 + marge + r * (hAx + ecAx);
+      return `<g class="circ-pill" data-p="${escapeHtml(t)}"><title>${escapeHtml(t)}</title><rect x="${x - w / 2}" y="${y}" width="${w}" height="${hAx}" rx="3" fill="#E4E2DA" stroke="#1d1d1b" stroke-width="0.8"/><text x="${x}" y="${y + 8.2}" text-anchor="middle" font-size="8.8" font-weight="700" ${police} fill="#1d1d1b">${escapeHtml(t)}</text></g>`; }).join(""); }).join("");
     // ajouts possibles : canaux en pointillé sous la figure, « + » devant, trait entre eux quand ils vont ensemble
     const groupes = o.ajouts ? (c.ajouts || []).filter(a => (a.canaux || []).length) : [];
     const grosse = a => !!pts && a.canaux.some(k => ((pts[k]) || []).length);
@@ -325,7 +328,7 @@ const Circuits = {
       const tag = prop && !/vérifié/.test(a.source) ? ` <span class="circ-pt-tag" title="Proposition à confirmer ou supprimer">à valider</span>` : (a.source && /correction/.test(a.source) ? ` <span class="muted" title="Selon ta correction">✓</span>` : "");
       return `<li>${fleches}${a.action ? ` <span class="muted">${escapeHtml(sansHanzi(a.action))}</span>` : ""}${libre}${tag}</li>`;
     }).join("");
-    const lies = (c.syndromes_lies || []).map(k => { const e = this.entreeSynd(k); return e ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(k)}">${escapeHtml(sansHanzi(e.nom))}</button>` : `<span class="muted">${escapeHtml(k)} (introuvable)</span>`; }).join(" ");
+    const lies = (c.syndromes_lies || []).map(k => { const l = this.libelleLie(k); return `<span class="circ-lie${l.libre ? " circ-lie-libre" : ""}">${l.entree ? `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(k)}">${escapeHtml(l.nom)}</button>` : `<span${l.introuvable ? ` class="muted"` : ""}>${escapeHtml(l.nom)}${l.introuvable ? " (introuvable)" : ""}</span>`}<button type="button" class="circ-lie-x" data-lie-x="${escapeHtml(k)}" title="Détacher ce syndrome du circuit" aria-label="Détacher ${escapeHtml(l.nom)}">✕</button></span>`; }).join(" ");
     const parCanal = c.grille.map(code => {
       const l = this.syndromesDuCanal(code);
       if (!l.length) return "";
@@ -356,10 +359,26 @@ const Circuits = {
         `<div class="sec-assoc">${this.section("Associations de points", this.assocTableHtml(c) + this.wjyChipsHtml(c) + `<div id="circ-assoc-detail" class="circ-assoc-detail"></div>`)}</div>` +
         `<div class="sec-schemas">${this.section("Schémas des associations", `<div id="circ-schemas-zone"></div>`)}</div>` +
         `<div class="sec-grille">${this.section("Comparaison des associations et des ajouts", this.grilleHtml(c))}</div>` + `</div></div>`)}
-      ${this.onglet(3, `<section><h3>Syndromes de ta base rattachés à ce circuit</h3>${lies ? `<div class="circ-synd-liste">${lies}</div>` : ""}</section>` +
+      ${this.onglet(3, `<section><h3>Syndromes de ta base rattachés à ce circuit</h3>${lies ? `<div class="circ-synd-liste">${lies}</div>` : ""}<div class="circ-lies-ajout"><input type="search" id="circ-lie-q" placeholder="Ajouter un syndrome : choisis dans ta base, ou tape-le" autocomplete="off" aria-label="Ajouter un syndrome"><ul id="circ-lie-sugg" class="prop-sugg"></ul></div></section>` +
         this.section("Formule de pharmacopée équivalente", this.equivalent(c)) +
         `<section><h3>Syndromes de ta base portant sur ces canaux</h3><p class="muted">Syndromes des organes, des canaux et des six niveaux dont l'organe ou le niveau est un des quatre canaux.</p>${parCanal}</section>`)}`;
     zone.querySelectorAll(".circ-onglet-btn").forEach(b => b.addEventListener("click", () => this.choisirOnglet(+b.dataset.o)));
+    // syndromes rattachés : détacher, ou en ajouter (choisis dans ta base, ou tapés tels quels)
+    zone.querySelectorAll("[data-lie-x]").forEach(b => b.addEventListener("click", () => this.enregistrerChamps(c, { syndromes_lies: (c.syndromes_lies || []).filter(x => x !== b.dataset.lieX) })));
+    const qLie = zone.querySelector("#circ-lie-q"), sgLie = zone.querySelector("#circ-lie-sugg");
+    if (qLie) {
+      const ajoutLie = k => this.enregistrerChamps(c, { syndromes_lies: [...(c.syndromes_lies || []), k] });
+      qLie.addEventListener("input", () => {
+        const t = qLie.value.trim(), n = dsNorm(t);
+        if (!n) { sgLie.innerHTML = ""; return; }
+        const l = (Syndromes.entries || []).filter(e => !(c.syndromes_lies || []).includes(this.cleSynd(e)) && n.split(/\s+/).every(m => dsNorm(e.nom + " " + e.sousLabel).includes(m))).slice(0, 10);
+        sgLie.innerHTML = l.map(e => `<li data-k="${escapeHtml(this.cleSynd(e))}"><strong>${escapeHtml(sansHanzi(e.nom))}</strong> <span class="muted">${escapeHtml((Syndromes.domaineLabels || {})[e.domaine] || "")}${e.sousLabel ? " · " + escapeHtml(e.sousLabel) : ""}</span></li>`).join("") +
+          (!(c.syndromes_lies || []).includes("libre:" + t) ? `<li data-libre="${escapeHtml(t)}">＋ Ajouter « ${escapeHtml(t)} » tel quel <span class="muted">(texte libre)</span></li>` : "");
+        sgLie.querySelectorAll("li[data-k]").forEach(li => li.addEventListener("click", () => ajoutLie(li.dataset.k)));
+        sgLie.querySelectorAll("li[data-libre]").forEach(li => li.addEventListener("click", () => ajoutLie("libre:" + li.dataset.libre)));
+      });
+      qLie.addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); const p = sgLie.querySelector("li[data-k], li[data-libre]"); if (p) p.click(); } });
+    }
     zone.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const e = this.entreeSynd(b.dataset.synd); if (e) this.ouvrirSyndrome(e); }));
     this.assocActive = null;
     zone.querySelectorAll(".circ-ass-ligne").forEach(r => r.addEventListener("click", ev => {
@@ -585,6 +604,12 @@ const Circuits = {
   couleurCanal(code) { return this.COULEUR_CANAL[code] || "var(--ink)"; },
   // texte posé dans le rond d'un canal : blanc sur un rond plein (yīn), couleur du canal sur un rond cerclé (yáng)
   texteRond(code) { return this.polarite(code) === "yin" ? (this.COULEUR_CANAL[code] ? "#fff" : "var(--bg)") : this.couleurCanal(code); },
+  // syndrome rattaché à un circuit : une entrée de ta base, ou un texte libre tapé à la main (clé « libre:… »)
+  libelleLie(k) {
+    if (String(k).startsWith("libre:")) return { nom: String(k).slice(6), libre: true };
+    const e = this.entreeSynd(k);
+    return e ? { nom: sansHanzi(e.nom), entree: e } : { nom: k, introuvable: true };
+  },
   pastilleCanal(k) {
     const col = this.couleurCanal(k), yin = this.polarite(k) === "yin";
     return `<span class="circ-pastille" style="border-color:${col};background:${yin ? col : "transparent"};color:${yin ? (this.COULEUR_CANAL[k] ? "#fff" : "var(--bg)") : col}">${escapeHtml(k)}</span>`;
@@ -1440,7 +1465,7 @@ const Circuits = {
     apercu();
     const puces = () => {
       const el = document.getElementById("ce-lies");
-      el.innerHTML = d.syndromes_lies.map(k => { const e = this.entreeSynd(k); return `<span class="chosen-item">${escapeHtml(e ? e.nom : k)}<button type="button" data-k="${escapeHtml(k)}" aria-label="Retirer">✕</button></span>`; }).join("") || `<span class="muted">Aucun.</span>`;
+      el.innerHTML = d.syndromes_lies.map(k => { const l = this.libelleLie(k); return `<span class="chosen-item">${escapeHtml(l.nom)}<button type="button" data-k="${escapeHtml(k)}" aria-label="Retirer">✕</button></span>`; }).join("") || `<span class="muted">Aucun.</span>`;
       el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { d.syndromes_lies = d.syndromes_lies.filter(x => x !== b.dataset.k); puces(); }));
     };
     puces();
@@ -1448,7 +1473,9 @@ const Circuits = {
       const ul = document.getElementById("ce-synd-sugg"), q = dsNorm(ev.target.value.trim());
       if (!q) { ul.innerHTML = ""; return; }
       const l = (Syndromes.entries || []).filter(e => !d.syndromes_lies.includes(this.cleSynd(e)) && q.split(/\s+/).every(m => dsNorm(e.nom + " " + e.sousLabel).includes(m))).slice(0, 12);
-      ul.innerHTML = l.map(e => `<li data-k="${escapeHtml(this.cleSynd(e))}"><strong>${escapeHtml(e.nom)}</strong> <span class="muted">${escapeHtml((Syndromes.domaineLabels || {})[e.domaine] || "")}${e.sousLabel ? " · " + escapeHtml(e.sousLabel) : ""}</span></li>`).join("") || `<li class="muted">Aucun résultat.</li>`;
+      const brut = ev.target.value.trim();
+      ul.innerHTML = l.map(e => `<li data-k="${escapeHtml(this.cleSynd(e))}"><strong>${escapeHtml(e.nom)}</strong> <span class="muted">${escapeHtml((Syndromes.domaineLabels || {})[e.domaine] || "")}${e.sousLabel ? " · " + escapeHtml(e.sousLabel) : ""}</span></li>`).join("") +
+        (brut && !d.syndromes_lies.includes("libre:" + brut) ? `<li data-k="libre:${escapeHtml(brut)}">＋ Ajouter « ${escapeHtml(brut)} » tel quel <span class="muted">(texte libre)</span></li>` : "");
       ul.querySelectorAll("li[data-k]").forEach(li => li.addEventListener("click", () => { d.syndromes_lies.push(li.dataset.k); document.getElementById("ce-synd-search").value = ""; ul.innerHTML = ""; puces(); }));
     });
     const pf = () => {
