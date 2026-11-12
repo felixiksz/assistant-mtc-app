@@ -136,9 +136,9 @@ const Circuits = {
       const y0 = y - tot / 2;
       const pil = aff.map((t, k) => {
         const nomP = (o.libelles && o.libelles[t]) || t;                 // point Tung : son nom, pas sa clé
-        const mv = this._mouv ? this._mouv.get(this.cleP(t)) : "", fond = mv ? this.COULEUR_MOUV[mv] : "var(--bg)", w = Math.max(20, nomP.length * 5.4 + 8);
+        const mv = this._mouv ? this._mouv.get(this.cleP(t)) : "", fond = mv && !this._nb ? this.COULEUR_MOUV[mv] : "var(--bg)", w = Math.max(20, nomP.length * 5.4 + 8);
         return `<g${t.startsWith("+") ? "" : ` class="circ-pill" data-p="${escapeHtml(t)}"`}><title>${escapeHtml(nomP + (mv ? " — " + this.NOM_MOUV[mv] : ""))}</title><rect x="${x - w / 2}" y="${y0 + k * (hP + ec)}" width="${w}" height="${hP}" rx="3" fill="${fond}" stroke="#1d1d1b" stroke-width="0.8"/>` +
-          `<text x="${x}" y="${y0 + k * (hP + ec) + 8.2}" text-anchor="middle" font-size="8.8" font-weight="700" ${police} fill="${mv === "eau" ? "#FFFFFF" : "#1d1d1b"}">${escapeHtml(nomP)}</text></g>`;
+          `<text x="${x}" y="${y0 + k * (hP + ec) + 8.2}" text-anchor="middle" font-size="8.8" font-weight="700" ${police} fill="${mv === "eau" && !this._nb ? "#FFFFFF" : "#1d1d1b"}">${escapeHtml(nomP)}</text></g>`;
       }).join("");
       return badge + pil;
     };

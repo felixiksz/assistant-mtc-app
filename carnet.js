@@ -9,7 +9,7 @@
    Dépend de app.js (escapeHtml, sansHanzi, Syndromes, Formules), circuits.js (Circuits), tung.js (Tung). */
 
 const CarnetCircuits = {
-  CLE: "carnet_circuits_options_v2",
+  CLE: "carnet_circuits_options_v3",
 
   // ---------- réglages : pour chaque rubrique, plusieurs mises en page (la dernière la retire)
   CHAMPS: [
@@ -18,25 +18,26 @@ const CarnetCircuits = {
     { k: "schema", lib: "Schéma et usage le plus courant", choix: [["cote", "Schéma à gauche, usage encadré à droite"], ["titre", "Petit schéma à côté du titre, usage sur une ligne"], ["sans", "Sans schéma, usage sur une ligne"]] },
     { k: "indications", lib: "Indications", choix: [["tableau", "Tableau par rubrique"], ["suivi", "Texte suivi, rubriques en gras"], ["colonnes", "Liste sur deux colonnes"], ["non", "Ne pas inclure"]] },
     { k: "actions", lib: "Actions", choix: [["liste", "Liste, une action par ligne"], ["colonnes", "Liste sur deux colonnes"], ["suivi", "Texte suivi"], ["non", "Ne pas inclure"]] },
-    { k: "ajouts", lib: "Ajouts possibles", choix: [["liste", "Liste, un ajout par ligne"], ["suivi", "Texte suivi"], ["non", "Ne pas inclure (ils restent sur le schéma)"]] },
-    { k: "assoc", lib: "Associations de points (tes tableaux)", choix: [["tableau", "Tableau : indication à gauche, points en pastilles à droite"], ["lignes", "Une ligne par association : indication, puis les points"], ["non", "Ne pas inclure"]] },
-    { k: "wjy", lib: "Recettes de Wang Ju Yi", choix: [["tableau", "Tableau, comme les associations : indication à gauche, points à droite"], ["cartes", "Petites cartes sur deux colonnes : points, puis indication"], ["points", "Les couples de points seulement"], ["non", "Ne pas inclure"]] },
+    { k: "ajouts", lib: "Ajouts possibles", choix: [["tableau", "Tableau : canal ajouté à gauche, dans quel cas à droite"], ["liste", "Liste, un ajout par ligne"], ["suivi", "Texte suivi"], ["non", "Ne pas inclure (ils restent sur le schéma)"]] },
+    { k: "assoc", lib: "Associations de points (tes tableaux)", choix: [["schemas", "Schémas : une carte par association, les points à leur place sur le circuit"], ["tableau", "Tableau : indication à gauche, points en pastilles à droite"], ["lignes", "Une ligne par association : indication, puis les points"], ["non", "Ne pas inclure"]] },
+    { k: "wjy", lib: "Recettes de Wang Ju Yi", choix: [["tableau", "Tableau, comme les associations : indication à gauche, points à droite"], ["schemas", "Schémas : une carte par recette, les points à leur place"], ["cartes", "Petites cartes sur deux colonnes : points, puis indication"], ["points", "Les couples de points seulement"], ["non", "Ne pas inclure"]] },
     { k: "points", lib: "Points par canal (★ retenus et points Tung)", choix: [["tableau", "Tableau : un bandeau par canal, une ligne par point avec son action"], ["colonnes", "Deux colonnes : canal, puis ses points avec action abrégée"], ["noms", "Une ligne par canal, noms des points seulement"], ["non", "Ne pas inclure"]] },
     { k: "tung", lib: "Points Tung à inclure", choix: [["tiens", "Seulement les tiens (canal choisi ou fiche complétée par toi)"], ["tous", "Tous ceux dont le canal est connu (livres et canaux déduits compris)"], ["non", "Aucun"]] },
+    { k: "tungForme", lib: "Présentation des points Tung", choix: [["cartes", "Cartes avec image et localisation, deux par rangée"], ["canal", "Rangés avec les points de leur canal"]] },
     { k: "sf", lib: "Syndromes et formules", choix: [["tableau", "Tableau"], ["suivi", "Texte suivi"], ["non", "Ne pas inclure"]] },
   ],
   BOOLS: [["couverture", "Couverture"], ["legende", "Page « Lire un schéma »"], ["sommaire", "Sommaire"],
           ["assocNotes", "Notes des associations de points"], ["wjyTout", "Toutes les indications de chaque recette (sinon la première)"],
-          ["pointsRetenus", "Points retenus (★)"], ["tungAjout", "Points Tung qui demandent un ajout"],
+          ["pointsRetenus", "Points retenus (★)"], ["tungAjout", "Points Tung qui demandent un ajout"], ["tungImages", "Image de localisation des points Tung"],
           ["syndCanaux", "Syndromes des canaux (texte du cours)"], ["notes", "Notes des circuits"],
           ["indexInd", "Index des indications, par catégorie"], ["indexTab", "Index des tableaux (associations)"], ["indexSynd", "Index des syndromes rattachés"],
           ["multiple4", "Compléter par des pages blanches jusqu'à un multiple de 4 (carnet agrafé)"]],
   PRESETS: {
-    complet: { nom: "Complet", o: { mode: "double", taille: "8.6", schema: "cote", indications: "tableau", actions: "liste", ajouts: "liste", assoc: "tableau", wjy: "tableau", points: "tableau", tung: "tiens", sf: "tableau",
+    complet: { nom: "Complet", o: { mode: "double", taille: "8.6", schema: "cote", indications: "tableau", actions: "liste", ajouts: "tableau", assoc: "schemas", wjy: "tableau", points: "tableau", tung: "tiens", tungForme: "cartes", sf: "tableau", tungImages: true,
       couverture: true, legende: true, sommaire: true, multiple4: false, assocNotes: true, wjyTout: true, pointsRetenus: true, tungAjout: true, syndCanaux: true, notes: true, indexInd: true, indexTab: true, indexSynd: true } },
-    compact: { nom: "Compact", o: { mode: "page", taille: "8", schema: "cote", indications: "suivi", actions: "colonnes", ajouts: "suivi", assoc: "lignes", wjy: "cartes", points: "colonnes", tung: "tiens", sf: "suivi",
+    compact: { nom: "Compact", o: { mode: "page", taille: "8", schema: "cote", indications: "suivi", actions: "colonnes", ajouts: "liste", assoc: "schemas", wjy: "cartes", points: "colonnes", tung: "tiens", tungForme: "cartes", sf: "suivi", tungImages: true,
       couverture: true, legende: true, sommaire: true, multiple4: false, assocNotes: true, wjyTout: false, pointsRetenus: true, tungAjout: false, syndCanaux: false, notes: true, indexInd: true, indexTab: true, indexSynd: true } },
-    minimal: { nom: "Le moins de pages", o: { mode: "suite", taille: "7.4", schema: "titre", indications: "suivi", actions: "suivi", ajouts: "non", assoc: "lignes", wjy: "points", points: "noms", tung: "tiens", sf: "suivi",
+    minimal: { nom: "Le moins de pages", o: { mode: "suite", taille: "7.4", schema: "titre", indications: "suivi", actions: "suivi", ajouts: "non", assoc: "lignes", wjy: "points", points: "noms", tung: "tiens", tungForme: "canal", sf: "suivi", tungImages: false,
       couverture: true, legende: false, sommaire: true, multiple4: false, assocNotes: false, wjyTout: false, pointsRetenus: true, tungAjout: false, syndCanaux: false, notes: false, indexInd: true, indexTab: false, indexSynd: false } },
   },
   o: null,
@@ -114,6 +115,25 @@ const CarnetCircuits = {
     p.ient { display: flex; align-items: baseline; gap: 1mm; margin: 0 0 0.4mm; break-inside: avoid; }
     p.ient i { flex: 1; min-width: 3mm; border-bottom: 0.5pt dotted #000; transform: translateY(-0.8mm); }
     p.ient b { font-weight: 600; white-space: nowrap; }
+    table.aj td.ajc { width: 27%; white-space: nowrap; font-weight: 800; }
+    table.aj td.ajc small { display: block; font-weight: 400; font-size: 0.85em; white-space: normal; margin-top: 0.4mm; }
+    table.aj td small { display: block; font-size: 0.87em; margin-top: 0.4mm; }
+    .paire { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; margin: 0 0 3mm; align-items: stretch; }
+    .sch { border: 0.8pt solid #000; padding: 1.4mm 1.8mm; min-width: 0; }
+    .sch p.si { margin: 0; }
+    .sch p.si strong, .sch p.si span { display: block; }
+    .sch p.si span, .sch small { font-size: 0.87em; }
+    .sch small { display: block; }
+    .sch small.tag { text-transform: uppercase; font-weight: 800; font-size: 0.78em; letter-spacing: 0.04em; }
+    .sch .sd { text-align: center; line-height: 0; margin: 1.5mm 0 1mm; }
+    .sch .sd svg { max-width: 100%; height: auto; }
+    .timg { display: block; line-height: 0; margin: 0.8mm 0 0.4mm; }
+    .timg img { height: 25mm; width: auto; max-width: 100%; object-fit: contain; object-position: left center; filter: grayscale(1); border: 0.6pt solid #000; background: #fff; }
+    .cartes .timg img { height: 20mm; }
+    .sch.tc p.si span { margin-top: 0.5mm; }
+    .sch .sd.timg { text-align: center; }
+    .sch .sd.timg img { height: 31mm; object-position: center; border: 0; }
+    .sch.tc small { margin-top: 0.6mm; }
     ul.t { list-style: none; margin: 0 0 1mm; padding: 0; }
     ul.t li { padding-left: 2.2mm; text-indent: -2.2mm; break-inside: avoid; }
     ul.t li::before { content: "- "; }
@@ -176,13 +196,43 @@ const CarnetCircuits = {
       else aj(this.blocListe("Indications", c.indications, o.indications === "colonnes" ? "col2" : ""));
     }
     if (o.actions !== "non") aj(o.actions === "suivi" ? this.blocSuivi("Actions", (c.actions || []).map(x => this.h(x))) : this.blocListe("Actions", c.actions, o.actions === "colonnes" ? "col2" : ""));
-    const ajouts = (c.ajouts || []).map(a => (a.canaux || []).length ? C.ajoutLigne(a, c.grille) : (a.texte || a.action || "")).filter(Boolean);
-    if (o.ajouts !== "non") aj(o.ajouts === "suivi" ? this.blocSuivi("Ajouts possibles", ajouts.map(x => this.h(x))) : this.blocListe("Ajouts possibles", ajouts));
+    const badge = kc => `<span class="canal${C.polarite(kc) === "yin" ? " yin" : ""}">${kc}</span>`;
+    const etL = l => l.length > 1 ? l.slice(0, -1).join(", ") + " et " + l[l.length - 1] : l.join("");
+    const nrm = t => dsNorm(sansHanzi(String(t || ""))).replace(/[^a-z0-9]+/g, " ").trim();
+    const AJ = (c.ajouts || []).map(a => {
+      const cx = a.canaux || [], action = String(a.action || "").trim();
+      // le lien avec le circuit : canaux reliés (un seul canal ajouté) ou mouvements réunis (plusieurs)
+      const lien = cx.length === 1 ? (() => { const l = c.grille.filter(g => (C.SYSTEMES[cx[0]] || []).includes(g)); return l.length ? "relié à " + etL(l) : ""; })()
+        : cx.length ? [...new Set(cx.map(kc => C.NOM_MOUV[C.MOUV_CANAL[kc]]).filter(Boolean))].join(" / ") + (a.ensemble ? ", ensemble" : ", au choix") : "";
+      // le texte libre n'est gardé que s'il dit autre chose que l'action et que ce qui est déjà écrit (« ajout possible… », « canal … — même place que … »)
+      let texte = String(a.texte || "").replace(/\s*:\s*[A-Za-z+ ]{1,12}$/, "").trim();
+      const nt = nrm(texte), na = nrm(action);
+      if (!nt || /^(ajout possible|canal )/i.test(texte) || (na && (na.includes(nt) || nt.includes(na) || nt.slice(0, 24) === na.slice(0, 24)))) texte = "";
+      return { cx, ensemble: a.ensemble, action: action || texte, texte: action ? texte : "", lien };
+    }).filter(a => a.cx.length || a.action);
+    const ajLigne = a => (a.cx.length ? a.cx.join(a.ensemble || a.cx.length < 2 ? " + " : " ou ") + (a.action ? " : " : "") : "") + this.h(a.action) + (a.lien ? ` (${this.h(a.lien)})` : "") + (a.texte ? " ; " + this.h(a.texte) : "");
+    if (o.ajouts === "tableau" && AJ.length) b.push({ titre: "Ajouts possibles", env: ['<table class="aj">', "</table>"], tete: `<tr><th>Ajout</th><th>Dans quel cas</th></tr>`,
+      rows: AJ.map(a => `<tr><td class="ajc">+ ${a.cx.map(badge).join(a.ensemble || a.cx.length < 2 ? "" : " ou ")}${a.lien ? `<small>${this.h(a.lien)}</small>` : ""}</td><td>${this.h(a.action) || "—"}${a.texte ? `<small>${this.h(a.texte)}</small>` : ""}</td></tr>`) });
+    else if (o.ajouts === "liste" && AJ.length) b.push({ titre: "Ajouts possibles", env: ['<ul class="t">', "</ul>"], rows: AJ.map(a => `<li>${ajLigne(a)}</li>`) });
+    else if (o.ajouts === "suivi") aj(this.blocSuivi("Ajouts possibles", AJ.map(ajLigne)));
     // associations de points : l'indication à gauche, les points en pastilles à droite (une ligne par canal)
     const pt = p => { const rem = C.commentairesDe(p).join(" ; "); return `<span class="pt">${this.h(C.clePoint(p) || p)}</span>` + (rem ? `<small class="rem">(${this.h(rem)})</small>` : ""); };
     const ordre = pts => [...c.grille, ...Object.keys(pts).filter(k => !c.grille.includes(k))].filter(k => (pts[k] || []).length);
     const TP = ['<table class="tp">', "</table>"], teteTP = `<tr><th>Pour…</th><th>Points</th></tr>`;
-    if (o.assoc !== "non" && (c.associations || []).length) {
+    const carte = (ind, pts, note, tag) => {
+      const ajc = (c.ajouts || []).filter(x => (x.canaux || []).some(kc => (pts[kc] || []).length)).map(x => ({ canaux: x.canaux, ensemble: x.ensemble }));
+      const dessines = new Set([...c.grille, ...C.AXE, ...ajc.flatMap(x => x.canaux)]);
+      const hors = Object.keys(pts).filter(kc => !dessines.has(kc) && (pts[kc] || []).length);
+      const pleins = Object.keys(pts).filter(kc => dessines.has(kc) && new Set((pts[kc] || []).map(p => C.clePoint(p)).filter(Boolean)).size > 3);   // le dessin n'écrit que trois points par canal : les autres sont listés dessous
+      const svg = C.dessin({ grille: c.grille, figure: c.figure, ajouts: ajc }, { taille: 132, etiquettes: true, points: pts, ajouts: ajc.length > 0 });
+      return `<div class="sch">${tag ? `<small class="tag">${tag}</small>` : ""}<p class="si"><strong>${this.h(ind[0] || "")}</strong>${ind.slice(1).map(x => `<span>${this.h(x)}</span>`).join("")}</p><div class="sd">${svg}</div>` +
+        pleins.map(kc => `<small>${badge(kc)}${pts[kc].map(pt).join("")}</small>`).join("") +
+        (hors.length ? `<small>+ ${hors.map(kc => pts[kc].map(pt).join("")).join(" ")}</small>` : "") + (note ? `<small>${note}</small>` : "") + `</div>`;
+    };
+    const paires = l => { const r = []; for (let i = 0; i < l.length; i += 2) r.push(`<div class="paire">${l[i]}${l[i + 1] || ""}</div>`); return r; };
+    if (o.assoc === "schemas" && (c.associations || []).length) {
+      b.push({ titre: "Associations de points", env: P, rows: paires(c.associations.map(a => carte(C.indicationsDe(a.tableau), a.points || {}, o.assocNotes && a.note ? this.h(a.note) : ""))) });
+    } else if (o.assoc !== "non" && (c.associations || []).length) {
       const note = a => o.assocNotes && a.note ? `<small>${this.h(a.note)}</small>` : "";
       if (o.assoc === "tableau") b.push({ titre: "Associations de points", env: TP, tete: teteTP,
         rows: c.associations.map(a => `<tr><td class="lib">${this.h(a.tableau)}${note(a)}</td><td class="pts">${ordre(a.points || {}).map(k => a.points[k].map(pt).join("")).join("<br>")}</td></tr>`) });
@@ -197,7 +247,14 @@ const CarnetCircuits = {
       const ind = w => this.h((w.r.puces || [])[0] || w.r.groupe || "");
       const autres = w => o.wjyTout && (w.r.puces || []).length > 1 ? `<small>${w.r.puces.slice(1).map(x => this.h(x)).join(" · ")}</small>` : "";
       const G = C.wjyGroupes(wjy), rows = [];
-      if (o.wjy === "tableau") {
+      if (o.wjy === "schemas") {
+        G.forEach(g => {
+          rows.push(`<p class="sgrp grp">${grp(g)}</p>`);
+          paires(g.items.map(({ w }) => { const pts = { ...w.r.canaux }; (w.r.axe || []).forEach(p => { const kc = (p.match(/^[A-Za-z]+/) || [""])[0].toUpperCase(); (pts[kc] = pts[kc] || []).push(p); });
+            const pu = w.r.puces || []; return carte([pu[0] || w.r.groupe || "", ...(o.wjyTout ? pu.slice(1) : [])], pts, ""); })).forEach(x => rows.push(x));
+        });
+        b.push({ titre: "Recettes de Wang Ju Yi", env: P, rows });
+      } else if (o.wjy === "tableau") {
         G.forEach(g => { rows.push(`<tr class="grp"><td colspan="2">${grp(g)}</td></tr>`); g.items.forEach(({ w }) => rows.push(`<tr><td class="lib">${ind(w)}${autres(w)}</td><td class="pts">${couple(w)}${w.r.vaisseaux ? `<small>${this.h(w.r.vaisseaux)}</small>` : ""}</td></tr>`)); });
         b.push({ titre: "Recettes de Wang Ju Yi", env: TP, tete: teteTP, rows });
       } else if (o.wjy === "cartes") {
@@ -205,8 +262,8 @@ const CarnetCircuits = {
         b.push({ titre: "Recettes de Wang Ju Yi", env: ['<div class="cartes">', "</div>"], rows });
       } else b.push({ titre: "Recettes de Wang Ju Yi", env: P, rows: G.map(g => `<p class="suivi"><strong>${grp(g)} :</strong> ${g.items.map(({ w }) => couple(w)).join(" ")}</p>`) });
     }
-    // points par canal : tes points retenus (★) et les points Tung rattachés à ce canal (pastille en pointillé)
-    if (o.points !== "non") {
+    // points par canal : tes points retenus (★) et, selon le réglage, les points Tung rattachés à ce canal (pastille en pointillé)
+    {
       const codes = [...new Set([...c.grille, ...(c.ajouts || []).flatMap(a => a.canaux || [])])];
       const tungDe = {};
       if (o.tung !== "non") try {
@@ -217,26 +274,37 @@ const CarnetCircuits = {
       const ficheT = p => { try { return Tung.parNom(String(p.point).replace(/\s*[:(].*$/, "")) || Tung.parNom(p.point); } catch (e) { return null; } };
       const retenusDe = kc => o.pointsRetenus ? C.ptsAffiches(kc, c).filter(x => C.retenu(x)) : [];
       const dejaT = new Set(codes.flatMap(kc => retenusDe(kc)).map(ficheT).filter(Boolean).map(f => f.id));       // un point Tung que tu as déjà retenu n'est pas répété
-      const parCanal = [...new Set([...codes, ...Object.keys(tungDe)])].map(kc => ({ k: kc, pts: retenusDe(kc), tung: (tungDe[kc] || []).filter(f => !dejaT.has(f.id)) })).filter(x => x.pts.length || x.tung.length);
+      const parCanal = [...new Set([...codes, ...Object.keys(tungDe)])].map(kc => ({ k: kc, pts: o.points !== "non" ? retenusDe(kc) : [], tung: o.tungForme === "cartes" ? [] : (tungDe[kc] || []).filter(f => !dejaT.has(f.id)) })).filter(x => x.pts.length || x.tung.length);
       const cl = p => ficheT(p) ? "pt tg" : "pt";
       const canal = kc => `<span class="canal${C.polarite(kc) === "yin" ? " yin" : ""}">${kc}</span>${this.h((C.canaux.get(kc) || {}).nom || "")}${c.grille.includes(kc) ? "" : " (ajout)"}`;
+      const imgT = f => o.tungImages && (f.images || []).length ? `<span class="timg"><img alt="" data-rel="tung/images/${escapeHtml(f.images[0])}"></span>` : "";
       const nomT = f => this.h(f.nom), numT = f => (f.numeros || []).length ? this.h(f.numeros.join("/")) + " · " : "";
       const rows = [];
       if (parCanal.length && o.points === "tableau") {
         parCanal.forEach(x => {
           rows.push(`<tr class="grp gauche"><td colspan="2">${canal(x.k)}</td></tr>`);
-          x.pts.forEach(p => rows.push(`<tr><td class="pn"><span class="${cl(p)}">${this.h(p.point)}</span></td><td>${this.h(p.action || "")}${p.commentaire ? " (" + this.h(p.commentaire) + ")" : ""}</td></tr>`));
-          x.tung.forEach(f => rows.push(`<tr><td class="pn"><span class="pt tg">${nomT(f)}</span><small>${numT(f)}Tung</small></td><td>${this.h(Tung.action(f) || "")}</td></tr>`));
+          x.pts.forEach(p => rows.push(`<tr><td class="pn"><span class="${cl(p)}">${this.h(p.point)}</span></td><td>${this.h(p.action || "")}${p.commentaire ? " (" + this.h(p.commentaire) + ")" : ""}${ficheT(p) && o.tungForme !== "cartes" ? imgT(ficheT(p)) : ""}</td></tr>`));
+          x.tung.forEach(f => rows.push(`<tr><td class="pn"><span class="pt tg">${nomT(f)}</span><small>${numT(f)}Tung</small></td><td>${this.h(Tung.action(f) || "")}${imgT(f)}</td></tr>`));
         });
         b.push({ titre: "Points par canal", env: ['<table class="pc">', "</table>"], rows });
       } else if (parCanal.length && o.points === "colonnes") {
         parCanal.forEach(x => {
           rows.push(`<p class="sgrp grp">${canal(x.k)}</p>`);
           x.pts.forEach(p => rows.push(`<p class="lg"><span class="${cl(p)}">${this.h(p.point)}</span>${p.action ? escapeHtml(this.court(p.action, 44)) : ""}</p>`));
-          x.tung.forEach(f => rows.push(`<p class="lg"><span class="pt tg">${nomT(f)}</span>${escapeHtml(this.court(Tung.action(f) || "", 40))}</p>`));
+          x.tung.forEach(f => rows.push(`<p class="lg"><span class="pt tg">${nomT(f)}</span>${escapeHtml(this.court(Tung.action(f) || "", 40))}${imgT(f)}</p>`));
         });
         b.push({ titre: "Points par canal", env: ['<div class="cartes libre">', "</div>"], rows });
       } else if (parCanal.length) b.push({ titre: "Points par canal", env: P, rows: parCanal.map(x => `<p class="lg"><span class="canal${C.polarite(x.k) === "yin" ? " yin" : ""}">${x.k}</span>${x.pts.map(p => `<span class="${cl(p)}">${this.h(p.point)}</span>`).join("")}${x.tung.map(f => `<span class="pt tg">${nomT(f)}</span>`).join("")}</p>`) });
+      // points Tung en cartes : nom, numéro, canaux, image de localisation, localisation et action ; deux par rangée
+      if (o.tungForme === "cartes" && o.tung !== "non") {
+        const vus = new Set(), tousT = [];
+        [...new Set([...codes, ...Object.keys(tungDe)])].forEach(kc => [...retenusDe(kc).map(ficheT).filter(Boolean), ...(tungDe[kc] || [])].forEach(f => { if (!vus.has(f.id)) { vus.add(f.id); tousT.push(f); } }));
+        const loc = f => { const t = sansHanzi(Tung.localisation(f) || "").replace(/\s+/g, " ").trim(); return t.length > 170 ? t.slice(0, 168).replace(/\s+\S*$/, "") + "…" : t; };
+        const carteT = f => `<div class="sch tc"><p class="si"><strong>${nomT(f)}</strong><span>${(f.numeros || []).length ? this.h(f.numeros.join(" · ")) + " " : ""}${((f.canaux || {}).codes || []).map(badge).join("")}</span></p>` +
+          (o.tungImages && (f.images || []).length ? `<div class="sd timg"><img alt="" data-rel="tung/images/${escapeHtml(f.images[0])}"></div>` : "") +
+          (loc(f) ? `<small><strong>Localisation :</strong> ${escapeHtml(loc(f))}</small>` : "") + (Tung.action(f) ? `<small>${this.h(Tung.action(f))}</small>` : "") + `</div>`;
+        if (tousT.length) b.push({ titre: "Points Tung", env: P, rows: paires(tousT.map(carteT)) });
+      }
     }
     // syndromes et formules
     if (o.sf !== "non") {
@@ -433,6 +501,10 @@ const CarnetCircuits = {
       const z = doc.getElementById("pages");
       z.className = "impaire";                               // à l'écran : la page 1 est seule à droite, puis les doubles pages
       z.innerHTML = pages.map((p, i) => this.page(i, p)).join("");
+      z.querySelectorAll("img[data-rel]").forEach(async im => {
+        try { im.src = Store.mode === "github" ? await Store.imageUrl(im.dataset.rel) : new URL("data/" + im.dataset.rel, location.href).href; }
+        catch (e) { const s = im.closest(".timg"); if (s) s.remove(); }
+      });
       const feuilles = Math.ceil(pages.length / 4);
       doc.getElementById("etat").innerHTML = `<strong>${pages.length} pages</strong> <span>(${circuits.length} circuit${circuits.length > 1 ? "s" : ""}, ${feuilles} feuille${feuilles > 1 ? "s" : ""} A4 en carnet). À l'impression : format A5, marges « Aucune », « Graphiques d'arrière-plan » coché.</span>`;
     } finally { Circuits._nb = false; }
