@@ -1540,3 +1540,8 @@ article.formule-detail, .vue-travail { border-radius: 12px !important; }
 .circ-lies-ajout input { width: 100%; box-sizing: border-box; font: inherit; padding: 0.35rem 0.9rem; border-radius: 999px !important; }
 /* le choix Formules / Circuits de Prescrire est remplacé par les onglets des fenêtres */
 #tab-proposer .prop-vues { display: none; }
+/* réseau : suggestions de points Tung */
+.reseau-sugg { list-style: none; margin: -0.3rem 0 0.6rem; padding: 0; }
+.reseau-sugg li { padding: 0.35rem 0.7rem; border: 1px solid var(--ink); border-top: 0; cursor: pointer; background: var(--panel); }
+.reseau-sugg li:first-child { border-top: 1px solid var(--ink); }
+.reseau-sugg li:hover { background: var(--accent-soft, var(--panel)); }

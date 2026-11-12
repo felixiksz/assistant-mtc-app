@@ -79,10 +79,31 @@ const Reseau = {
     if (deja) { this.ouvrir(); this.avertir(nom + " est déjà dans le réseau."); this.surligner(deja.id); return; }
     const id = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     this.snap();
-    this.etat.points.push({ id, point: nom, canal: p.canal || this.canalDe(nom), cote: "", raison: p.raison || "", source: p.source || "", tung: !!p.tung });
+    this.etat.points.push({ id, point: nom, canal: p.canal || (p.tung ? "" : this.canalDe(nom)), cote: "", raison: p.raison || "", source: p.source || "", tung: !!p.tung });
     this.sauver();
     this.ouvrir();
     this.surligner(id);
+  },
+  // ---------- points Tung : reconnus par leur nom, un alias ou un numéro (Shui Jin, 77.08…)
+  codePoint(t) { return /^[A-Za-z]{1,3}\s?\.?\s?\d{1,2}$/.test(String(t).trim()); },
+  nomTung(f) { return f.nom + ((f.numeros || []).length ? " " + f.numeros.join("/") : ""); },
+  async suggererTung(t) {
+    if (typeof Tung === "undefined") return [];
+    try { await Tung.ensureLoaded(); } catch (e) { return []; }
+    const n = dsNorm(t), m = n.split(/\s+/).filter(Boolean);
+    if (!m.length) return [];
+    const cle = Tung.cleNom(t);
+    const sc = f => {
+      const noms = [f.nom, ...(f.alias || []), ...(f.numeros || [])].map(x => Tung.cleNom(x));
+      if (noms.some(x => x === cle)) return 0;
+      if (noms.some(x => x.startsWith(cle))) return 1;
+      const h = dsNorm([f.nom, f.zh, f.trad, ...(f.numeros || []), ...(f.alias || [])].join(" "));
+      return m.every(x => h.includes(x)) ? 2 : 9;
+    };
+    return Tung.liste.map(f => ({ f, s: sc(f) })).filter(x => x.s < 9).sort((a, b) => a.s - b.s || a.f.nom.localeCompare(b.f.nom, "fr")).slice(0, 8).map(x => x.f);
+  },
+  ajouterTung(f) {
+    this.ajouter({ point: this.nomTung(f), canal: ((f.canaux || {}).codes || [])[0] || "", raison: typeof Tung.action === "function" ? sansHanzi(Tung.action(f)) : "", source: "point Tung", tung: true });
   },
   retirer(id) { this.snap(); this.etat.points = this.etat.points.filter(x => x.id !== id); this.sauver(); this.rendre(); },
   maj(id, champs) { const x = this.etat.points.find(y => y.id === id); if (x) { Object.assign(x, champs); this.sauver(); } },
@@ -198,7 +219,7 @@ const Reseau = {
         <details class="reseau-schema-d"${this.fenetre.schemaFerme ? "" : " open"}><summary>Schéma</summary><div id="reseau-schema">${this.schema()}</div></details>
         <p id="reseau-avis" class="muted reseau-avis" aria-live="polite"></p>
         <ul class="reseau-liste">${lignes || `<li class="muted reseau-vide">Aucun point : utilise le ✓ à côté d'un point, ou tape-le ci-dessous.</li>`}</ul>
-        ${verrou ? "" : `<form id="reseau-ajout" class="reseau-ajout"><input type="text" id="reseau-point" placeholder="Ajouter un point (ex. TF5, Rt 4)" autocomplete="off"><button type="submit" class="reseau-ic2" title="Ajouter" aria-label="Ajouter ce point">＋</button></form>`}
+        ${verrou ? "" : `<form id="reseau-ajout" class="reseau-ajout"><input type="text" id="reseau-point" placeholder="Ajouter un point (ex. TF5, Rt 4)" autocomplete="off"><button type="submit" class="reseau-ic2" title="Ajouter" aria-label="Ajouter ce point">＋</button></form><ul id="reseau-sugg" class="prop-sugg reseau-sugg"></ul>`}
         <div class="reseau-barre">
           <button type="button" class="reseau-ic2" id="reseau-annuler" title="Annuler la dernière modification (Ctrl+Z)" aria-label="Annuler"${this.hist.length ? "" : " disabled"}>↶</button>
           <button type="button" class="reseau-ic2" id="reseau-refaire" title="Rétablir (Ctrl+Y)" aria-label="Rétablir"${this.futur.length ? "" : " disabled"}>↷</button>
@@ -281,7 +302,30 @@ const Reseau = {
     });
     f.querySelectorAll("[data-x]").forEach(b => b.addEventListener("click", () => this.retirer(b.dataset.x)));
     const form = q("#reseau-ajout");
-    if (form) form.addEventListener("submit", ev => { ev.preventDefault(); const i = q("#reseau-point"); const v = i.value.trim(); if (!v) return; i.value = ""; this.ajouter({ point: v, source: "saisi" }); });
+    if (form) {
+      const champ = q("#reseau-point"), sg = q("#reseau-sugg");
+      const dejaTung = f => this.etat.points.some(p => p.tung && this.cleP(p.point) === this.cleP(this.nomTung(f)));
+      const montrer = async () => {
+        const t = champ.value.trim();
+        if (!t || this.codePoint(t)) { sg.innerHTML = ""; return; }
+        const l = await this.suggererTung(t);
+        sg.innerHTML = l.filter(f => !dejaTung(f)).map(f => `<li data-t="${escapeHtml(f.id)}"><strong>${escapeHtml(f.nom)}</strong> <span class="muted">${escapeHtml((f.numeros || []).join(" · "))}${((f.canaux || {}).codes || []).length ? " · " + f.canaux.codes.join("+") : ""} · point Tung</span></li>`).join("");
+        sg.querySelectorAll("li[data-t]").forEach(li => li.addEventListener("click", () => { const f = Tung.parId(li.dataset.t); champ.value = ""; sg.innerHTML = ""; if (f) this.ajouterTung(f); }));
+      };
+      champ.addEventListener("input", montrer);
+      form.addEventListener("submit", async ev => {
+        ev.preventDefault();
+        const v = champ.value.trim(); if (!v) return;
+        if (!this.codePoint(v)) {                                           // pas un code de canal : c'est peut-être un point Tung
+          const l = await this.suggererTung(v), exact = l.find(f => this.nomTung(f) && this.cleP(f.nom) === this.cleP(v)) || (typeof Tung !== "undefined" && Tung.parNom ? Tung.parNom(v) : null);
+          const f = exact || (l.length === 1 ? l[0] : null);
+          if (f) { champ.value = ""; sg.innerHTML = ""; this.ajouterTung(f); return; }
+          if (l.length > 1) { await montrer(); this.avertir(l.length + " points Tung correspondent : choisis dans la liste."); return; }
+        }
+        champ.value = ""; sg.innerHTML = "";
+        this.ajouter({ point: v, source: "saisi" });
+      });
+    }
     q("#reseau-annuler").addEventListener("click", () => this.annuler());
     q("#reseau-refaire").addEventListener("click", () => this.refaire());
     q("#reseau-favoris").addEventListener("click", () => this.ajouterFavoris());

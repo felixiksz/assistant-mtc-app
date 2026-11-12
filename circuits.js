@@ -1030,7 +1030,7 @@ const Circuits = {
   // ---------- schémas des associations : un petit schéma par association, côte à côte, avec ses indications ; on épingle pour comparer
   get vueAssoc() { if (!this._vueAssoc) { let v = "liste"; try { v = localStorage.getItem("circ_vue_assoc") || "liste"; } catch (e) { /* stockage indisponible */ } this._vueAssoc = ["liste", "schemas", "grille"].includes(v) ? v : "liste"; } return this._vueAssoc; },
   set vueAssoc(v) { this._vueAssoc = v; },
-  _sch: { wjy: false, epingles: new Set(), comparer: false, ind: null },
+  _sch: { wjy: true, epingles: new Set(), comparer: false, ind: null },
   cartesSchemas(c) {
     const ajoutsDe = pts => (c.ajouts || []).filter(x => (x.canaux || []).some(k => (pts[k] || []).length)).map(x => ({ canaux: x.canaux, ensemble: x.ensemble }));
     const cartes = (c.associations || []).map((a, i) => ({ cle: "a" + i, titre: sansHanzi(a.tableau || ""), ind: this.indicationsDe(a.tableau), wjy: false, cond: "", note: a.note || "", pts: a.points || {}, aj: ajoutsDe(a.points || {}),
@@ -1088,7 +1088,7 @@ const Circuits = {
     const tout = z.querySelector("#circ-sch-tout"); if (tout) tout.addEventListener("click", () => { S.comparer = false; this.dessinerSchemas(c); });
   },
   // ---------- grille de comparaison : une colonne par tableau (avec ses indications en tête), une ligne par canal ; on choisit l'indication qui intéresse
-  _grille: { sel: null, wjy: false },
+  _grille: { sel: null, wjy: true },
   indicationsDe(t) { return sansHanzi(t || "").split(/\s*[,;]\s*/).map(x => x.trim()).filter(Boolean); },
   grilleHtml(c) {
     if (!(c.associations || []).length && !(this._wjyListe || []).length && !(c.ajouts || []).length) return "";
