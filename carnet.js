@@ -130,7 +130,11 @@ const CarnetCircuits = {
     .timg { display: block; line-height: 0; margin: 0.8mm 0 0.4mm; }
     .timg img { height: 25mm; width: auto; max-width: 100%; object-fit: contain; object-position: left center; filter: grayscale(1); border: 0.6pt solid #000; background: #fff; }
     .cartes .timg img { height: 20mm; }
-    .sch.tc p.si span { margin-top: 0.5mm; }
+    .tch { display: flex; justify-content: space-between; align-items: flex-start; gap: 2mm; }
+    .tch strong { display: block; }
+    .tch .tnum { display: block; font-size: 0.87em; }
+    .tch .tcx { flex: none; white-space: nowrap; line-height: 1; }
+    .tch .tcx .canal { min-width: 0; padding: 0.2mm 0.8mm; margin: 0 0 0 0.7mm; font-size: 0.78em; }
     .sch .sd.timg { text-align: center; }
     .sch .sd.timg img { height: 31mm; object-position: center; border: 0; }
     .sch.tc small { margin-top: 0.6mm; }
@@ -300,7 +304,7 @@ const CarnetCircuits = {
         const vus = new Set(), tousT = [];
         [...new Set([...codes, ...Object.keys(tungDe)])].forEach(kc => [...retenusDe(kc).map(ficheT).filter(Boolean), ...(tungDe[kc] || [])].forEach(f => { if (!vus.has(f.id)) { vus.add(f.id); tousT.push(f); } }));
         const loc = f => { const t = sansHanzi(Tung.localisation(f) || "").replace(/\s+/g, " ").trim(); return t.length > 170 ? t.slice(0, 168).replace(/\s+\S*$/, "") + "…" : t; };
-        const carteT = f => `<div class="sch tc"><p class="si"><strong>${nomT(f)}</strong><span>${(f.numeros || []).length ? this.h(f.numeros.join(" · ")) + " " : ""}${((f.canaux || {}).codes || []).map(badge).join("")}</span></p>` +
+        const carteT = f => `<div class="sch tc"><div class="tch"><div><strong>${nomT(f)}</strong>${(f.numeros || []).length ? `<span class="tnum">${this.h(f.numeros.join(" · "))}</span>` : ""}</div><div class="tcx">${((f.canaux || {}).codes || []).map(badge).join("")}</div></div>` +
           (o.tungImages && (f.images || []).length ? `<div class="sd timg"><img alt="" data-rel="tung/images/${escapeHtml(f.images[0])}"></div>` : "") +
           (loc(f) ? `<small><strong>Localisation :</strong> ${escapeHtml(loc(f))}</small>` : "") + (Tung.action(f) ? `<small>${this.h(Tung.action(f))}</small>` : "") + `</div>`;
         if (tousT.length) b.push({ titre: "Points Tung", env: P, rows: paires(tousT.map(carteT)) });
