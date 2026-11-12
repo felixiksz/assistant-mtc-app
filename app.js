@@ -4262,6 +4262,7 @@ const Comparateur = {
   // pastille flottante « Comparer (n) » : visible partout dès qu'au moins un élément est choisi ; un clic ouvre le plateau
   total() { return this.synd.length + this.form.length + this.circ.length; },
   pastille() {
+    this.barre();
     let p = document.getElementById("cmp-pastille");
     const n = this.total();
     if (!n) { if (p) p.remove(); this.plateau(false); return; }
@@ -4274,6 +4275,28 @@ const Comparateur = {
     }
     p.textContent = `⇄ Comparer (${n})`;
     if (document.getElementById("cmp-plateau")) this.plateau(true);
+  },
+
+  // sur grand écran, le plateau est une bande toujours visible en bas de page (sur téléphone : la pastille et son panneau)
+  barre() {
+    let b = document.getElementById("cmp-barre");
+    if (!b) {
+      b = document.createElement("div");
+      b.id = "cmp-barre"; b.setAttribute("role", "region"); b.setAttribute("aria-label", "Plateau de comparaison");
+      document.body.appendChild(b); document.body.classList.add("avec-plateau");
+      window.addEventListener("load", () => { if (this.circ.length && typeof Circuits !== "undefined") Circuits.ensureLoaded().then(() => this.barre()).catch(() => {}); });
+    }
+    const n = this.total();
+    b.innerHTML = `<strong class="cmp-b-titre">⇄ Plateau de comparaison</strong>` + (n
+      ? ["synd", "form", "circ"].filter(t => this[t].length).map(t => `<span class="cmp-b-grp"><span class="cmp-b-type">${this.NOMS[t]}</span>` +
+          this[t].map(k => `<span class="chosen-item">${escapeHtml(sansChinois(this.libelle(t, k)))}<button type="button" data-t="${t}" data-x="${escapeHtml(k)}" aria-label="Retirer">✕</button></span>`).join("") +
+          `<button type="button" class="edit-toggle-btn" data-go="${t}"${this[t].length < 2 ? ` disabled title="Ajoutes-en au moins deux"` : ""}>Comparer (${this[t].length})</button></span>`).join("") +
+        `<button type="button" class="cmp-pl-vider">Tout vider</button>`
+      : `<span class="muted">vide — le bouton ⇄ d'une fiche ou d'un résultat de recherche met de côté un syndrome, une formule ou un circuit.</span>`);
+    const v = b.querySelector(".cmp-pl-vider"); if (v) v.addEventListener("click", () => { this.synd = []; this.form = []; this.circ = []; this.apresRetrait(); });
+    b.querySelectorAll("[data-x]").forEach(x => x.addEventListener("click", () => { const l = this[x.dataset.t], i = l.indexOf(x.dataset.x); if (i >= 0) l.splice(i, 1); this.apresRetrait(); }));
+    b.querySelectorAll("[data-go]").forEach(x => x.addEventListener("click", () => this.lancer(x.dataset.go)));
+    setTimeout(() => { if (b.offsetHeight) document.body.style.setProperty("--h-plateau", b.offsetHeight + "px"); }, 0);   // la page garde la place de la bande, quelle que soit sa hauteur
   },
 
   // plateau de comparaison : syndromes, formules et circuits mis de côté, par type ; « Comparer » ouvre la vue qui convient
@@ -6193,18 +6216,19 @@ const GlobalSearch = {
     const ordre = ["Syndromes", "Formules", "Circuits", "Points", "Points Tung"];
     const cles = [...groups.keys()].sort((x, y) => (ordre.indexOf(x) < 0 ? 99 : ordre.indexOf(x)) - (ordre.indexOf(y) < 0 ? 99 : ordre.indexOf(y)));
     const flat = [];
-    let html = chips;
+    let html = chips + `<div class="gsr-grille${tout ? "" : " seul"}">`;
     cles.forEach(group => {
       const list = groups.get(group);
-      html += `<div class="gsr-group-label">${escapeHtml(group)} (${list.length})</div><ul>`;
+      html += `<div class="gsr-groupe"><div class="gsr-group-label">${escapeHtml(group)} (${list.length})</div><ul>`;
       list.slice(0, max).forEach(it => {
         const i = flat.push(it) - 1;
         html += `<li data-i="${i}"><span class="gsr-txt"><span class="gsr-title">${dsMarque(it.title, q)}</span>${it.sub ? `<span class="gsr-sub">${dsMarque(it.sub, q)}</span>` : ""}</span>` +
           `<span class="gsr-actions">${it.comparer ? `<button type="button" data-act="comparer" title="Mettre sur le plateau de comparaison" aria-label="Mettre sur le plateau de comparaison">⇄</button>` : ""}${it.onglet ? `<button type="button" data-act="onglet" title="Ouvrir dans un onglet de travail" aria-label="Ouvrir dans un onglet de travail">⧉</button>` : ""}${it.reseau ? `<button type="button" data-act="reseau" title="Ajouter à la consultation en cours" aria-label="Ajouter à la consultation en cours">＋</button>` : ""}</span></li>`;
       });
       if (list.length > max) html += `<li class="gsr-plus" data-f="${list[0].type}">Voir les ${list.length} résultats…</li>`;
-      html += `</ul>`;
+      html += `</ul></div>`;
     });
+    html += `</div>`;
     this.results.innerHTML = html;
     this.results.classList.add("open");
     this.results.querySelectorAll("[data-f]").forEach(x => x.addEventListener("click", ev => { ev.stopPropagation(); this.filtre = x.dataset.f; this.results.scrollTop = 0; this.runSearch(); }));
