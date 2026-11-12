@@ -124,24 +124,27 @@ const Circuits = {
       return `<circle cx="${x}" cy="${y}" r="${r}" fill="${fond}" stroke="${col}" stroke-width="${o2.pointille ? 2.5 : 3}"${o2.pointille ? ` stroke-dasharray="3.5 2.5"` : ""}><title>${escapeHtml((this.canaux.get(code) || {}).nom || code)}</title></circle>${lib}`;
     };
     // points dans un rond : pastilles empilées (4 au plus ; au-delà, « +n »), colorées selon le mouvement du point
-    const contenu = (code, x, y, r) => {
-      const liste = [...new Set(((pts && pts[code]) || []).map(t => this.clePoint(t)).filter(Boolean))], max = r < 20 ? 3 : 4;
-      const aff = liste.length > max ? [...liste.slice(0, max - 1), "+" + (liste.length - max + 1)] : liste;
-      const hP = 8.4, ec = 1.4, tot = aff.length * hP + Math.max(0, aff.length - 1) * ec, yin = this.polarite(code) === "yin";
-      const code_ = aff.length <= (r < 20 ? 2 : 3) && code ? `<text x="${x}" y="${y - r + 8.5}" text-anchor="middle" font-size="6.4" font-weight="700" ${police} fill="${this.texteRond(code)}" opacity="0.9">${escapeHtml(code)}</text>` : "";
-      const y0 = aff.length <= (r < 20 ? 2 : 3) ? y - tot / 2 + 4.5 : y - tot / 2;
+    // les points d'un canal : ils s'écrivent en grand, sans le rond du canal (seulement une petite étiquette colorée au-dessus) ; au-delà de trois : « +n »
+    const pile = (code, x, y, ajout) => {
+      const liste = [...new Set(((pts && pts[code]) || []).map(t => this.clePoint(t)).filter(Boolean))];
+      const aff = liste.length > 3 ? [...liste.slice(0, 2), "+" + (liste.length - 2)] : liste;
+      const hP = 11, ec = 1.6, tot = aff.length * hP + Math.max(0, aff.length - 1) * ec, yin = this.polarite(code) === "yin", col = this.couleurCanal(code);
+      const wB = code.length * 5 + 7, yB = y - tot / 2 - 11.5;
+      const badge = code ? `<rect x="${x - wB / 2}" y="${yB}" width="${wB}" height="9" rx="4.5" fill="${yin ? col : "var(--bg)"}" stroke="${col}" stroke-width="1.3"${ajout ? ` stroke-dasharray="2.4 1.6"` : ""}/><text x="${x}" y="${yB + 7}" text-anchor="middle" font-size="6.6" font-weight="700" ${police} fill="${this.texteRond(code)}">${escapeHtml(code)}</text>` : "";
+      const y0 = y - tot / 2;
       const pil = aff.map((t, k) => {
-        const mv = this._mouv ? this._mouv.get(this.cleP(t)) : "", fond = mv ? this.COULEUR_MOUV[mv] : "var(--bg)", w = Math.max(14, t.length * 4.2 + 5);
-        return `<g${t.startsWith("+") ? "" : ` class="circ-pill" data-p="${escapeHtml(t)}"`}><title>${escapeHtml(t + (mv ? " — " + this.NOM_MOUV[mv] : ""))}</title><rect x="${x - w / 2}" y="${y0 + k * (hP + ec)}" width="${w}" height="${hP}" rx="2.2" fill="${fond}" stroke="#1d1d1b" stroke-width="0.6"/>` +
-          `<text x="${x}" y="${y0 + k * (hP + ec) + 6.4}" text-anchor="middle" font-size="6.6" font-weight="700" ${police} fill="${mv === "eau" ? "#FFFFFF" : "#1d1d1b"}">${escapeHtml(t)}</text></g>`;
+        const mv = this._mouv ? this._mouv.get(this.cleP(t)) : "", fond = mv ? this.COULEUR_MOUV[mv] : "var(--bg)", w = Math.max(20, t.length * 5.4 + 8);
+        return `<g${t.startsWith("+") ? "" : ` class="circ-pill" data-p="${escapeHtml(t)}"`}><title>${escapeHtml(t + (mv ? " — " + this.NOM_MOUV[mv] : ""))}</title><rect x="${x - w / 2}" y="${y0 + k * (hP + ec)}" width="${w}" height="${hP}" rx="3" fill="${fond}" stroke="#1d1d1b" stroke-width="0.8"/>` +
+          `<text x="${x}" y="${y0 + k * (hP + ec) + 8.2}" text-anchor="middle" font-size="8.8" font-weight="700" ${police} fill="${mv === "eau" ? "#FFFFFF" : "#1d1d1b"}">${escapeHtml(t)}</text></g>`;
       }).join("");
-      return code_ + pil;
+      return badge + pil;
     };
     const ronds = pos.map(([x, y], i) => {
       const code = g[i] || "";
       const anneau = o.surligne && o.surligne.has(code) ? `<circle cx="${x}" cy="${y}" r="21.5" fill="none" stroke="var(--accent)" stroke-width="4"/>` : "";
       if (!pts) return anneau + rond(x, y, rayon, code, { etiquette: o.etiquettes });
-      return anneau + rond(x, y, rayon, code, { etiquette: false, sansNom: true }) + contenu(code, x, y, rayon);
+      if (code && ((pts[code]) || []).length) return pile(code, x, y);                          // des points : pas besoin du rond du canal
+      return anneau + rond(x, y, 16, code, { etiquette: true });                               // pas de point : le canal reste dessiné, plus petit
     }).join("");
     // points d'acupuncture : au-dessus des ronds du haut, au-dessous de ceux du bas
     const etiq = pts && false ? pos.map(([x, y], i) => {
@@ -158,9 +161,9 @@ const Circuits = {
     const groupes = o.ajouts ? (c.ajouts || []).filter(a => (a.canaux || []).length) : [];
     const grosse = a => !!pts && a.canaux.some(k => ((pts[k]) || []).length);
     // hauteur d'un groupe d'ajouts : « AJOUT POSSIBLE », les ronds (grosses bulles s'ils portent des points), la légende éventuelle
-    const hGroupe = a => grosse(a) ? (a.action ? 69 : 55) : (a.action ? 60 : 48);
+    const hGroupe = a => grosse(a) ? (a.action ? 84 : 68) : (a.action ? 60 : 48);
     const hautGroupe = k => 122 + marge + axeH + groupes.slice(0, k).reduce((s, a) => s + hGroupe(a), 0);
-    const yGroupe = k => hautGroupe(k) + 8 + (grosse(groupes[k]) ? 23 : 17);
+    const yGroupe = k => hautGroupe(k) + 8 + (grosse(groupes[k]) ? 36 : 17);
     const espGroupe = a => grosse(a) ? 40 : 30;
     // largeur : les groupes de grosses bulles (3 canaux par exemple) dépassent les 120 de la figure
     const debGroupe = a => 60 - (a.canaux.length - 1) * espGroupe(a) / 2 - (grosse(a) ? 36 : 28), finGroupe = a => 60 + (a.canaux.length - 1) * espGroupe(a) / 2 + (grosse(a) ? 22 : 14);
@@ -173,12 +176,12 @@ const Circuits = {
       const noeuds = a.canaux.map((code, j) => {
         const x = x0 + j * esp;
         if (!big) return rond(x, cy, 11, code, { etiquette: true, pointille: true });
-        return rond(x, cy, 18, code, { etiquette: false, sansNom: true, pointille: true }) + (((pts[code]) || []).length ? contenu(code, x, cy, 18) : `<text x="${x}" y="${cy + 4}" text-anchor="middle" font-size="11" font-weight="700" ${police} fill="${this.texteRond(code)}">${escapeHtml(code)}</text>`);
+        return ((pts[code]) || []).length ? pile(code, x, cy, true) : rond(x, cy, 13, code, { etiquette: true, pointille: true });
       }).join("");
       const legende = sansHanzi(a.action || "").slice(0, 34);
-      const marque = `<text x="60" y="${cy - (big ? 23 : 17)}" text-anchor="middle" font-size="6.6" font-weight="700" letter-spacing="0.6" ${police} fill="var(--ink)">AJOUT POSSIBLE</text>`;
+      const marque = `<text x="60" y="${cy - (big ? 36 : 17)}" text-anchor="middle" font-size="6.6" font-weight="700" letter-spacing="0.6" ${police} fill="var(--ink)">AJOUT POSSIBLE</text>`;
       return `${marque}${lien}${noeuds}<text x="${x0 - (big ? 28 : 22)}" y="${cy + 5}" text-anchor="middle" font-size="15" font-weight="700" ${police} fill="var(--ink)">+</text>` +
-        (legende ? `<text x="60" y="${cy + (big ? 31 : 25)}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)" opacity="0.8">${escapeHtml(legende)}</text>` : "");
+        (legende ? `<text x="60" y="${cy + (big ? 33 : 25)}" text-anchor="middle" font-size="7" ${police} fill="var(--ink)" opacity="0.8">${escapeHtml(legende)}</text>` : "");
     }).join("");
     const cote = "";                                   // pas de mention « main » / « pied » : ça va de soi
     const L = 120, H = 120 + marge * 2 + axeH + (groupes.length ? 2 + groupes.reduce((s, a) => s + hGroupe(a), 0) + 4 : 0);

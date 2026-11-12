@@ -1491,3 +1491,15 @@ article.formule-detail, .vue-travail { border-radius: 12px !important; }
 .onglet-t.glisse { opacity: 0.4; }
 .onglet-t.cible { box-shadow: inset 4px 0 0 var(--accent); }
 .onglet-t.epingle { padding-right: 0.6rem; }
+/* palette de commandes (Ctrl+K) */
+#palette { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,.45); display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
+#palette[hidden] { display: none; }
+.pal-boite { width: min(40rem, calc(100vw - 1.5rem)); background: var(--bg); color: var(--ink); border: 2px solid var(--ink); border-radius: 16px !important; box-shadow: 6px 6px 0 var(--ink); padding: 0.7rem; }
+.pal-boite input { width: 100%; box-sizing: border-box; font: inherit; font-size: 1.05rem; padding: 0.5rem 0.9rem; border-radius: 999px !important; }
+#pal-res { list-style: none; margin: 0.5rem 0 0; padding: 0; max-height: 50vh; overflow-y: auto; }
+.pal-groupe { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 0.5rem 0.4rem 0.15rem; }
+.pal-item { padding: 0.4rem 0.6rem; border-radius: 10px !important; cursor: pointer; }
+.pal-item.sel { background: var(--ink); color: var(--bg); }
+.pal-item.sel .muted { color: inherit; opacity: 0.8; }
+.pal-vide { padding: 0.6rem; }
+.pal-aide { font-size: 0.72rem; margin: 0.5rem 0.3rem 0; }

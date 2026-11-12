@@ -608,3 +608,64 @@ const Replier = {
   }
 };
 Replier.init();
+
+/* ============ Palette de commandes (Ctrl+K) : une recherche qui ouvre directement une fiche dans un onglet, ou change de section ============ */
+const Palette = {
+  sel: 0, res: [], index: null,
+  norm(t) { return String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); },
+  async construire() {
+    const e = [];
+    const add = (groupe, lib, detail, texte, action) => e.push({ groupe, lib, detail, n: this.norm(lib + " " + detail + " " + (texte || "")), action });
+    Object.entries(Fenetre.SECTIONS).forEach(([k, S]) => S.mods.forEach(([m, nom]) => add("Aller à", S.nom + " › " + nom, "", "section module", () => { const b = document.querySelector('#menu-panneau .tab-btn[data-tab="' + m + '"]'); if (b) b.click(); })));
+    try { if (typeof Circuits !== "undefined") { await Circuits.ensureLoaded(); Circuits.liste.forEach(c => add("Circuits", Circuits.nomCourt(c), c.grille.join(" · ") + ((c.mots_cles || []).length ? " — " + c.mots_cles.slice(0, 2).join(" ; ") : ""), Circuits.texteRecherche(c), () => Onglets.ouvrirCircuit(c.id))); } } catch (x) { /* circuits indisponibles */ }
+    try { if (typeof Tung !== "undefined") { await Tung.ensureLoaded(); Tung.liste.forEach(f => add("Points Tung", f.nom + ((f.numeros || []).length ? " " + f.numeros.join("/") : ""), "", (f.alias || []).join(" "), () => Onglets.ouvrirTung(f.id))); } } catch (x) { /* Tung indisponible */ }
+    if (typeof Formules !== "undefined") (Formules.index || []).forEach(f => add("Formules", f.pinyin || f.id, f.nom_fr || "", f.indications_syndrome, () => Onglets.ouvrirFormule(f.id)));
+    if (typeof Syndromes !== "undefined") (Syndromes.entries || []).forEach(s => add("Syndromes", s.nom, s.sousLabel || "", "", () => Onglets.ouvrirSyndrome(s)));
+    if (typeof Points !== "undefined") (Points.entries || []).forEach(p => add("Points", p.id, (p.data && p.data.pinyin) || "", "", () => Onglets.ouvrirPoint(p.id)));
+    this.index = e;
+  },
+  async ouvrir() {
+    let p = document.getElementById("palette");
+    if (!p) {
+      p = document.createElement("div"); p.id = "palette"; p.hidden = true;
+      p.innerHTML = `<div class="pal-boite" role="dialog" aria-label="Palette de commandes"><input type="search" id="pal-q" placeholder="Chercher une fiche, un circuit, un symptôme, une section…" autocomplete="off"><ul id="pal-res" role="listbox"></ul><p class="pal-aide muted">↑ ↓ pour choisir · Entrée pour ouvrir dans un onglet · Échap pour fermer</p></div>`;
+      document.body.appendChild(p);
+      p.addEventListener("click", ev => { if (ev.target === p) this.fermer(); });
+      p.querySelector("#pal-q").addEventListener("input", () => { this.sel = 0; this.chercher(); });
+      p.querySelector("#pal-q").addEventListener("keydown", ev => {
+        if (ev.key === "ArrowDown") { ev.preventDefault(); this.sel = Math.min(this.res.length - 1, this.sel + 1); this.afficher(); }
+        else if (ev.key === "ArrowUp") { ev.preventDefault(); this.sel = Math.max(0, this.sel - 1); this.afficher(); }
+        else if (ev.key === "Enter") { ev.preventDefault(); this.valider(this.sel); }
+        else if (ev.key === "Escape") { ev.preventDefault(); this.fermer(); }
+      });
+    }
+    p.hidden = false;
+    const q = p.querySelector("#pal-q"); q.value = ""; q.focus();
+    this.sel = 0; this.res = [];
+    p.querySelector("#pal-res").innerHTML = `<li class="muted pal-vide">Chargement…</li>`;
+    if (!this.index) await this.construire();
+    this.chercher();
+  },
+  fermer() { const p = document.getElementById("palette"); if (p) p.hidden = true; },
+  chercher() {
+    const mots = this.norm(document.getElementById("pal-q").value).split(/\s+/).filter(Boolean);
+    this.res = (this.index || []).filter(x => mots.every(m => x.n.includes(m))).slice(0, 40);
+    if (!mots.length) this.res = (this.index || []).filter(x => x.groupe === "Aller à" || x.groupe === "Circuits").slice(0, 25);
+    this.afficher();
+  },
+  afficher() {
+    const ul = document.getElementById("pal-res");
+    let g = "";
+    ul.innerHTML = this.res.map((x, i) => (x.groupe !== g ? (g = x.groupe, `<li class="pal-groupe" role="presentation">${escapeHtml(g)}</li>`) : "") + `<li role="option" class="pal-item${i === this.sel ? " sel" : ""}" data-i="${i}" aria-selected="${i === this.sel}"><strong>${escapeHtml(x.lib)}</strong>${x.detail ? ` <span class="muted">${escapeHtml(x.detail)}</span>` : ""}</li>`).join("") || `<li class="muted pal-vide">Rien trouvé.</li>`;
+    ul.querySelectorAll(".pal-item").forEach(li => { li.addEventListener("click", () => this.valider(+li.dataset.i)); li.addEventListener("mousemove", () => { if (this.sel !== +li.dataset.i) { this.sel = +li.dataset.i; ul.querySelectorAll(".pal-item").forEach(x => x.classList.toggle("sel", +x.dataset.i === this.sel)); } }); });
+    const s = ul.querySelector(".pal-item.sel"); if (s) s.scrollIntoView({ block: "nearest" });
+  },
+  valider(i) { const x = this.res[i]; if (!x) return; this.fermer(); x.action(); },
+  init() {
+    document.addEventListener("keydown", ev => {
+      if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "k") { ev.preventDefault(); this.ouvrir(); }
+      else if (ev.key === "Escape") this.fermer();
+    });
+  }
+};
+Palette.init();
