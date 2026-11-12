@@ -1433,3 +1433,8 @@ article.formule-detail, .vue-travail { border-radius: 12px !important; }
 .circ-pt .rem.on { display: inline; }
 .circ-g-choix { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; margin: 0 0 0.5rem; }
 .circ-g-wjy { display: block; font-size: 0.85rem; margin-top: 0.5rem; }
+.circ-ass-grp td { background: var(--panel); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.35rem 0.5rem !important; }
+.circ-ass-grp .circ-pastille { min-width: 1.4rem; height: 1.4rem; font-size: 0.65rem; vertical-align: middle; }
+/* grille : l'en-tête redevient lisible (le style des tableaux de fiche mettait des lettres claires sur fond clair) */
+.formule-detail .circ-grille th { color: var(--ink); background: var(--panel); text-transform: none; font-size: 0.85rem; letter-spacing: 0; }
+.formule-detail .circ-grille th.circ-g-vide { background: var(--panel); }

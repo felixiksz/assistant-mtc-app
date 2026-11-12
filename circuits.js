@@ -429,6 +429,12 @@ const Circuits = {
       ((r.lectures || []).length ? `<p class="muted">Lu autrement que tes notes : ${r.lectures.map(l => `« ${escapeHtml(l.note)} » → ${escapeHtml(l.lu)}`).join(" ; ")} (faute probable dans tes notes).</p>` : "");
   },
   // tableau unique des associations (les tiennes et celles de Wang Ju Yi) : les points, l'indication principale, « WJY » discret, ✓ pour le réseau ; un clic déplie
+  // recettes de Wang Ju Yi rangées par condition : d'abord celles qui restent dans les quatre canaux (sans ajout), puis une rubrique par ajout nécessaire
+  wjyGroupes(liste) {
+    const m = new Map();
+    liste.forEach((w, i) => { const cle = (w.ajout || []).join("+"); if (!m.has(cle)) m.set(cle, { cle, ajout: [...(w.ajout || [])], items: [] }); m.get(cle).items.push({ w, i }); });
+    return [...m.values()].sort((a, b) => a.ajout.length - b.ajout.length || a.cle.localeCompare(b.cle));
+  },
   assocTableHtml(c) {
     const res = this.recettesWjy(c);
     this._wjyListe = res.liste;
@@ -440,8 +446,9 @@ const Circuits = {
       const lst = Object.entries(a.points || {}).flatMap(([k, v]) => v.map(p => ({ point: this.clePoint(p), canal: k, raison: sansHanzi(a.tableau), source: "ton tableau" })));
       return ligne("a" + i, pts.join(" · "), sansHanzi(a.tableau), false, lst);
     });
-    const wjy = res.liste.map((w, i) => ligne("w" + i, this.nomRecette(w.r), w.r.puces[0] || w.r.groupe || "", true,
-      w.r.points.map(p => ({ point: p, raison: "Wang Ju Yi " + w.r.points.join(" – ") + (w.r.puces[0] ? " : " + w.r.puces[0] : ""), source: "Wang Ju Yi" }))));
+    const wjy = this.wjyGroupes(res.liste).map(g => `<tr class="circ-ass-grp"><td colspan="4">Wang Ju Yi — ${g.ajout.length ? "avec ajout : " + g.ajout.map(k => this.pastilleCanal(k)).join(" + ") : "dans les quatre canaux du circuit, sans ajout"} <span class="muted">(${g.items.length})</span></td></tr>` +
+      g.items.map(({ w, i }) => ligne("w" + i, this.nomRecette(w.r), w.r.puces[0] || w.r.groupe || "", true,
+        w.r.points.map(p => ({ point: p, raison: "Wang Ju Yi " + w.r.points.join(" – ") + (w.r.puces[0] ? " : " + w.r.puces[0] : ""), source: "Wang Ju Yi" })))).join(""));
     const tout = [...siennes, ...wjy];
     return tout.length ? `<table class="circ-assoc-table"><tbody>${tout.join("")}</tbody></table>` : "";
   },
@@ -972,10 +979,10 @@ const Circuits = {
   },
   colonnesGrille(c) {
     const cols = (c.associations || []).map(a => ({ nom: sansHanzi(a.tableau || ""), wjy: false, ind: this.indicationsDe(a.tableau), note: a.note || "", pts: a.points || {} }));
-    if (this._grille.wjy) (this._wjyListe || []).forEach(w => {
+    if (this._grille.wjy) this.wjyGroupes(this._wjyListe || []).forEach(g => g.items.forEach(({ w }) => {
       const o = { ...w.r.canaux }; (w.r.axe || []).forEach(pt => { const k = (pt.match(/^[A-Za-z]+/) || [""])[0].toUpperCase(); (o[k] = o[k] || []).push(pt); });
-      cols.push({ nom: this.nomRecette(w.r), wjy: true, ind: (w.r.puces || []).slice(0, 1).map(x => sansHanzi(x)), note: "", pts: o });
-    });
+      cols.push({ nom: this.nomRecette(w.r), wjy: true, cond: g.ajout.length ? "ajout " + g.ajout.join(" + ") : "sans ajout", ind: (w.r.puces || []).slice(0, 1).map(x => sansHanzi(x)), note: "", pts: o });
+    }));
     return cols;
   },
   dessinerGrille(c) {
@@ -991,7 +998,7 @@ const Circuits = {
     const toutes = []; cols.forEach(col => col.ind.forEach(i => { if (!toutes.includes(i)) toutes.push(i); }));
     const sel = G.sel && toutes.includes(G.sel) ? G.sel : null;
     const puces = toutes.length > 1 ? `<div class="circ-g-choix"><span class="muted">Indication :</span> ${toutes.map((i, n) => `<button type="button" class="cat-chip${i === sel ? " active" : ""}" data-ind="${n}">${escapeHtml(i)}</button>`).join("")}</div>` : "";
-    const tete = cols.map((col, ti) => `<th class="${sel && !col.ind.includes(sel) ? "off" : ""}" data-t="${ti}">${col.wjy ? `<span class="circ-g-src">WJY</span><strong>${escapeHtml(col.nom)}</strong>` : ""}<div class="circ-g-ind">${col.ind.map(i => `<span class="${i === sel ? "hit" : ""}">${escapeHtml(i)}</span>`).join(" · ")}</div>${col.note ? `<div class="muted circ-g-note">${escapeHtml(col.note)}</div>` : ""}</th>`).join("");
+    const tete = cols.map((col, ti) => `<th class="${sel && !col.ind.includes(sel) ? "off" : ""}" data-t="${ti}">${col.wjy ? `<span class="circ-g-src">WJY · ${escapeHtml(col.cond || "")}</span><strong>${escapeHtml(col.nom)}</strong>` : ""}<div class="circ-g-ind">${col.ind.map(i => `<span class="${i === sel ? "hit" : ""}">${escapeHtml(i)}</span>`).join(" · ")}</div>${col.note ? `<div class="muted circ-g-note">${escapeHtml(col.note)}</div>` : ""}</th>`).join("");
     const corps = lignes.map(l => `<tr class="${l.ajout ? "aj" : ""}"><td class="circ-g-canal">${this.pastilleCanal(l.k)}${l.ajout ? `<span class="circ-g-tag">ajout</span>` : l.axe ? `<span class="circ-g-tag">axe</span>` : ""}</td>` +
       cols.map((col, ti) => `<td class="${sel && !col.ind.includes(sel) ? "off" : ""}" data-t="${ti}">${(col.pts[l.k] || []).map(p => {
         const k = this.clePoint(p), rem = this.commentairesDe(p).join(" ; "), n = compte[k] || 1;
