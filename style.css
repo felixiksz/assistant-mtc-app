@@ -1473,3 +1473,21 @@ article.formule-detail, .vue-travail { border-radius: 12px !important; }
 .circ-motscles li { border: 1.5px solid var(--ink); border-radius: 999px !important; padding: 0.15rem 0.7rem; font-size: 0.88rem; font-weight: 600; background: var(--panel); }
 .circ-lmots { display: block; font-size: 0.78rem; color: var(--muted); margin-top: 0.1rem; line-height: 1.3; }
 .circ-g-choix .cat-chip { text-transform: none; max-width: 20rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem; }
+/* téléphone : les quatre sections en barre fixe en bas de l'écran, les boutons flottants remontent */
+@media (max-width: 700px) {
+  .sections-bar { position: fixed; left: 0; right: 0; bottom: 0; margin: 0 !important; border-radius: 0 !important; border: 0; border-top: 2px solid var(--ink); z-index: 58; overflow-x: hidden; }
+  .sec-btn { flex: 1 1 0; padding: 0.85rem 0.2rem; font-size: 0.7rem; letter-spacing: 0.02em; }
+  body { padding-bottom: 3.4rem; }
+  .reseau-lanceur { bottom: 4rem; }
+  #cmp-pastille { bottom: 4rem; }
+  .reseau-fenetre { bottom: 7.4rem !important; }
+}
+/* onglets : glisser, épingler, menu contextuel */
+#onglet-ctx { position: fixed; z-index: 70; min-width: 11rem; background: var(--bg); border: 2px solid var(--ink); border-radius: 12px !important; box-shadow: 4px 4px 0 var(--ink); padding: 0.25rem; display: grid; }
+#onglet-ctx[hidden] { display: none; }
+#onglet-ctx button { font: inherit; font-size: 0.9rem; text-align: left; background: none; border: 0; color: var(--ink); padding: 0.4rem 0.7rem; cursor: pointer; border-radius: 8px !important; }
+#onglet-ctx button:hover:not(:disabled) { background: rgba(0,0,0,.09); }
+#onglet-ctx button:disabled { opacity: 0.4; cursor: default; }
+.onglet-t.glisse { opacity: 0.4; }
+.onglet-t.cible { box-shadow: inset 4px 0 0 var(--accent); }
+.onglet-t.epingle { padding-right: 0.6rem; }

@@ -122,6 +122,39 @@ const Onglets = {
     this.memoriser();
   },
 
+  // ---------- onglets : réordonner, épingler, fermer les autres
+  deplacer(id, avantId) {
+    const i = this.liste.findIndex(x => x.id === id);
+    if (i < 0 || id === avantId || !this.liste.some(x => x.id === avantId)) return;
+    const [o] = this.liste.splice(i, 1);
+    this.liste.splice(this.liste.findIndex(x => x.id === avantId), 0, o);
+    this.memoriser(); this.rendreBarre();
+  },
+  epingler(id) { const o = this.liste.find(x => x.id === id); if (!o) return; o.desc.epingle = !o.desc.epingle; this.memoriser(); this.rendreBarre(); },
+  fermerAutres(id, droiteSeulement) {
+    const cible = this.liste.find(x => x.id === id); if (!cible) return;
+    const f = Fenetre.deItem(cible), ic = this.liste.indexOf(cible);
+    this.liste.filter((x, i) => x !== cible && Fenetre.deItem(x) === f && !x.desc.epingle && (!droiteSeulement || i > ic)).forEach(x => this.fermer(x.id));
+    this.activer(id);
+  },
+  menuOnglet(ev, id) {
+    ev.preventDefault();
+    const o = this.liste.find(x => x.id === id); if (!o) return;
+    let m = document.getElementById("onglet-ctx");
+    if (!m) {
+      m = document.createElement("div"); m.id = "onglet-ctx"; m.hidden = true; document.body.appendChild(m);
+      document.addEventListener("click", () => { m.hidden = true; });
+      document.addEventListener("keydown", e => { if (e.key === "Escape") m.hidden = true; });
+    }
+    m.innerHTML = [["epingler", o.desc.epingle ? "Détacher l'onglet" : "Épingler l'onglet"], ["fermer", "Fermer"], ["autres", "Fermer les autres"], ["droite", "Fermer à droite"]].map(([k, l]) => `<button type="button" data-a="${k}"${k === "fermer" && o.desc.epingle ? " disabled" : ""}>${l}</button>`).join("");
+    m.style.left = Math.max(4, Math.min(ev.clientX, innerWidth - 200)) + "px"; m.style.top = Math.max(4, Math.min(ev.clientY, innerHeight - 170)) + "px";
+    m.hidden = false;
+    m.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+      const a = b.dataset.a;
+      if (a === "epingler") this.epingler(id); else if (a === "fermer") this.fermer(id); else if (a === "autres") this.fermerAutres(id, false); else if (a === "droite") this.fermerAutres(id, true);
+    }));
+  },
+
   // un onglet de circuit : le module Circuits, avec la fiche de ce circuit
   async activerCircuit(o) {
     this.memoriserDefilement();
@@ -480,7 +513,7 @@ const Fenetre = {
     b.hidden = false;
     b.innerHTML = S.mods.map(([id, nom]) => `<button type="button" class="onglet-t onglet-mod${surModule && mod === id ? " actif" : ""}" data-fm="${id}">${escapeHtml(libelle(id, nom))}</button>`).join("") +
       (Onglets.liste.some(o => this.deItem(o) === sec) ? `<span class="onglet-sep"></span>` : "") +
-      Onglets.liste.filter(o => this.deItem(o) === sec).map(o => `<span class="onglet-t${Onglets.actif === o.id ? " actif" : ""}" data-o="${escapeHtml(o.id)}"><button type="button" class="onglet-nom" data-o="${escapeHtml(o.id)}" title="${escapeHtml(o.titre)}">${escapeHtml(o.genre)} ${escapeHtml(o.titre)}</button><button type="button" class="onglet-x" data-x="${escapeHtml(o.id)}" aria-label="Fermer l'onglet">✕</button></span>`).join("") +
+      Onglets.liste.filter(o => this.deItem(o) === sec).map((o, i) => ({ o, i })).sort((a, b) => (b.o.desc.epingle ? 1 : 0) - (a.o.desc.epingle ? 1 : 0) || a.i - b.i).map(({ o }) => `<span class="onglet-t${Onglets.actif === o.id ? " actif" : ""}${o.desc.epingle ? " epingle" : ""}" data-o="${escapeHtml(o.id)}" draggable="true"><button type="button" class="onglet-nom" data-o="${escapeHtml(o.id)}" title="${escapeHtml(o.titre)} — clic droit (ou appui long) : épingler, fermer…">${o.desc.epingle ? "📌 " : ""}${escapeHtml(o.genre)} ${escapeHtml(o.titre)}</button>${o.desc.epingle ? "" : `<button type="button" class="onglet-x" data-x="${escapeHtml(o.id)}" aria-label="Fermer l'onglet">✕</button>`}</span>`).join("") +
       (this.sourcesPlus(sec) ? `<button type="button" class="onglet-menu fen-plus" title="Ouvrir une fiche dans un nouvel onglet" aria-label="Ouvrir une fiche dans un nouvel onglet">+</button>` : "") +
       (Onglets.enLigne() ? `<span class="onglet-sync" title="Onglets synchronisés avec tes autres appareils (via ton dépôt GitHub)">🔄</span>` : "");
     const pl = b.querySelector(".fen-plus"); if (pl) pl.addEventListener("click", e => this.menuPlus(e, sec));
@@ -488,6 +521,15 @@ const Fenetre = {
       const o = document.querySelector('#menu-panneau .tab-btn[data-tab="' + x.dataset.fm + '"]'); if (o) o.click();
     }));
     b.querySelectorAll("[data-o]").forEach(x => x.addEventListener("click", () => Onglets.activer(x.dataset.o)));
+    // onglets de fiches : glisser pour réordonner, clic droit (ou appui long) pour épingler ou fermer
+    b.querySelectorAll(".onglet-t[data-o]").forEach(t => {
+      t.addEventListener("contextmenu", e => Onglets.menuOnglet(e, t.dataset.o));
+      t.addEventListener("dragstart", e => { e.dataTransfer.setData("text/plain", t.dataset.o); e.dataTransfer.effectAllowed = "move"; t.classList.add("glisse"); });
+      t.addEventListener("dragend", () => t.classList.remove("glisse"));
+      t.addEventListener("dragover", e => { e.preventDefault(); t.classList.add("cible"); });
+      t.addEventListener("dragleave", () => t.classList.remove("cible"));
+      t.addEventListener("drop", e => { e.preventDefault(); t.classList.remove("cible"); Onglets.deplacer(e.dataTransfer.getData("text/plain"), t.dataset.o); });
+    });
     b.querySelectorAll("[data-x]").forEach(x => x.addEventListener("click", e => { e.stopPropagation(); Onglets.fermer(x.dataset.x); }));
   }
 };
@@ -512,6 +554,16 @@ Onglets.init();
   brancher(typeof Syndromes !== "undefined" ? Syndromes : undefined, "showDetail", "syn-detail", e => Onglets.ouvrirSyndrome(e));
   brancher(typeof Points !== "undefined" ? Points : undefined, "showDetail", "pts-detail", e => Onglets.ouvrirPoint(e.id));
 })();
+// Points Tung : la fiche affichée à droite peut s'ouvrir dans son propre onglet (⧉), comme les autres
+if (typeof Tung !== "undefined" && Tung.rendreDetail) {
+  const rd = Tung.rendreDetail.bind(Tung);
+  Tung.rendreDetail = function (...a) {
+    const r = rd(...a);
+    const id = Tung.actif;
+    if (id && id !== "(nouveau)" && Tung.vue === "fiches" && !Tung.edition && Tung.parId(id)) Fenetre.boutonOnglet(document.getElementById("tung-detail"), () => Onglets.ouvrirTung(id));
+    return r;
+  };
+}
 Onglets.restaurer();
 
 /* ============ Sections repliables : le titre (h3) de chaque section d'une fiche la replie ou la déplie ============
