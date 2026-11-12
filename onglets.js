@@ -336,7 +336,12 @@ const Onglets = {
     const m = cle.match(/^([A-Z]+)(\d+)$/);
     const cherche = m ? (alias[m[1]] || m[1]) + m[2] : cle;
     const entry = (Points.entries || []).find(e => norm(e.id) === cherche);
-    if (!entry) { if (!opt.differe) alert("Point " + texte + " : pas de fiche dans ta base de points."); return; }
+    if (!entry) {
+      // pas un point de canal : peut-être un point Tung écrit par son nom
+      if (typeof Tung !== "undefined") return Tung.ensureLoaded().then(() => { const f = Tung.parNom(texte); if (f) return this.ouvrirTung(f.id, opt); if (!opt.differe) alert("Point " + texte + " : pas de fiche dans ta base de points."); }).catch(() => { if (!opt.differe) alert("Point " + texte + " : pas de fiche dans ta base de points."); });
+      if (!opt.differe) alert("Point " + texte + " : pas de fiche dans ta base de points.");
+      return;
+    }
     return this.ouvrir("pt:" + norm(entry.id), entry.id + (entry.data.pinyin ? " " + entry.data.pinyin : ""), "📍", async (zone, recharger) => {
       zone.innerHTML = Points.htmlDetail(entry);
       Store.hydrateImages(zone);

@@ -735,8 +735,21 @@ const Circuits = {
         if (li.querySelector(".circ-cat")) continue;
         const st = li.querySelector("strong"), nom = this.cleP(this.pointBase(st.innerText));
         const pref = (nom.match(/^[A-Z]+/) || [""])[0], fichier = { RT: "Rt", RN: "Rn" }[pref] || pref;
-        const db = await this.dbCanal(fichier);
+        const connu = this.CODES_CANAUX.includes(fichier) || fichier === "RM" || fichier === "DM";
+        const db = connu ? await this.dbCanal(fichier) : [];
         const p = db.find(x => this.cleP(x.point) === nom);
+        if (!p && typeof Tung !== "undefined") {                                           // pas un point de canal : peut-être un point Tung (« Shui Jin »)
+          try { await Tung.ensureLoaded(); } catch (e) { /* base Tung indisponible */ }
+          const f = Tung.parNom ? Tung.parNom(st.innerText) : null;
+          if (f) {
+            const num = (f.numeros || []).join(" / "), codes = ((f.canaux && f.canaux.codes) || []).join("+");
+            const lien = li.querySelector("a.circ-ptlien"); if (lien) { lien.removeAttribute("data-pt-fiche"); lien.dataset.tungFiche = f.id; lien.title = "Ouvrir la fiche Tung dans un nouvel onglet"; }
+            st.insertAdjacentHTML("afterend", ` <span class="circ-cat">point Tung${num ? " " + escapeHtml(num) : ""}${codes ? " · " + escapeHtml(codes) : ""}</span>`);
+            const ch = li.querySelector(".circ-pt-choisir");
+            if (ch) { try { const d = JSON.parse(ch.dataset.reseau); d.tung = true; d.canal = ""; d.point = f.nom + ((f.numeros || []).length ? " " + f.numeros.join("/") : ""); ch.dataset.reseau = JSON.stringify(d); } catch (e) { /* attribut illisible */ } }
+          }
+          continue;
+        }
         const cats = p ? this.categoriesDe(p) : [];
         if (cats.length && !li.querySelector(".circ-cat")) st.insertAdjacentHTML("afterend", ` <span class="circ-cat">${escapeHtml(cats.join(" ; "))}</span>`);
       }

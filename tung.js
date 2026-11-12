@@ -57,6 +57,14 @@ const Tung = {
   },
 
   parId(id) { return this.liste.find(f => f.id === id) || null; },
+  // un nom écrit dans une liste de points (« Shui Jin », « Zhong Bai 11.23 », « 77.08 ») : retrouve la fiche Tung par son nom, ses alias, son numéro ou son identifiant
+  cleNom(x) { return String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, ""); },
+  parNom(texte) {
+    const k = this.cleNom(texte);
+    if (!k) return null;
+    return this.liste.find(f => this.cleNom(f.nom) === k || (f.alias || []).some(x => this.cleNom(x) === k) || (f.numeros || []).some(n => this.cleNom(n) === k) ||
+      ((f.numeros || []).length && this.cleNom(f.nom + " " + f.numeros[0]) === k) || this.cleNom(f.id) === k) || null;
+  },
   zoneNom(n) { const z = (this.base.zones || []).find(x => x.n === n); return z ? z.nom : ""; },
   srcCourt(s) { return s === "perso" ? "Toi" : ((this.base.sources[s] || {}).court || s); },
   texteRecherche(f) {
