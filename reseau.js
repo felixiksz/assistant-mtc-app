@@ -39,11 +39,12 @@ const Reseau = {
     const n = String(point).match(/(\d+)\s*$/) || String(point).match(/(\d+)/);
     return n ? parseInt(n[1], 10) : 1e9;
   },
-  ordonne() {
-    const c = this.etat.circuit && typeof Circuits !== "undefined" ? Circuits.parId(this.etat.circuit) : null;
+  ordonne(e) {
+    e = e || this.etat;
+    const c = e.circuit && typeof Circuits !== "undefined" ? Circuits.parId(e.circuit) : null;
     const grille = c ? c.grille : [];
     const rang = k => { const i = grille.indexOf(k); if (i >= 0) return i; const j = this.ORDRE_CANAUX.indexOf(k); return j >= 0 ? 100 + j : 999; };
-    return [...this.etat.points].sort((a, b) =>
+    return [...e.points].sort((a, b) =>
       (a.tung ? 1 : 0) - (b.tung ? 1 : 0) ||
       (a.tung ? 0 : rang(a.canal) - rang(b.canal)) ||
       this.numeroDe(a.point) - this.numeroDe(b.point) ||
@@ -86,20 +87,21 @@ const Reseau = {
   majLanceur() {
     const b = document.getElementById("reseau-lanceur");
     if (!b) return;
-    const n = this.etat.points.length;
-    b.textContent = "📋 Réseau" + (n ? " (" + n + ")" : "") + (this.etat.verrou ? " 🔒" : "");
-    b.title = "Réseau de la patiente : points choisis et raisons";
+    const n = this.etat.points.length, na = this.archives.length;
+    b.textContent = "📋 Réseau" + (n ? " · " + n + " pt" + (n > 1 ? "s" : "") : "") + (this.etat.verrou ? " 🔒" : "");
+    b.title = "Réseau de la patiente : " + n + " point(s) dans le réseau en cours" + (na ? " ; " + na + " réseau(x) enregistré(s)" : "");
   },
   ouvrir() { this.fenetre.ouvert = true; this.ecrire(this.CLE_FENETRE, this.fenetre); this.rendre(); },
   fermer() { this.fenetre.ouvert = false; this.ecrire(this.CLE_FENETRE, this.fenetre); this.rendre(); },
   reduire() { this.fenetre.reduit = !this.fenetre.reduit; this.ecrire(this.CLE_FENETRE, this.fenetre); this.rendre(); },
 
   // ---------- résumé texte (à copier dans le dossier)
-  resume() {
-    const c = this.etat.circuit && typeof Circuits !== "undefined" ? Circuits.parId(this.etat.circuit) : null;
+  resume(e) {
+    e = e || this.etat;
+    const c = e.circuit && typeof Circuits !== "undefined" ? Circuits.parId(e.circuit) : null;
     const d = new Date().toLocaleDateString("fr-FR");
-    const l = ["Réseau — " + (this.etat.patiente || "patiente") + " — " + d + (this.etat.verrou ? " (arrêté)" : ""), c ? "Circuit : " + Circuits.nomCourt(c) + " (" + c.grille.join(", ") + ")" : "Circuit : non choisi", ""];
-    this.ordonne().forEach(p => l.push("• " + p.point + (p.cote ? " (" + p.cote + ")" : "") + (p.raison ? " : " + p.raison : "")));
+    const l = ["Réseau — " + (e.patiente || "patiente") + " — " + d + (e.verrou ? " (arrêté)" : ""), c ? "Circuit : " + Circuits.nomCourt(c) + " (" + c.grille.join(", ") + ")" : "Circuit : non choisi", ""];
+    this.ordonne(e).forEach(p => l.push("• " + p.point + (p.cote ? " (" + p.cote + ")" : "") + (p.raison ? " : " + p.raison : "")));
     return l.join("\n");
   },
 
@@ -127,6 +129,26 @@ const Reseau = {
     return `<div class="reseau-schema">${svg}</div>` + (hors ? `<p class="muted reseau-hors">Hors des quatre canaux : ${hors}</p>` : "") + (tung.length ? `<p class="reseau-hors reseau-tung"><strong>Points Tung</strong><br>${tung.map(escapeHtml).join("<br>")}</p>` : "");
   },
 
+  vue: "reseau",          // onglet de la fenêtre : « reseau » (en cours) ou « archives » (enregistrés)
+
+  // réseau en cours identique à son enregistrement ? (pour ne rien perdre sans demander)
+  identique(a, b) { const n = x => JSON.stringify({ ...x, maj: 0, archiveId: 0 }); return n(a) === n(b); },
+  // garde le réseau en cours parmi les enregistrés (mis à jour s'il en vient déjà)
+  archiver() {
+    const e = this.etat;
+    if (!e.points.length) return null;
+    const existant = e.archiveId ? this.archives.find(a => a.id === e.archiveId) : null;
+    if (existant && this.identique(existant.etat, e)) return existant;
+    const id = e.archiveId || "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    const entree = { id, nom: (e.patiente || "Sans nom").trim(), date: new Date().toLocaleString("fr-FR"), etat: { ...JSON.parse(JSON.stringify(e)), archiveId: id } };
+    if (existant) this.archives.splice(this.archives.indexOf(existant), 1);
+    this.archives.unshift(entree);
+    this.archives = this.archives.slice(0, 50);
+    this.ecrire(this.CLE_ARCHIVES, this.archives);
+    this.etat.archiveId = id; this.sauver();
+    return entree;
+  },
+
   rendre() {
     this.creer();
     const f = document.getElementById("reseau-fenetre");
@@ -136,34 +158,50 @@ const Reseau = {
     if (this.fenetre.x != null) { f.style.left = this.fenetre.x + "px"; f.style.top = this.fenetre.y + "px"; f.style.right = "auto"; f.style.bottom = "auto"; }
     const e = this.etat, verrou = e.verrou, dis = verrou ? " disabled" : "";
     const circuits = typeof Circuits !== "undefined" && Circuits.liste ? Circuits.liste : [];
+    const nbA = this.archives.length, nbP = e.points.length;
+    const COTES = [["D", "D"], ["G", "G"], ["D + G", "D+G"]];
     const lignes = this.ordonne().map(p => `<li class="reseau-ligne" data-id="${escapeHtml(p.id)}">
         <div class="reseau-ligne-tete"><span class="sx-code">${escapeHtml(p.canal || "?")}</span> ${p.tung ? `<strong>${escapeHtml(p.point)}</strong>` : `<a href="#" class="circ-ptlien" data-pt-fiche="${escapeHtml(p.point)}" title="Ouvrir la fiche du point dans un nouvel onglet"><strong>${escapeHtml(p.point)}</strong></a>`}
-          <select class="reseau-cote" aria-label="Côté"${dis}>${["", "D", "G", "D + G"].map(v => `<option value="${v}"${p.cote === v ? " selected" : ""}>${v || "côté ?"}</option>`).join("")}</select>
+          <span class="reseau-cotes" role="group" aria-label="Côté">${COTES.map(([v, l]) => `<button type="button" class="reseau-cote-btn${p.cote === v ? " on" : ""}" data-cote="${v}" aria-pressed="${p.cote === v}"${dis}>${l}</button>`).join("")}</span>
           ${verrou ? "" : `<button type="button" class="reseau-x" data-x="${escapeHtml(p.id)}" title="Retirer du réseau" aria-label="Retirer ${escapeHtml(p.point)} du réseau">✕</button>`}</div>
-        <textarea class="reseau-raison" rows="2" placeholder="Raison du choix…"${dis}>${escapeHtml(p.raison)}</textarea>
+        <textarea class="reseau-raison" rows="1" placeholder="Raison du choix…"${dis}>${escapeHtml(p.raison)}</textarea>
       </li>`).join("");
-    const arch = this.archives.map((a, i) => `<li><span>${escapeHtml(a.nom)} <span class="muted">— ${escapeHtml(a.date)}, ${a.etat.points.length} point(s)</span></span> <button type="button" class="edit-toggle-btn" data-ouvrir="${i}">Ouvrir</button> <button type="button" class="edit-toggle-btn" data-suppr="${i}" aria-label="Supprimer ce réseau enregistré">🗑</button></li>`).join("");
+    const nomCirc = a => { const c = a.circuit && typeof Circuits !== "undefined" ? Circuits.parId(a.circuit) : null; return c ? Circuits.nomCourt(c) : ""; };
+    const arch = this.archives.map((a, i) => `<li class="reseau-arch${e.archiveId === a.id ? " en-cours" : ""}">
+        <div class="reseau-arch-texte"><strong>${escapeHtml(a.nom)}</strong>${a.etat.verrou ? " 🔒" : ""}${e.archiveId === a.id ? ` <span class="reseau-arch-tag">en cours</span>` : ""}
+          <span class="muted">${escapeHtml(a.date)} · ${a.etat.points.length} point(s)${nomCirc(a.etat) ? " · " + escapeHtml(nomCirc(a.etat)) : ""}</span>
+          <span class="reseau-arch-pts">${this.ordonne(a.etat).map(p => escapeHtml(p.point)).join(" · ")}</span></div>
+        <div class="reseau-arch-btns"><button type="button" class="reseau-ic2" data-ouvrir="${i}" title="Ouvrir ce réseau" aria-label="Ouvrir ce réseau">↗</button><button type="button" class="reseau-ic2" data-copier="${i}" title="Copier le résumé" aria-label="Copier le résumé">📄</button><button type="button" class="reseau-ic2" data-suppr="${i}" title="Supprimer" aria-label="Supprimer ce réseau enregistré">🗑</button></div></li>`).join("");
+    const corpsEnCours = `
+        <div class="reseau-rang">
+          <input type="text" id="reseau-nom" class="reseau-nom" value="${escapeHtml(e.patiente)}" placeholder="Patiente (initiales)" aria-label="Patiente (initiales ou repère)"${dis}>
+          <select id="reseau-circuit" aria-label="Circuit"${dis}><option value="">Circuit…</option>${circuits.map(c => `<option value="${escapeHtml(c.id)}"${e.circuit === c.id ? " selected" : ""}>${escapeHtml(Circuits.nomCourt(c))} (${c.grille.join(" ")})</option>`).join("")}</select>
+        </div>
+        <details class="reseau-schema-d"${this.fenetre.schemaFerme ? "" : " open"}><summary>Schéma</summary><div id="reseau-schema">${this.schema()}</div></details>
+        <p id="reseau-avis" class="muted reseau-avis" aria-live="polite"></p>
+        <ul class="reseau-liste">${lignes || `<li class="muted reseau-vide">Aucun point : utilise le ✓ à côté d'un point, ou tape-le ci-dessous.</li>`}</ul>
+        ${verrou ? "" : `<form id="reseau-ajout" class="reseau-ajout"><input type="text" id="reseau-point" placeholder="Ajouter un point (ex. TF5, Rt 4)" autocomplete="off"><button type="submit" class="reseau-ic2" title="Ajouter" aria-label="Ajouter ce point">＋</button></form>`}
+        <div class="reseau-barre">
+          <button type="button" class="reseau-ic2" id="reseau-enreg" title="Enregistrer ce réseau" aria-label="Enregistrer ce réseau">💾</button>
+          <button type="button" class="reseau-ic2" id="reseau-copier" title="Copier le résumé" aria-label="Copier le résumé">📄</button>
+          <button type="button" class="reseau-ic2" id="reseau-verrou" title="${verrou ? "Rouvrir le réseau" : "Arrêter le réseau (définitif)"}" aria-label="${verrou ? "Rouvrir le réseau" : "Arrêter le réseau"}">${verrou ? "🔓" : "🔒"}</button>
+          <button type="button" class="reseau-ic2" id="reseau-nouveau" title="Nouveau réseau (celui-ci est gardé dans les enregistrés)" aria-label="Nouveau réseau">🆕</button>
+        </div>`;
+    const corpsArchives = `<ul class="reseau-archives-liste">${arch || `<li class="muted reseau-vide">Aucun réseau enregistré. Le bouton 💾 de l'onglet « En cours » garde le réseau, et « Nouveau » le garde aussi avant de repartir à zéro.</li>`}</ul>`;
     f.innerHTML = `
       <div class="reseau-tete" id="reseau-tete"><strong>📋 Réseau${e.patiente ? " — " + escapeHtml(e.patiente) : ""}${verrou ? " 🔒" : ""}</strong>
         <span><button type="button" class="reseau-ic" id="reseau-reduire" title="${this.fenetre.reduit ? "Agrandir" : "Réduire"}" aria-label="${this.fenetre.reduit ? "Agrandir" : "Réduire"}">${this.fenetre.reduit ? "▢" : "—"}</button><button type="button" class="reseau-ic" id="reseau-fermer" title="Fermer (le réseau est conservé)" aria-label="Fermer">✕</button></span></div>
+      <div class="reseau-onglets" role="tablist">
+        <button type="button" role="tab" class="reseau-onglet${this.vue === "reseau" ? " actif" : ""}" data-vue="reseau">En cours <span class="reseau-n">${nbP}</span></button>
+        <button type="button" role="tab" class="reseau-onglet${this.vue === "archives" ? " actif" : ""}" data-vue="archives">Enregistrés <span class="reseau-n">${nbA}</span></button>
+      </div>
       <div class="reseau-corps">
-        <label class="reseau-champ">Patiente (initiales ou repère)<input type="text" id="reseau-nom" value="${escapeHtml(e.patiente)}" placeholder="ex. M.D."${dis}></label>
-        <label class="reseau-champ">Circuit<select id="reseau-circuit"${dis}><option value="">— choisir —</option>${circuits.map(c => `<option value="${escapeHtml(c.id)}"${e.circuit === c.id ? " selected" : ""}>${escapeHtml(Circuits.nomCourt(c))} (${c.grille.join(" ")})</option>`).join("")}</select></label>
-        <div id="reseau-schema">${this.schema()}</div>
-        <p id="reseau-avis" class="muted reseau-avis" aria-live="polite"></p>
-        <ul class="reseau-liste">${lignes || `<li class="muted">Aucun point retenu : utilise le bouton ✓ à côté d'un point, ou tape-le ci-dessous.</li>`}</ul>
-        ${verrou ? "" : `<form id="reseau-ajout" class="reseau-ajout"><input type="text" id="reseau-point" placeholder="Ajouter un point (ex. TF5, Rt 4)" autocomplete="off"><button type="submit" class="edit-toggle-btn">+ Ajouter</button></form>`}
-        <div class="reseau-actions">
-          <button type="button" class="edit-toggle-btn" id="reseau-verrou">${verrou ? "🔓 Rouvrir le réseau" : "🔒 Arrêter le réseau (définitif)"}</button>
-          <button type="button" class="edit-toggle-btn" id="reseau-copier">📄 Copier le résumé</button>
-          <button type="button" class="edit-toggle-btn" id="reseau-enreg">💾 Enregistrer</button>
-          <button type="button" class="edit-toggle-btn" id="reseau-nouveau">Nouveau</button>
-        </div>
-        ${arch ? `<details class="reseau-archives"><summary>Réseaux enregistrés (${this.archives.length})</summary><ul>${arch}</ul></details>` : ""}
+        ${this.vue === "archives" ? corpsArchives : corpsEnCours}
         <p class="muted reseau-confid">Données gardées uniquement dans ce navigateur : jamais envoyées au dépôt ni synchronisées.</p>
       </div>`;
     this.brancher(f);
-    if (typeof Circuits !== "undefined" && Circuits.annoterCroisements) Circuits.annoterCroisements(f);
+    f.querySelectorAll(".reseau-raison").forEach(t => { t.style.height = "auto"; t.style.height = Math.max(t.scrollHeight, 28) + "px"; });
+    if (this.vue === "reseau" && typeof Circuits !== "undefined" && Circuits.annoterCroisements) Circuits.annoterCroisements(f);
     if (typeof Circuits !== "undefined" && Circuits.chargerInter && !Circuits._mouvPret) Circuits.chargerInter().then(() => { const z = document.getElementById("reseau-schema"); if (z) z.innerHTML = this.schema(); });
   },
 
@@ -171,44 +209,7 @@ const Reseau = {
     const q = s => f.querySelector(s);
     q("#reseau-fermer").addEventListener("click", () => this.fermer());
     q("#reseau-reduire").addEventListener("click", () => this.reduire());
-    q("#reseau-nom").addEventListener("input", ev => { this.etat.patiente = ev.target.value; this.sauver(); const t = q("#reseau-tete strong"); if (t) t.textContent = "📋 Réseau" + (this.etat.patiente ? " — " + this.etat.patiente : "") + (this.etat.verrou ? " 🔒" : ""); });
-    q("#reseau-circuit").addEventListener("change", ev => { this.etat.circuit = ev.target.value || null; this.sauver(); q("#reseau-schema").innerHTML = this.schema(); });
-    f.querySelectorAll(".reseau-ligne").forEach(l => {
-      const id = l.dataset.id;
-      l.querySelector(".reseau-raison").addEventListener("input", ev => this.maj(id, { raison: ev.target.value }));
-      l.querySelector(".reseau-cote").addEventListener("change", ev => this.maj(id, { cote: ev.target.value }));
-    });
-    f.querySelectorAll("[data-x]").forEach(b => b.addEventListener("click", () => this.retirer(b.dataset.x)));
-    const form = q("#reseau-ajout");
-    if (form) form.addEventListener("submit", ev => { ev.preventDefault(); const i = q("#reseau-point"); const v = i.value.trim(); if (!v) return; i.value = ""; this.ajouter({ point: v, source: "saisi" }); });
-    q("#reseau-verrou").addEventListener("click", () => { this.etat.verrou = !this.etat.verrou; this.sauver(); this.rendre(); });
-    q("#reseau-copier").addEventListener("click", async () => {
-      const t = this.resume();
-      try { await navigator.clipboard.writeText(t); this.avertir("Résumé copié."); } catch (e) { window.prompt("Copie le résumé :", t); }
-    });
-    q("#reseau-enreg").addEventListener("click", () => {
-      if (!this.etat.points.length) { this.avertir("Rien à enregistrer."); return; }
-      const nom = (this.etat.patiente || "Sans nom").trim();
-      this.archives.unshift({ nom, date: new Date().toLocaleString("fr-FR"), etat: JSON.parse(JSON.stringify(this.etat)) });
-      this.archives = this.archives.slice(0, 50);
-      this.ecrire(this.CLE_ARCHIVES, this.archives);
-      this.rendre(); this.avertir("Réseau enregistré.");
-    });
-    q("#reseau-nouveau").addEventListener("click", () => {
-      if (this.etat.points.length && !confirm("Commencer un nouveau réseau ? Le réseau en cours sera effacé de la fenêtre (enregistre-le d'abord si besoin).")) return;
-      this.etat = { patiente: "", circuit: null, verrou: false, points: [] };
-      this.sauver(); this.rendre();
-    });
-    f.querySelectorAll("[data-ouvrir]").forEach(b => b.addEventListener("click", () => {
-      if (this.etat.points.length && !confirm("Remplacer le réseau en cours par celui-ci ?")) return;
-      this.etat = JSON.parse(JSON.stringify(this.archives[+b.dataset.ouvrir].etat));
-      this.sauver(); this.rendre();
-    }));
-    f.querySelectorAll("[data-suppr]").forEach(b => b.addEventListener("click", () => {
-      if (!confirm("Supprimer ce réseau enregistré ?")) return;
-      this.archives.splice(+b.dataset.suppr, 1);
-      this.ecrire(this.CLE_ARCHIVES, this.archives); this.rendre();
-    }));
+    f.querySelectorAll("[data-vue]").forEach(b => b.addEventListener("click", () => { this.vue = b.dataset.vue; this.rendre(); }));
     // déplacement par la barre de titre (souris ou doigt)
     const tete = q("#reseau-tete");
     tete.addEventListener("pointerdown", ev => {
@@ -222,6 +223,52 @@ const Reseau = {
       };
       const fin = () => { tete.removeEventListener("pointermove", bouge); tete.removeEventListener("pointerup", fin); this.ecrire(this.CLE_FENETRE, this.fenetre); };
       tete.addEventListener("pointermove", bouge); tete.addEventListener("pointerup", fin);
+    });
+    const copier = async t => { try { await navigator.clipboard.writeText(t); this.avertir("Résumé copié."); } catch (e) { window.prompt("Copie le résumé :", t); } };
+    if (this.vue === "archives") {
+      f.querySelectorAll("[data-ouvrir]").forEach(b => b.addEventListener("click", () => {
+        const cible = this.archives[+b.dataset.ouvrir];
+        if (!cible) return;
+        if (this.etat.archiveId !== cible.id) this.archiver();          // le réseau en cours n'est pas perdu
+        this.etat = { patiente: "", circuit: null, verrou: false, points: [], ...JSON.parse(JSON.stringify(cible.etat)), archiveId: cible.id };
+        this.vue = "reseau"; this.sauver(); this.rendre();
+      }));
+      f.querySelectorAll("[data-copier]").forEach(b => b.addEventListener("click", () => { const a = this.archives[+b.dataset.copier]; if (a) copier(this.resume(a.etat)); }));
+      f.querySelectorAll("[data-suppr]").forEach(b => b.addEventListener("click", () => {
+        const a = this.archives[+b.dataset.suppr];
+        if (!a || !confirm("Supprimer le réseau enregistré « " + a.nom + " » ? Cela ne peut pas être annulé.")) return;
+        this.archives.splice(+b.dataset.suppr, 1);
+        if (this.etat.archiveId === a.id) { delete this.etat.archiveId; this.sauver(); }
+        this.ecrire(this.CLE_ARCHIVES, this.archives); this.rendre();
+      }));
+      return;
+    }
+    q("#reseau-nom").addEventListener("input", ev => { this.etat.patiente = ev.target.value; this.sauver(); const t = q("#reseau-tete strong"); if (t) t.textContent = "📋 Réseau" + (this.etat.patiente ? " — " + this.etat.patiente : "") + (this.etat.verrou ? " 🔒" : ""); });
+    q("#reseau-circuit").addEventListener("change", ev => { this.etat.circuit = ev.target.value || null; this.sauver(); q("#reseau-schema").innerHTML = this.schema(); });
+    const sd = q(".reseau-schema-d"); if (sd) sd.addEventListener("toggle", () => { this.fenetre.schemaFerme = !sd.open; this.ecrire(this.CLE_FENETRE, this.fenetre); });
+    f.querySelectorAll(".reseau-ligne").forEach(l => {
+      const id = l.dataset.id, ta = l.querySelector(".reseau-raison");
+      ta.addEventListener("input", ev => { this.maj(id, { raison: ev.target.value }); ta.style.height = "auto"; ta.style.height = Math.max(ta.scrollHeight, 28) + "px"; });
+      l.querySelectorAll(".reseau-cote-btn").forEach(b => b.addEventListener("click", () => {
+        const p = this.etat.points.find(x => x.id === id); if (!p) return;
+        this.maj(id, { cote: p.cote === b.dataset.cote ? "" : b.dataset.cote });                // un second clic retire le côté
+        l.querySelectorAll(".reseau-cote-btn").forEach(c => { const on = c.dataset.cote === (this.etat.points.find(x => x.id === id) || {}).cote; c.classList.toggle("on", on); c.setAttribute("aria-pressed", String(on)); });
+      }));
+    });
+    f.querySelectorAll("[data-x]").forEach(b => b.addEventListener("click", () => this.retirer(b.dataset.x)));
+    const form = q("#reseau-ajout");
+    if (form) form.addEventListener("submit", ev => { ev.preventDefault(); const i = q("#reseau-point"); const v = i.value.trim(); if (!v) return; i.value = ""; this.ajouter({ point: v, source: "saisi" }); });
+    q("#reseau-verrou").addEventListener("click", () => { this.etat.verrou = !this.etat.verrou; this.sauver(); this.rendre(); });
+    q("#reseau-copier").addEventListener("click", () => copier(this.resume()));
+    q("#reseau-enreg").addEventListener("click", () => {
+      if (!this.etat.points.length) { this.avertir("Rien à enregistrer."); return; }
+      this.archiver(); this.rendre(); this.avertir("Réseau enregistré.");
+    });
+    q("#reseau-nouveau").addEventListener("click", () => {
+      const garde = this.etat.points.length ? this.archiver() : null;                      // le réseau en cours est gardé dans les enregistrés
+      this.etat = { patiente: "", circuit: null, verrou: false, points: [] };
+      this.sauver(); this.rendre();
+      if (garde) this.avertir("Réseau précédent gardé dans « Enregistrés ».");
     });
   },
 

@@ -1357,3 +1357,34 @@ article.formule-detail, .vue-travail { border-radius: 12px !important; }
 .theme-champ input[type="color"] { width: 2.4rem; height: 1.8rem; padding: 0; border: 1.5px solid var(--ink); background: none; cursor: pointer; }
 .theme-custom-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 #theme-grid button[data-theme="custom"] { font-size: 0.8rem; }
+/* fenêtre du réseau de la patiente : onglets, lignes compactes, boutons en icônes, arrondis */
+.reseau-lanceur { border-radius: 999px !important; }
+.reseau-fenetre { border-radius: 14px !important; width: 28rem; }
+.reseau-tete { border-radius: 12px 12px 0 0 !important; }
+.reseau-onglets { display: flex; gap: 0.3rem; padding: 0.4rem 0.6rem 0; flex: none; border-bottom: 1.5px solid var(--ink); }
+.reseau-onglet { font: inherit; font-size: 0.85rem; font-weight: 700; background: none; color: var(--ink); border: 1.5px solid transparent; border-bottom: 0; padding: 0.3rem 0.8rem; cursor: pointer; border-radius: 10px 10px 0 0 !important; margin-bottom: -1.5px; }
+.reseau-onglet.actif { background: var(--ink); color: var(--bg); }
+.reseau-n { display: inline-block; min-width: 1.3em; text-align: center; padding: 0 0.35em; margin-left: 0.2rem; border: 1.5px solid currentColor; border-radius: 999px !important; font-size: 0.75rem; }
+.reseau-rang { display: flex; gap: 0.4rem; margin: 0.2rem 0 0.4rem; }
+.reseau-nom { flex: 0 0 8.5rem; min-width: 0; font: inherit; padding: 0.3rem 0.6rem; border-radius: 999px !important; }
+.reseau-rang select { flex: 1; min-width: 0; font: inherit; padding: 0.3rem 0.5rem; border-radius: 10px !important; }
+.reseau-schema-d > summary { cursor: pointer; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.reseau-ligne { border-radius: 10px !important; padding: 0.35rem 0.5rem; }
+.reseau-cotes { display: inline-flex; margin-left: auto; border: 1.5px solid var(--ink); border-radius: 999px !important; overflow: hidden; }
+.reseau-cote-btn { font: inherit; font-size: 0.72rem; font-weight: 700; background: none; color: var(--ink); border: 0; border-right: 1px solid var(--ink); padding: 0.05rem 0.5rem; cursor: pointer; border-radius: 0 !important; }
+.reseau-cote-btn:last-child { border-right: 0; }
+.reseau-cote-btn.on { background: var(--ink); color: var(--bg); }
+.reseau-x { border: 0 !important; background: none !important; }
+.reseau-raison { resize: none; overflow: hidden; border-radius: 8px !important; padding: 0.25rem 0.4rem; min-height: 1.8rem; }
+.reseau-ajout input { border-radius: 999px !important; padding-left: 0.7rem; }
+.reseau-ic2 { font: inherit; font-size: 1.15rem; line-height: 1; background: none; border: 0; color: var(--ink); cursor: pointer; padding: 0.3rem 0.5rem; border-radius: 8px !important; }
+.reseau-ic2:hover { background: rgba(0,0,0,.09); }
+.reseau-barre { display: flex; gap: 0.2rem; justify-content: flex-end; border-top: 1px solid var(--line); padding-top: 0.4rem; margin-top: 0.5rem; }
+.reseau-vide { padding: 0.4rem 0.2rem; font-size: 0.85rem; }
+.reseau-archives-liste { list-style: none; margin: 0.3rem 0; padding: 0; display: grid; gap: 0.5rem; }
+.reseau-arch { display: flex; gap: 0.4rem; justify-content: space-between; align-items: flex-start; border: 1px solid var(--line); border-radius: 10px !important; padding: 0.45rem 0.55rem; }
+.reseau-arch.en-cours { outline: 2px solid var(--accent); }
+.reseau-arch-texte { display: grid; gap: 0.1rem; min-width: 0; font-size: 0.88rem; }
+.reseau-arch-pts { font-size: 0.8rem; overflow-wrap: anywhere; }
+.reseau-arch-tag { font-size: 0.68rem; font-weight: 700; border: 1px solid currentColor; border-radius: 999px !important; padding: 0 0.4rem; }
+.reseau-arch-btns { display: flex; flex: none; }
