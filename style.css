@@ -1438,3 +1438,38 @@ article.formule-detail, .vue-travail { border-radius: 12px !important; }
 /* grille : l'en-tête redevient lisible (le style des tableaux de fiche mettait des lettres claires sur fond clair) */
 .formule-detail .circ-grille th { color: var(--ink); background: var(--panel); text-transform: none; font-size: 0.85rem; letter-spacing: 0; }
 .formule-detail .circ-grille th.circ-g-vide { background: var(--panel); }
+/* onglet Tableaux : trois vues (liste, schémas, grille) */
+.circ-vues { display: inline-flex; border: 1.5px solid var(--ink); border-radius: 999px !important; overflow: hidden; margin: 0 0 0.8rem; }
+.circ-vue-btn { font: inherit; font-size: 0.85rem; font-weight: 700; background: none; color: var(--ink); border: 0; border-right: 1px solid var(--ink); padding: 0.3rem 1rem; cursor: pointer; border-radius: 0 !important; }
+.circ-vue-btn:last-child { border-right: 0; }
+.circ-vue-btn.actif { background: var(--ink); color: var(--bg); }
+.circ-t2.vue-liste .sec-schemas, .circ-t2.vue-liste .sec-grille { display: none; }
+.circ-t2.vue-schemas .sec-assoc, .circ-t2.vue-schemas .sec-grille, .circ-t2.vue-schemas .circ-t2-g { display: none; }
+.circ-t2.vue-grille .sec-assoc, .circ-t2.vue-grille .sec-schemas, .circ-t2.vue-grille .circ-t2-g { display: none; }
+.circ-t2.vue-schemas, .circ-t2.vue-grille { grid-template-columns: 1fr; }
+.circ-sch-barre { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; justify-content: space-between; margin: 0 0 0.7rem; }
+.circ-sch-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+.circ-schemas-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr)); gap: 0.8rem; align-items: start; }
+.circ-schemas-grille.cmp { grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
+.circ-sch { border: 1.5px solid var(--ink); border-radius: 14px !important; padding: 0.6rem 0.7rem; background: var(--panel); display: flex; flex-direction: column; gap: 0.4rem; min-width: 0; }
+.circ-sch.epingle { outline: 3px solid var(--accent); outline-offset: 1px; }
+.circ-sch.off { opacity: 0.25; }
+.circ-sch header { display: grid; gap: 0.2rem; }
+.circ-sch h4 { margin: 0; font-size: 1rem; line-height: 1.25; }
+.circ-sch-tag { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.circ-sch-ind { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; line-height: 1.35; color: var(--muted); }
+.circ-sch-ind li.hit { color: var(--ink); font-weight: 700; text-decoration: underline; }
+.circ-sch-dessin { text-align: center; line-height: 0; }
+.circ-sch-dessin svg { max-width: 100%; height: auto; overflow: visible; }
+.circ-sch footer { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem; font-size: 0.8rem; }
+.circ-sch-btns { margin-left: auto; display: inline-flex; gap: 0.2rem; }
+.circ-sch-note { flex-basis: 100%; }
+.circ-pill rect { transition: stroke-width 0.1s; }
+.circ-pill.commun rect { stroke: var(--accent); stroke-width: 1.8; }
+.circ-pill.h rect { stroke: var(--accent); stroke-width: 2.6; }
+.circ-pill { cursor: default; }
+/* mots clés d'un circuit : usage le plus courant, en tête de fiche et dans la liste */
+.circ-motscles { display: flex; flex-wrap: wrap; gap: 0.3rem 0.4rem; list-style: none; margin: 0 0 0.9rem; padding: 0; }
+.circ-motscles li { border: 1.5px solid var(--ink); border-radius: 999px !important; padding: 0.15rem 0.7rem; font-size: 0.88rem; font-weight: 600; background: var(--panel); }
+.circ-lmots { display: block; font-size: 0.78rem; color: var(--muted); margin-top: 0.1rem; line-height: 1.3; }
+.circ-g-choix .cat-chip { text-transform: none; max-width: 20rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem; }
