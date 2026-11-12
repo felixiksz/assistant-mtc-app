@@ -1545,3 +1545,7 @@ article.formule-detail, .vue-travail { border-radius: 12px !important; }
 .reseau-sugg li { padding: 0.35rem 0.7rem; border: 1px solid var(--ink); border-top: 0; cursor: pointer; background: var(--panel); }
 .reseau-sugg li:first-child { border-top: 1px solid var(--ink); }
 .reseau-sugg li:hover { background: var(--accent-soft, var(--panel)); }
+/* circuit suggéré dans le traitement d'un syndrome */
+.circ-lien-couple { font: inherit; font-weight: inherit; color: inherit; background: none; border: 0; border-bottom: 2px dotted var(--accent); padding: 0; cursor: pointer; }
+.circ-lien-couple:hover { background: var(--accent-soft, transparent); }
+.circ-lies-auto { margin: 0.4rem 0; }

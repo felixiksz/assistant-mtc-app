@@ -66,7 +66,7 @@ const Tung = {
       ((f.numeros || []).length && this.cleNom(f.nom + " " + f.numeros[0]) === k) || this.cleNom(f.id) === k) || null;
   },
   zoneNom(n) { const z = (this.base.zones || []).find(x => x.n === n); return z ? z.nom : ""; },
-  srcCourt(s) { return s === "perso" ? "Toi" : ((this.base.sources[s] || {}).court || s); },
+  srcCourt(s) { return s === "perso" ? "" : ((this.base.sources[s] || {}).court || s); },
   texteRecherche(f) {
     const ch = f.blocs.flatMap(b => b.champs.map(c => [c.k, ...(Array.isArray(c.v) ? c.v : [c.v])].join(" ")));
     return dsNorm([f.nom, f.zh, f.trad, ...(f.numeros || []), ...((f.canaux || {}).codes || []), ...(f.alias || []), ...(f.membres || []).map(m => m[0] || m), ...ch].join(" "));
@@ -115,8 +115,8 @@ const Tung = {
     if (this.vue === "fiches") {
       const ok = f => (!this.zone || (this.zone === "?" ? !f.zone : f.zone === this.zone)) && (!this.canal || (this.canal === "?" ? !((f.canaux || {}).codes || []).length : ((f.canaux || {}).codes || []).includes(this.canal))) && mots.every(m => this.texteRecherche(f).includes(m));
       const ligne = (f, enfant) => `<li class="gl-item tung-item${enfant ? " tung-enfant" : ""}${f.id === this.actif ? " selected" : ""}" data-id="${escapeHtml(f.id)}"><strong>${enfant ? "↳ " : ""}${escapeHtml(f.nom)}</strong>` +
-        `<span class="muted">${escapeHtml((f.numeros || []).join(" · ") || "sans numéro")}${((f.canaux || {}).codes || []).length ? " · canal " + (f.canaux.collectif ? "six fu" + f.canaux.codes.filter(k => !["GI", "E", "IG", "V", "VB", "TF"].includes(k)).map(k => "+" + k).join("") : f.canaux.codes.join("+")) : ""}${f.type === "groupe" ? " · groupe" : ""}${f.origine === "perso" ? " · créé par toi" : f.complete ? " · complété" : ""}</span>` +
-        `<span class="tung-srcs">${[...new Set(f.blocs.map(b => b.source))].map(s => `<span class="sx-code">${escapeHtml(this.srcCourt(s))}</span>`).join("")}</span></li>`;
+        `<span class="muted">${escapeHtml((f.numeros || []).join(" · ") || "sans numéro")}${((f.canaux || {}).codes || []).length ? " · canal " + (f.canaux.collectif ? "six fu" + f.canaux.codes.filter(k => !["GI", "E", "IG", "V", "VB", "TF"].includes(k)).map(k => "+" + k).join("") : f.canaux.codes.join("+")) : ""}${f.type === "groupe" ? " · groupe" : ""}${f.origine === "perso" ? "" : f.complete ? " · complété" : ""}</span>` +
+        `<span class="tung-srcs">${[...new Set(f.blocs.map(b => b.source))].filter(s => s !== "perso").map(s => `<span class="sx-code">${escapeHtml(this.srcCourt(s))}</span>`).join("")}</span></li>`;
       const racines = this.liste.filter(f => !f.parent);
       racines.forEach(f => {
         const enf = (f.enfants || []).map(id => this.parId(id)).filter(Boolean);
@@ -126,7 +126,7 @@ const Tung = {
     } else if (this.vue === "protocoles") {
       const l = this.protos.filter(p => mots.every(m => dsNorm([p.nom, p.mouvement, p.indication].join(" ")).includes(m)));
       n = l.length;
-      html = l.map(p => `<li class="gl-item tung-item${p.id === this.actif ? " selected" : ""}" data-id="${escapeHtml(p.id)}"><strong>${escapeHtml(p.nom)}</strong><span class="muted">${escapeHtml(p.mouvement || "")}${p.origine === "perso" ? " · créé par toi" : ""}</span></li>`).join("");
+      html = l.map(p => `<li class="gl-item tung-item${p.id === this.actif ? " selected" : ""}" data-id="${escapeHtml(p.id)}"><strong>${escapeHtml(p.nom)}</strong><span class="muted">${escapeHtml(p.mouvement || "")}</span></li>`).join("");
     } else {
       const l = this.base.mouvements.filter(m => mots.every(x => dsNorm(m.nom).includes(x)));
       n = l.length;
@@ -168,8 +168,9 @@ const Tung = {
   },
 
   // abréviations des sources, écrites seulement quand une information ne vient pas de la source dominante du champ
-  ABBR: { goodman: "Go", gyneco: "Gy", tan: "Ta", elotus: "eL", perso: "Toi" },
+  ABBR: { goodman: "Go", gyneco: "Gy", tan: "Ta", elotus: "eL", perso: "" },
   etiquette(it) {
+    if (it.source === "perso") return "";
     const s = it.source, nom = s === "perso" ? "Tes ajouts" + (it.titre ? " — " + it.titre : "") : ((this.base.sources[s] || {}).nom || s);
     return `<span class="tung-tag" title="${escapeHtml(nom + (it.page ? ", p. " + it.page : "") + (it.langue === "en" ? " (texte en anglais)" : ""))}">${this.ABBR[s] || s}${it.page ? " " + escapeHtml(it.page) : ""}${it.langue === "en" ? " · EN" : ""}</span>`;
   },
@@ -187,16 +188,16 @@ const Tung = {
     const cles = [...m.keys()].sort((a, b) => { const x = ORDRE.indexOf(a), y = ORDRE.indexOf(b); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y); });
     const sources = [...new Set(f.blocs.map(b => b.source))];
     const principale = sources.find(s => s !== "perso") || sources[0];
-    const liste = sources.map(s => { const b = f.blocs.filter(x => x.source === s); const pg = b.map(x => x.page).filter(Boolean).join(", "); return `<span class="tung-tag-leg">${this.ABBR[s] || s} = ${escapeHtml(s === "perso" ? "Tes ajouts" : (this.base.sources[s] || {}).court || s)}${pg ? " p. " + escapeHtml(pg) : ""}${b.some(x => x.langue === "en") ? " (anglais)" : ""}</span>`; });
+    const liste = sources.filter(s => s !== "perso").map(s => { const b = f.blocs.filter(x => x.source === s); const pg = b.map(x => x.page).filter(Boolean).join(", "); return `<span class="tung-tag-leg">${this.ABBR[s] || s} = ${escapeHtml((this.base.sources[s] || {}).court || s)}${pg ? " p. " + escapeHtml(pg) : ""}${b.some(x => x.langue === "en") ? " (anglais)" : ""}</span>`; });
     const champs = cles.map(k => {
       const items = m.get(k), cnt = {};
       items.forEach(x => { cnt[x.source] = (cnt[x.source] || 0) + 1; });
       const dom = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || sources.indexOf(a) - sources.indexOf(b))[0];
-      const tete = dom !== principale || items[0].source === "perso" ? this.etiquette(items.find(x => x.source === dom)) : "";
+      const tete = dom !== principale ? this.etiquette(items.find(x => x.source === dom)) : "";
       const ligne = x => escapeHtml(x.text) + (x.source !== dom ? " " + this.etiquette(x) : "");
       return `<div class="tung-champ"><h4>${escapeHtml(k)} ${tete}</h4>${items.length > 1 ? `<ul class="tcm-list">${items.map(x => `<li>${ligne(x)}</li>`).join("")}</ul>` : `<p>${ligne(items[0])}</p>`}</div>`;
     }).join("");
-    return `<p class="tung-sources muted">Sources : ${liste.join(" · ")}. Une abréviation n'est écrite que là où l'information ne vient pas de la même source que le reste de la rubrique.</p>${champs}`;
+    return (liste.length ? `<p class="tung-sources muted">Sources : ${liste.join(" · ")}. Une abréviation n'est écrite que là où l'information ne vient pas de la même source que le reste de la rubrique.</p>` : "") + champs;
   },
 
   champ(c, langue) {
@@ -254,9 +255,9 @@ const Tung = {
   htmlCanaux(f) {
     const c = f.canaux || {}, l = c.codes || [];
     if (!l.length) return `<p class="muted tung-canal">Canal : non renseigné — le crayon ✏️ permet de le choisir.</p>`;
-    if (c.collectif) { const FU = ["GI", "E", "IG", "V", "VB", "TF"], autres = l.filter(k => !FU.includes(k)); return `<p class="tung-canal"><strong>Canal :</strong> <span class="sx-code">les six fu</span> ${autres.map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")} <span class="muted">(les six fu ensemble${autres.length ? ", et " + autres.join(", ") : ""} — ${c.statut === "toi" ? "précision donnée par toi" : "d'après la source"})</span></p>`; }
-    const st = c.statut === "deduit" ? "déduit, à valider" : c.statut === "toi" ? "choisi par toi" : "d'après la source";
-    return `<p class="tung-canal"><strong>Canal :</strong> ${l.map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")} <span class="muted">(${st}${c.source ? " — " + escapeHtml(c.source) : ""})</span></p>`;
+    if (c.collectif) { const FU = ["GI", "E", "IG", "V", "VB", "TF"], autres = l.filter(k => !FU.includes(k)); return `<p class="tung-canal"><strong>Canal :</strong> <span class="sx-code">les six fu</span> ${autres.map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")} <span class="muted">(les six fu ensemble${autres.length ? ", et " + autres.join(", ") : ""}${c.statut === "toi" ? "" : " — d'après la source"})</span></p>`; }
+    const st = c.statut === "deduit" ? "déduit, à valider" : c.statut === "toi" ? "" : "d'après la source", note = [st, c.statut === "toi" ? "" : (c.source ? escapeHtml(c.source) : "")].filter(Boolean).join(" — ");
+    return `<p class="tung-canal"><strong>Canal :</strong> ${l.map(k => `<span class="sx-code">${escapeHtml(k)}</span>`).join(" ")}${note ? ` <span class="muted">(${note})</span>` : ""}</p>`;
   },
 
   // points Tung compatibles avec un circuit : tous leurs canaux sont dans le circuit (le réseau reste équilibré) ; « avec ajout » si un canal d'ajout possible est nécessaire
@@ -339,7 +340,7 @@ const Tung = {
     const d = this.edition, z = this.zoneDetail(), complet = f.origine === "perso";
     const T = (id, lib, rows, val, ph = "") => `<label>${lib}<textarea id="te-${id}" rows="${rows}" placeholder="${escapeHtml(ph)}">${escapeHtml(val)}</textarea></label>`;
     z.innerHTML = `<h2>${d.nouveau ? "Nouvelle fiche Tung" : (complet ? "Modifier : " : "Compléter : ") + escapeHtml(f.nom)}</h2>
-      ${complet ? "" : `<p class="muted">Les informations des livres ne sont pas modifiées : ce que tu écris ici s'ajoute dans un bloc « Tes ajouts ».</p>`}
+      ${complet ? "" : `<p class="muted">Les informations des livres ne sont pas modifiées : ce que tu écris ici s'ajoute à ces informations.</p>`}
       <form class="circ-form" id="tung-form">
         ${complet ? `<label>Nom<input type="text" id="te-nom" value="${escapeHtml(d.nom)}"></label>
         <label>Caractères chinois (facultatif)<input type="text" id="te-zh" value="${escapeHtml(d.zh)}"></label>

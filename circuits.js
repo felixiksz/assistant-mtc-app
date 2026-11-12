@@ -222,6 +222,8 @@ const Circuits = {
 
   // ---------- onglet : liste + fiche
   init() {
+    let attente = null;
+    new MutationObserver(() => { if (attente) return; attente = setTimeout(() => { attente = null; this.lierCouples(document); }, 80); }).observe(document.body, { childList: true, subtree: true });
     document.getElementById("circuit-search").addEventListener("input", e => { this.recherche = e.target.value; this.rendreListe(); });
     document.getElementById("circuit-nouveau").addEventListener("click", () => this.nouveau());
     document.querySelector('.tab-btn[data-tab="circuits"]').addEventListener("click", () => this.ouvert());
@@ -255,7 +257,7 @@ const Circuits = {
     const l = this.liste.filter(c => (!this.filtre || c.grille.includes(this.filtre)) && (!q || q.split(/\s+/).every(m => this.texteRecherche(c).includes(m)))).map((c, i) => ({ c, i })).sort((a, b) => score(b.c) - score(a.c) || a.i - b.i).map(o => o.c);
     ul.innerHTML = l.map(c => `<li class="gl-item circ-item${c.id === this.actif ? " selected" : ""}" data-id="${escapeHtml(c.id)}">` +
       `<span class="circ-mini">${this.dessin(c, { taille: 54, etiquettes: true })}</span>` +
-      `<span class="circ-titre"><strong>${escapeHtml(this.nomCourt(c))}</strong><span class="muted">${c.grille.join(" · ")}${c.origine === "perso" ? " · créé par toi" : c.modifie ? " · modifié" : ""}</span>${(c.mots_cles || []).length ? `<span class="circ-lmots">${c.mots_cles.slice(0, 3).map(escapeHtml).join(" · ")}</span>` : ""}</span></li>`).join("") || `<li class="muted">Aucun circuit.</li>`;
+      `<span class="circ-titre"><strong>${escapeHtml(this.nomCourt(c))}</strong><span class="muted">${c.grille.join(" · ")}${c.origine === "perso" ? "" : c.modifie ? " · modifié" : ""}</span>${(c.mots_cles || []).length ? `<span class="circ-lmots">${c.mots_cles.slice(0, 3).map(escapeHtml).join(" · ")}</span>` : ""}</span></li>`).join("") || `<li class="muted">Aucun circuit.</li>`;
     ul.querySelectorAll("li[data-id]").forEach(li => li.addEventListener("click", () => this.afficher(li.dataset.id)));
     document.getElementById("circuit-count").textContent = l.length + " circuit(s)";
   },
@@ -359,10 +361,19 @@ const Circuits = {
         `<div class="sec-assoc">${this.section("Associations de points", this.assocTableHtml(c) + this.wjyChipsHtml(c) + `<div id="circ-assoc-detail" class="circ-assoc-detail"></div>`)}</div>` +
         `<div class="sec-schemas">${this.section("Schémas des associations", `<div id="circ-schemas-zone"></div>`)}</div>` +
         `<div class="sec-grille">${this.section("Comparaison des associations et des ajouts", this.grilleHtml(c))}</div>` + `</div></div>`)}
-      ${this.onglet(3, `<section><h3>Syndromes de ta base rattachés à ce circuit</h3>${lies ? `<div class="circ-synd-liste">${lies}</div>` : ""}<div class="circ-lies-ajout"><input type="search" id="circ-lie-q" placeholder="Ajouter un syndrome : choisis dans ta base, ou tape-le" autocomplete="off" aria-label="Ajouter un syndrome"><ul id="circ-lie-sugg" class="prop-sugg"></ul></div></section>` +
+      ${this.onglet(3, `<section><h3>Syndromes de ta base rattachés à ce circuit</h3>${lies ? `<div class="circ-synd-liste">${lies}</div>` : ""}<div class="circ-lies-auto" id="circ-lies-auto" hidden></div><div class="circ-lies-ajout"><input type="search" id="circ-lie-q" placeholder="Ajouter un syndrome : choisis dans ta base, ou tape-le" autocomplete="off" aria-label="Ajouter un syndrome"><ul id="circ-lie-sugg" class="prop-sugg"></ul></div></section>` +
         this.section("Formule de pharmacopée équivalente", this.equivalent(c)) +
         `<section><h3>Syndromes de ta base portant sur ces canaux</h3><p class="muted">Syndromes des organes, des canaux et des six niveaux dont l'organe ou le niveau est un des quatre canaux.</p>${parCanal}</section>`)}`;
     zone.querySelectorAll(".circ-onglet-btn").forEach(b => b.addEventListener("click", () => this.choisirOnglet(+b.dataset.o)));
+    // syndromes dont le traitement suggère déjà ce circuit : rattachés d'office
+    const zAuto = zone.querySelector("#circ-lies-auto");
+    if (zAuto) this.syndromesParCircuit().then(m => {
+      const dej = c.syndromes_lies || [], l = (m.get(c.id) || []).filter(k => !dej.includes(k)).map(k => this.entreeSynd(k)).filter(Boolean);
+      if (!l.length || !zAuto.isConnected) return;
+      zAuto.innerHTML = `<p class="muted">Suggéré par le traitement de ces syndromes :</p><div class="circ-synd-liste">${l.map(e => `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(this.cleSynd(e))}">${escapeHtml(sansHanzi(e.nom))}</button>`).join(" ")}</div>`;
+      zAuto.hidden = false;
+      zAuto.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const e = this.entreeSynd(b.dataset.synd); if (e) this.ouvrirSyndrome(e); }));
+    }).catch(() => {});
     // syndromes rattachés : détacher, ou en ajouter (choisis dans ta base, ou tapés tels quels)
     zone.querySelectorAll("[data-lie-x]").forEach(b => b.addEventListener("click", () => this.enregistrerChamps(c, { syndromes_lies: (c.syndromes_lies || []).filter(x => x !== b.dataset.lieX) })));
     const qLie = zone.querySelector("#circ-lie-q"), sgLie = zone.querySelector("#circ-lie-sugg");
@@ -604,6 +615,58 @@ const Circuits = {
   couleurCanal(code) { return this.COULEUR_CANAL[code] || "var(--ink)"; },
   // texte posé dans le rond d'un canal : blanc sur un rond plein (yīn), couleur du canal sur un rond cerclé (yáng)
   texteRond(code) { return this.polarite(code) === "yin" ? (this.COULEUR_CANAL[code] ? "#fff" : "var(--bg)") : this.couleurCanal(code); },
+  // ---------- circuits suggérés dans le traitement des syndromes (« Acupuncture classique : Tài yīn / Yáng míng : … ») : reconnus et rattachés
+  COUPLE_NOMS: { poumon: "p", "gros intestin": "gi", estomac: "e", rate: "rt", coeur: "c", "intestin grele": "ig", vessie: "v", reins: "rn", "enveloppe du coeur": "ec", "trois foyers": "tf", "vesicule biliaire": "vb", foie: "f" },
+  cleCouple(t) {
+    let s = String(t || "").toLowerCase().replace(/œ/g, "oe").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[\u3400-\u9fff]/g, "");
+    for (let i = 0; i < 4 && /\(/.test(s); i++) s = s.replace(/\([^()]*\)/g, " ");
+    const m = this.COUPLE_NOMS;
+    const el = s.split(/[\/,&;]| et /).map(x => x.replace(/\s+/g, " ").trim()).filter(Boolean).map(x => m[x] || x);
+    return el.length ? [...new Set(el)].sort().join("|") : "";
+  },
+  circuitDuCouple(t) {
+    const k = this.cleCouple(t);
+    return k ? (this.liste || []).find(x => this.cleCouple(x.nom) === k) || null : null;
+  },
+  // pour chaque circuit : les syndromes dont le traitement le suggère (lus une fois dans les fiches qui ont un traitement, puis gardés)
+  async syndromesParCircuit() {
+    if (this._parCircuit) return this._parCircuit;
+    if (this._parCircuitEnCours) return this._parCircuitEnCours;
+    this._parCircuitEnCours = (async () => {
+      await this.ensureLoaded();
+      const res = new Map(), vus = new Set();
+      const idx = (Syndromes.rawIndexByDomaine || {}).qi_sang_liquides || [];
+      const aTrait = new Set(idx.filter(x => x.a_un_traitement).map(x => x.chemin || x.chemin_relatif));
+      const entrees = (Syndromes.entries || []).filter(e => e.domaine === "qi_sang_liquides" && (!aTrait.size || aTrait.has(e.chemin)));
+      await Promise.all(entrees.map(async e => {
+        let d; try { d = await Store.readJSON(`syndromes/${e.domaine}/${e.chemin}`); } catch (x) { return; }
+        const couples = [];
+        (function marche(o) { if (Array.isArray(o)) o.forEach(marche); else if (o && typeof o === "object") { if (typeof o.couple_canaux === "string") couples.push(o.couple_canaux); Object.values(o).forEach(marche); } })(d);
+        couples.forEach(t => {
+          const circ = this.circuitDuCouple(t); if (!circ) return;
+          const k = this.cleSynd(e), cle = circ.id + "|" + k;
+          if (vus.has(cle)) return; vus.add(cle);
+          if (!res.has(circ.id)) res.set(circ.id, []);
+          res.get(circ.id).push(k);
+        });
+      }));
+      this._parCircuit = res;
+      return res;
+    })();
+    return this._parCircuitEnCours;
+  },
+  // dans le texte d'un syndrome, le nom du couple de canaux devient un lien vers le circuit qui lui correspond
+  async lierCouples(racine) {
+    const l = [...(racine || document).querySelectorAll("[data-couple]:not([data-lie])")];
+    if (!l.length) return;
+    l.forEach(x => x.setAttribute("data-lie", "1"));
+    try { await this.ensureLoaded(); } catch (e) { return; }
+    l.forEach(x => {
+      const circ = this.circuitDuCouple(x.dataset.couple);
+      if (!circ) return;
+      x.innerHTML = `<button type="button" class="circ-lien-couple" data-circ-fiche="${escapeHtml(circ.id)}" title="Ouvrir le circuit « ${escapeHtml(this.nomCourt(circ))} » (${escapeHtml(circ.grille.join(" "))})">${x.innerHTML}</button>`;
+    });
+  },
   // syndrome rattaché à un circuit : une entrée de ta base, ou un texte libre tapé à la main (clé « libre:… »)
   libelleLie(k) {
     if (String(k).startsWith("libre:")) return { nom: String(k).slice(6), libre: true };

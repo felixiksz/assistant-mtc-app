@@ -2138,7 +2138,7 @@ const Syndromes = {
     const acClassique = (t.acupuncture_classique && t.acupuncture_classique.length)
       ? `<h4 class="sec-sub">Acupuncture classique</h4>` + t.acupuncture_classique.map(c => {
           const groupes = (c.groupes || []).map(g => Array.isArray(g) ? g.join(", ") : g).join(" · ");
-          return `<p><strong>${escapeHtml(c.couple_canaux || "")}</strong> : ${escapeHtml(groupes)}</p>`;
+          return `<p><strong><span data-couple="${escapeHtml(c.couple_canaux || "")}">${escapeHtml(c.couple_canaux || "")}</span></strong> : ${escapeHtml(groupes)}</p>`;
         }).join("") : "";
     const commun = (t.pour_toutes_situations && t.pour_toutes_situations.length)
       ? `<h4 class="sec-sub">Pour toutes les situations</h4><p>${escapeHtml(t.pour_toutes_situations.join(", "))}</p>` : "";
@@ -4774,7 +4774,7 @@ const Proposer = {
       const ajouts = mod.ajouts.map(a => `<span class="prop-aj">${Animaux.marque(a)}+ ${escapeHtml(a)} ${SubstanceNature.pastille(this.substAjout(a))} ${SubstanceNature.pastilleDose(this.substAjout(a))}</span>`).join(" ");
       const retraits = mod.retraits.map(a => `<span class="prop-ret">− ${escapeHtml(a)}</span>`).join(" ");
       return `<label class="prop-mod${l.rang ? " pert" : ""}"><input type="checkbox" data-mod="${escapeHtml(cle)}"${(this.choix[f.id] || new Set()).has(l.k) ? " checked" : ""}>` +
-        `<span><strong>${escapeHtml(mod.condition || mod.texte.slice(0, 90))}</strong>${mod.source === "carte" ? ' <span class="pm-src">carte mentale</span>' : mod.source === "personnel" ? ' <span class="pm-src">ajout personnel</span>' : ""}${mod.principe && mod.condition ? ` <span class="muted">— ${escapeHtml(mod.principe)}</span>` : ""}` +
+        `<span><strong>${escapeHtml(mod.condition || mod.texte.slice(0, 90))}</strong>${mod.source === "carte" ? ' <span class="pm-src">carte mentale</span>' : ""}${mod.principe && mod.condition ? ` <span class="muted">— ${escapeHtml(mod.principe)}</span>` : ""}` +
         `<br>${ajouts} ${retraits}${pourquoi ? `<br><span class="prop-pourquoi">${escapeHtml(pourquoi)}</span>` : ""}` +
         `<details class="prop-orig"><summary>texte d'origine</summary>${escapeHtml(mod.texte)}</details></span></label>`;
     };
