@@ -168,7 +168,7 @@ const CarnetCircuits = {
       b.push({ html: `${sep}<div class="tete2"><div><h2 class="titre"><span>${nom}</span></h2><p><strong>${c.grille.join(" · ")}</strong></p>${ligne}</div>${svg}</div>`, debut: entree, avecSuivant: true });
     }
     // indications
-    const groupes = (c.indications_groupes || []).filter(g => (g.items || []).length);
+    const groupes = this.groupesInd(c);
     if (o.indications !== "non") {
       if (o.indications === "tableau" && groupes.length) b.push({ titre: "Indications", rows: groupes.map(g => `<tr><td class="lib">${this.h(g.titre)}</td><td>${g.items.map(x => this.h(x)).join(" · ")}</td></tr>`) });
       else if (o.indications === "suivi" && groupes.length) aj(this.blocSuivi("Indications", groupes.map(g => `<strong>${this.h(g.titre)} :</strong> ${g.items.map(x => this.h(x)).join(", ")}`)));
@@ -316,9 +316,39 @@ const CarnetCircuits = {
 
   // ---------- index : indications (par catégorie), tableaux, syndromes ; chaque entrée renvoie à la page où commence son circuit
   CATEGORIES: [["Général", /^(|general|generale)$/], ["Shen", /^shen$/], ["Tête", /^tete$/], ["Neuro", /^neuro$/], ["Respiratoire, ORL", /^respir/], ["Cœur, sang", /^(coeur|sang)$/], ["Digestif", /^digest/],
-    ["Urinaire, uro-génital", /^(urinaire|uro)/], ["Gynéco, andro", /^gyneco/], ["Peau, tissus", /^(dermato|tissus)/], ["Douleurs, carrosserie", /^(dou|carosserie|carrosserie)/]],
+    ["Urinaire, uro-génital", /^(urinaire|uro)/], ["Gynéco, andro", /^gyneco/], ["Peau, tissus", /^(dermato|tissus)/], ["Douleurs, carrosserie", /^(dou|carosserie|carrosserie)/], ["Pouls et langue", /^pouls/], ["Autres", /^autres$/]],
   categorie(titre) { const n = dsNorm(String(titre || "")).trim(); const c = this.CATEGORIES.find(x => x[1].test(n)); return c ? c[0] : String(titre).trim(); },
-  termes(texte) { return sansHanzi(String(texte || "")).split(/[,;]|…|\.\.\./).map(x => x.replace(/\s+/g, " ").replace(/[.\s]+$/, "").trim()).filter(x => x.length > 2); },
+  groupesInd(c) {
+    return (c.indications_groupes || []).map(g => {
+      let titre = String(g.titre || "").trim(), items = (g.items || []).slice();
+      if (!titre && items.length > 1 && /^[A-ZÀ-Ý ,'\/-]{3,40}$/.test(String(items[0]).trim())) { titre = String(items.shift()).trim().toLowerCase(); titre = titre.charAt(0).toUpperCase() + titre.slice(1); }
+      else if (!titre && /^(POULS|LANGUE)\b/.test(String(items[0] || ""))) titre = "Pouls et langue";
+      const connue = this.CATEGORIES.find(x => x[0] !== "Général" && x[1].test(dsNorm(titre).trim()));
+      return { titre: titre ? (connue && !g.titre ? connue[0] : titre) : "Autres", items };
+    }).filter(g => g.items.length);
+  },
+  // découpe un texte d'indications en entrées d'index. Une virgule ne sépare pas toujours deux indications :
+  // « douleur du dos, des lombes » = douleur du dos + douleur des lombes (le mot principal est repris) ;
+  // « liés au stress, à l'anxiété », « lombalgie, je mange, j'ai mal au dos », « digestion difficile, lente » restent une seule entrée.
+  termes(texte, teteDefaut) {
+    const protege = sansHanzi(String(texte || "")).replace(/\([^)]*\)/g, m => m.replace(/[,;:]/g, "\u0001"));        // pas de coupure dans une parenthèse
+    const brut = protege.split(/[,;:]|…|\.\.\./).map(x => x.replace(/\u0001/g, ",").replace(/\s+/g, " ").replace(/[.\s]+$/, "").trim()).filter(Boolean);
+    const DE = /^(de la |de l['’]|du |des |de |d['’])/i, COMPL = /\s+(de la |de l['’]|du |des |de |d['’])/i;
+    const SUITE = /^(à |au |aux |et |ou |je |j['’]|quand |si |qui |que |mais |surtout |avec |sans |car |donc |sauf |parfois |souvent |lié|due? |dus |dues )/i;
+    const ADJ = /^(lente?s?|difficiles?|chroniques?|aigu[eë]s?|nocturnes?|diurnes?|fréquente?s?|abondante?s?|douloureuses?|douloureux|irréguli[eè]re?s?|sévères?|légère?s?|léger)$/i;
+    const out = [];
+    brut.forEach(f => {
+      const prec = out[out.length - 1];
+      if (DE.test(f)) {
+        const i = prec ? prec.search(COMPL) : -1;                         // mot principal du terme précédent : « douleur » dans « douleur du dos »
+        if (i > 0) out.push(prec.slice(0, i) + " " + f);
+        else if (prec) out[out.length - 1] = prec + ", " + f;             // pas de mot principal reconnaissable : la phrase reste entière
+        else out.push(teteDefaut ? teteDefaut + " " + f : f.replace(DE, ""));
+      } else if (prec && (SUITE.test(f) || ADJ.test(f))) out[out.length - 1] = prec + ", " + f;
+      else out.push(f);
+    });
+    return out.filter(x => x.length > 2);
+  },
   lignesIndex(groupes) {           // groupes : Map(catégorie -> Map(clé -> { lib, pages: Set })) ; rend les lignes HTML, catégories dans l'ordre donné, entrées par ordre alphabétique
     const l = [];
     groupes.forEach((m, cat) => {
@@ -333,8 +363,8 @@ const CarnetCircuits = {
     const ind = new Map(this.CATEGORIES.map(x => [x[0], new Map()])), tab = new Map([["", new Map()]]), synd = new Map();
     circuits.forEach(c => {
       const p = pageDe.get(c.id);
-      const groupes = (c.indications_groupes || []).filter(g => (g.items || []).length);
-      if (groupes.length) groupes.forEach(g => g.items.forEach(x => this.termes(x).forEach(t => ajouter(ind, this.categorie(g.titre), t, p))));
+      const groupes = this.groupesInd(c);
+      if (groupes.length) groupes.forEach(g => g.items.forEach(x => this.termes(x, /^dou/.test(dsNorm(String(g.titre || ""))) ? "douleur" : "").forEach(t => ajouter(ind, this.categorie(g.titre), t, p))));
       else (c.indications || []).forEach(x => this.termes(x).forEach(t => ajouter(ind, "Non classé", t, p)));
       (c.associations || []).forEach(a => { const t = sansHanzi(String(a.tableau || "")).replace(/[\s,.;]+$/, "").trim(); if (t) ajouter(tab, "", t.charAt(0).toUpperCase() + t.slice(1), p); });
       [...new Set([...(c.syndromes_lies || []), ...((this._parCircuit && this._parCircuit.get(c.id)) || [])])].forEach(k => {
