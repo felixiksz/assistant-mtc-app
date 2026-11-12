@@ -94,3 +94,32 @@ const Prescription = {
       `<p class="muted sx-note">Tarifs SINOLUX 2026_2 TTC ; prix patient = prix thérapeute + 15 %, hors frais de port. Les ajouts ne sont pas chiffrés à part : la composition sur mesure suit le tarif « composition de votre choix ». Dose : posologie du laboratoire pour ce poids, à adapter.</p>`;
   }
 };
+
+/* ============================= Comparaison de circuits =============================
+   Deux circuits côte à côte : schéma, mots clés, canaux (en commun ou non), indications, actions, ajouts. Un onglet par comparaison (on peut en ouvrir plusieurs). */
+const ComparaisonCircuits = {
+  defaut() { return { a: "", b: "" }; },
+  async rendre(zone, e, changer) {
+    try { await Circuits.ensureLoaded(); } catch (x) { zone.innerHTML = `<p class="muted">Circuits indisponibles.</p>`; return; }
+    const liste = Circuits.liste, A = e.a ? Circuits.parId(e.a) : null, B = e.b ? Circuits.parId(e.b) : null;
+    const opts = v => `<option value="">— choisir un circuit —</option>` + liste.map(c => `<option value="${escapeHtml(c.id)}"${v === c.id ? " selected" : ""}>${escapeHtml(Circuits.nomCourt(c))} (${c.grille.join(" ")})</option>`).join("");
+    const commun = A && B ? A.grille.filter(k => B.grille.includes(k)) : [];
+    const colonne = (c, autre) => {
+      if (!c) return `<div class="cmpc-col cmpc-vide muted">Choisis un circuit.</div>`;
+      const seuls = c.grille.filter(k => !(autre && autre.grille.includes(k)));
+      const ajouts = (c.ajouts || []).filter(a => (a.canaux || []).length).map(a => Circuits.ajoutLigne({ canaux: a.canaux, ensemble: a.ensemble, action: "", texte: "" }, c.grille));
+      const liste2 = (t, l, n) => l && l.length ? `<h4>${t}</h4><ul>${l.slice(0, n).map(x => `<li>${escapeHtml(sansHanzi(x))}</li>`).join("")}${l.length > n ? `<li class="muted">… (+${l.length - n})</li>` : ""}</ul>` : "";
+      return `<div class="cmpc-col"><h3>${escapeHtml(Circuits.nomCourt(c))}</h3>
+        ${(c.mots_cles || []).length ? `<ul class="circ-motscles">${c.mots_cles.map(m => `<li>${escapeHtml(m)}</li>`).join("")}</ul>` : ""}
+        <div class="circ-sch-dessin">${Circuits.dessin(c, { taille: 170, etiquettes: true })}</div>
+        ${autre ? `<p class="cmpc-canaux">${c.grille.map(k => `<span class="${commun.includes(k) ? "commun" : "seul"}">${Circuits.pastilleCanal(k)}</span>`).join(" ")} <span class="muted">${seuls.length ? "seuls ici : " + seuls.join(", ") : "mêmes canaux"}</span></p>` : ""}
+        ${liste2("Indications", c.indications, 6)}${liste2("Actions", c.actions, 6)}${ajouts.length ? `<h4>Ajouts possibles</h4><ul>${ajouts.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : ""}</div>`;
+    };
+    zone.innerHTML = `<section class="cmpc"><h3>Comparaison de circuits</h3>
+      <div class="cmpc-choix"><select class="cc-a" aria-label="Premier circuit">${opts(e.a)}</select><span class="muted">contre</span><select class="cc-b" aria-label="Deuxième circuit">${opts(e.b)}</select></div>
+      ${A && B ? `<p class="cmpc-resume">${commun.length ? "Canaux en commun : " + commun.map(k => Circuits.pastilleCanal(k)).join(" ") : "Aucun canal en commun."}</p>` : ""}
+      <div class="cmpc-cols">${colonne(A, B)}${colonne(B, A)}</div></section>`;
+    zone.querySelector(".cc-a").addEventListener("change", ev => { e.a = ev.target.value; if (changer) changer(); this.rendre(zone, e, changer); });
+    zone.querySelector(".cc-b").addEventListener("change", ev => { e.b = ev.target.value; if (changer) changer(); this.rendre(zone, e, changer); });
+  }
+};
