@@ -631,9 +631,9 @@ const Circuits = {
   MOUV_CANAL: { P: "metal", GI: "metal", E: "terre", Rt: "terre", C: "feu", IG: "feu", V: "eau", Rn: "eau", EC: "feu", TF: "feu", VB: "bois", F: "bois" },
   // couleurs des canaux, comme dans le jeu (module Circuits) : terre jaune, bois vert, feu rouge, eau bleu ; le métal (P, GI) prend la couleur de l'encre
   COULEUR_CANAL: { E: "#d9a400", Rt: "#d9a400", VB: "#2f9a3c", F: "#2f9a3c", C: "#e0261b", IG: "#e0261b", EC: "#e0261b", TF: "#e0261b", V: "#1f5fd6", Rn: "#1f5fd6" },
-  couleurCanal(code) { return this.COULEUR_CANAL[code] || "var(--ink)"; },
+  couleurCanal(code) { return this._nb ? "#000" : (this.COULEUR_CANAL[code] || "var(--ink)"); },        // _nb : dessin en noir et blanc (carnet imprimé)
   // texte posé dans le rond d'un canal : blanc sur un rond plein (yīn), couleur du canal sur un rond cerclé (yáng)
-  texteRond(code) { return this.polarite(code) === "yin" ? (this.COULEUR_CANAL[code] ? "#fff" : "var(--bg)") : this.couleurCanal(code); },
+  texteRond(code) { if (this._nb) return this.polarite(code) === "yin" ? "#fff" : "#000"; return this.polarite(code) === "yin" ? (this.COULEUR_CANAL[code] ? "#fff" : "var(--bg)") : this.couleurCanal(code); },
   // ---------- circuits suggérés dans le traitement des syndromes (« Acupuncture classique : Tài yīn / Yáng míng : … ») : reconnus et rattachés
   COUPLE_NOMS: { poumon: "p", "gros intestin": "gi", estomac: "e", rate: "rt", coeur: "c", "intestin grele": "ig", vessie: "v", reins: "rn", "enveloppe du coeur": "ec", "trois foyers": "tf", "vesicule biliaire": "vb", foie: "f" },
   cleCouple(t) {
