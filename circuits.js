@@ -413,6 +413,7 @@ const Circuits = {
     this.rendrePoints(c);
     if (!this._mouvPret) this.chargerInter().then(() => { if (this.actif === c.id && document.getElementById("circ-dessin")) this.majAssoc(c); });
     if (!(Onglets.actif || "").startsWith("circ:")) Fenetre.boutonOnglet(zone, () => Onglets.ouvrirCircuit(c.id));
+    if (typeof Comparateur !== "undefined" && !zone.querySelector(".cmp-add")) zone.prepend(Comparateur.bouton("", () => Comparateur.ajouterCircuit(c.id)));
     this.crayonsChamps(zone, c);
     this.annoterCroisements(zone);
     const ajp = document.getElementById("circ-aj-prop"); if (ajp) ajp.addEventListener("click", () => this.proposerAjouts(c));

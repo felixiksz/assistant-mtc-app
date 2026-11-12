@@ -4173,12 +4173,13 @@ const Comparateur = {
   mode: "synd",                 // "synd" | "form"
   synd: [],                     // clés "domaine/chemin"
   form: [],                     // identifiants de formules
+  circ: [],                     // identifiants de circuits
   _norm: null,
 
   init() {
     try {
       const sauve = JSON.parse(localStorage.getItem("mtc_comparer") || "null");
-      if (sauve) { this.synd = (sauve.synd || []).slice(0, this.MAX); this.form = (sauve.form || []).slice(0, this.MAX); this.mode = ["form", "fam"].includes(sauve.mode) ? sauve.mode : "synd"; }
+      if (sauve) { this.synd = (sauve.synd || []).slice(0, this.MAX); this.form = (sauve.form || []).slice(0, this.MAX); this.circ = (sauve.circ || []).slice(0, this.MAX); this.mode = ["form", "fam"].includes(sauve.mode) ? sauve.mode : "synd"; }
     } catch (e) { /* pas de sélection mémorisée */ }
     document.getElementById("cmp-mode-synd").addEventListener("click", () => this.setMode("synd"));
     document.getElementById("cmp-mode-form").addEventListener("click", () => this.setMode("form"));
@@ -4190,7 +4191,7 @@ const Comparateur = {
   },
 
   memoriser() {
-    try { localStorage.setItem("mtc_comparer", JSON.stringify({ synd: this.synd, form: this.form, mode: this.mode })); } catch (e) { /* ignoré */ }
+    try { localStorage.setItem("mtc_comparer", JSON.stringify({ synd: this.synd, form: this.form, circ: this.circ, mode: this.mode })); } catch (e) { /* ignoré */ }
   },
 
   liste() { return this.mode === "form" ? this.form : this.synd; },
@@ -4230,9 +4231,10 @@ const Comparateur = {
     this.ajouter("synd", cle);
   },
   ajouterFormule(id) { this.ajouter("form", id); },
+  ajouterCircuit(id) { this.ajouter("circ", id); },
 
   ajouter(type, cle) {
-    const l = type === "synd" ? this.synd : this.form;
+    const l = this[type];
     if (l.includes(cle)) { this.toast(type, "déjà dans le comparateur"); return; }
     if (l.length >= this.MAX) l.shift();                       // le plus ancien est remplacé : 4 au maximum
     l.push(cle);
@@ -4250,23 +4252,68 @@ const Comparateur = {
   },
 
   toast(type, texte) {
-    const n = (type === "synd" ? this.synd : this.form).length;
+    const n = (this[type] || []).length;
     const p = document.getElementById("cmp-pastille");
     if (p) { p.dataset.msg = `${texte} (${n}/${this.MAX})`; p.classList.add("msg"); clearTimeout(this._t); this._t = setTimeout(() => p.classList.remove("msg"), 1800); }
   },
 
-  // pastille flottante « Comparer (n) » : visible dès qu'au moins un élément est choisi
+  // pastille flottante « Comparer (n) » : visible partout dès qu'au moins un élément est choisi ; un clic ouvre le plateau
+  total() { return this.synd.length + this.form.length + this.circ.length; },
   pastille() {
     let p = document.getElementById("cmp-pastille");
-    const n = this.synd.length + this.form.length;
-    if (!n) { if (p) p.remove(); return; }
+    const n = this.total();
+    if (!n) { if (p) p.remove(); this.plateau(false); return; }
     if (!p) {
       p = document.createElement("button");
-      p.id = "cmp-pastille"; p.type = "button";
-      p.addEventListener("click", () => document.querySelector('.tab-btn[data-tab="comparer"]').click());
+      p.id = "cmp-pastille"; p.type = "button"; p.title = "Plateau de comparaison : ce que tu as mis de côté pour comparer";
+      p.addEventListener("click", ev => { ev.stopPropagation(); this.plateau(); });
       document.body.appendChild(p);
+      document.addEventListener("click", ev => { if (!ev.target.closest("#cmp-plateau")) this.plateau(false); });
     }
-    p.textContent = `⇄ Comparer (${this.synd.length + this.form.length})`;
+    p.textContent = `⇄ Comparer (${n})`;
+    if (document.getElementById("cmp-plateau")) this.plateau(true);
+  },
+
+  // plateau de comparaison : syndromes, formules et circuits mis de côté, par type ; « Comparer » ouvre la vue qui convient
+  NOMS: { synd: "Syndromes", form: "Formules", circ: "Circuits" },
+  libelle(type, cle) {
+    if (type === "synd") { const e = Syndromes.entries.find(x => `${x.domaine}/${x.chemin}` === cle); return e ? e.nom : cle; }
+    if (type === "form") { const f = (Formules.index || []).find(x => x.id === cle); return f ? (f.pinyin || f.id) : cle; }
+    const c = typeof Circuits !== "undefined" && (Circuits.liste || []).length ? Circuits.parId(cle) : null;
+    return c ? Circuits.nomCourt(c) : cle;
+  },
+  plateau(force) {
+    let z = document.getElementById("cmp-plateau");
+    const ouvrir = force !== undefined ? force : !z;
+    if (z) z.remove();
+    if (!ouvrir || !this.total()) return;
+    if (this.circ.length && typeof Circuits !== "undefined" && !(Circuits.liste || []).length && !this._circCharge) {
+      this._circCharge = true;
+      Circuits.ensureLoaded().then(() => { if (document.getElementById("cmp-plateau")) this.plateau(true); }).catch(() => {});
+    }
+    z = document.createElement("div");
+    z.id = "cmp-plateau"; z.setAttribute("role", "dialog"); z.setAttribute("aria-label", "Plateau de comparaison");
+    z.innerHTML = `<div class="cmp-pl-tete"><strong>Plateau de comparaison</strong><button type="button" class="cmp-pl-fermer" aria-label="Fermer">✕</button></div>` +
+      ["synd", "form", "circ"].filter(t => this[t].length).map(t => `<section><div class="cmp-pl-titre"><h4>${this.NOMS[t]} <span class="muted">(${this[t].length}/${this.MAX})</span></h4>` +
+        `<button type="button" class="edit-toggle-btn" data-go="${t}"${this[t].length < 2 ? ` disabled title="Ajoutes-en au moins deux"` : ""}>Comparer</button></div>` +
+        `<div class="cmp-pl-items">${this[t].map(k => `<span class="chosen-item">${escapeHtml(sansChinois(this.libelle(t, k)))}<button type="button" data-t="${t}" data-x="${escapeHtml(k)}" aria-label="Retirer">✕</button></span>`).join("")}</div></section>`).join("") +
+      `<p class="cmp-pl-pied"><button type="button" class="cmp-pl-vider">Tout vider</button></p>`;
+    z.addEventListener("click", ev => ev.stopPropagation());
+    document.body.appendChild(z);
+    z.querySelector(".cmp-pl-fermer").addEventListener("click", () => this.plateau(false));
+    z.querySelector(".cmp-pl-vider").addEventListener("click", () => { this.synd = []; this.form = []; this.circ = []; this.apresRetrait(); });
+    z.querySelectorAll("[data-x]").forEach(b => b.addEventListener("click", () => { const l = this[b.dataset.t], i = l.indexOf(b.dataset.x); if (i >= 0) l.splice(i, 1); this.apresRetrait(); }));
+    z.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => this.lancer(b.dataset.go)));
+  },
+  apresRetrait() {
+    this.memoriser(); this.pastille();
+    if (document.getElementById("tab-comparer").classList.contains("active") && (this.mode === "synd" || this.mode === "form")) this.rendre();
+  },
+  lancer(type) {
+    this.plateau(false);
+    if (type === "circ") { Onglets.ouvrirComparaisonCircuits(null, { etat: { ids: [...this.circ] } }); return; }
+    this.mode = type; this.memoriser();
+    document.querySelector('.tab-btn[data-tab="comparer"]').click();
   },
 
   // bouton « ⇄ Comparer » réutilisable
@@ -5982,7 +6029,8 @@ const GlobalSearch = {
       if (ok(hay)) out.push({
         group: "Formules", title: f.pinyin || f.id, sub: f.indications_syndrome || f.categorie_nom || "",
         go: () => { this.gotoTab("formules"); Formules.showDetail(f); },
-        onglet: () => Onglets.ouvrirFormule(f.id)
+        onglet: () => Onglets.ouvrirFormule(f.id),
+        comparer: () => Comparateur.ajouterFormule(f.id)
       });
     });
 
@@ -5999,7 +6047,8 @@ const GlobalSearch = {
       if (ok(hay)) out.push({
         group: "Syndromes", title: e.nom, sub: (Syndromes.domaineLabels[e.domaine] || "") + (e.sousLabel ? " · " + e.sousLabel : ""),
         go: () => { this.gotoTab("syndromes"); Syndromes.showDetail(e); },
-        onglet: () => Onglets.ouvrirSyndrome(e)
+        onglet: () => Onglets.ouvrirSyndrome(e),
+        comparer: () => Comparateur.ajouterSyndrome(e)
       });
     });
 
@@ -6091,7 +6140,8 @@ const GlobalSearch = {
     if (typeof Circuits !== "undefined" && (Circuits.liste || []).length) Circuits.liste.forEach(c => {
       if (ok(Circuits.texteRecherche(c))) out.push({
         group: "Circuits", title: Circuits.nomCourt(c), sub: c.grille.join(" · ") + ((c.mots_cles || []).length ? " — " + c.mots_cles.slice(0, 2).join(" · ") : ""),
-        go: () => Onglets.ouvrirCircuit(c.id)
+        go: () => Onglets.ouvrirCircuit(c.id),
+        comparer: () => Comparateur.ajouterCircuit(c.id)
       });
     });
     if (typeof Tung !== "undefined" && (Tung.liste || []).length) Tung.liste.forEach(f => {
@@ -6145,7 +6195,7 @@ const GlobalSearch = {
       list.slice(0, max).forEach(it => {
         const i = flat.push(it) - 1;
         html += `<li data-i="${i}"><span class="gsr-txt"><span class="gsr-title">${dsMarque(it.title, q)}</span>${it.sub ? `<span class="gsr-sub">${dsMarque(it.sub, q)}</span>` : ""}</span>` +
-          `<span class="gsr-actions">${it.onglet ? `<button type="button" data-act="onglet" title="Ouvrir dans un onglet de travail" aria-label="Ouvrir dans un onglet de travail">⧉</button>` : ""}${it.reseau ? `<button type="button" data-act="reseau" title="Ajouter au réseau de la patiente" aria-label="Ajouter au réseau de la patiente">＋</button>` : ""}</span></li>`;
+          `<span class="gsr-actions">${it.comparer ? `<button type="button" data-act="comparer" title="Mettre sur le plateau de comparaison" aria-label="Mettre sur le plateau de comparaison">⇄</button>` : ""}${it.onglet ? `<button type="button" data-act="onglet" title="Ouvrir dans un onglet de travail" aria-label="Ouvrir dans un onglet de travail">⧉</button>` : ""}${it.reseau ? `<button type="button" data-act="reseau" title="Ajouter au réseau de la patiente" aria-label="Ajouter au réseau de la patiente">＋</button>` : ""}</span></li>`;
       });
       if (list.length > max) html += `<li class="gsr-plus" data-f="${list[0].type}">Voir les ${list.length} résultats…</li>`;
       html += `</ul>`;
@@ -6155,6 +6205,7 @@ const GlobalSearch = {
     this.results.querySelectorAll("[data-f]").forEach(x => x.addEventListener("click", ev => { ev.stopPropagation(); this.filtre = x.dataset.f; this.results.scrollTop = 0; this.runSearch(); }));
     this.results.querySelectorAll("li[data-i]").forEach(li => li.addEventListener("click", ev => {
       const it = flat[+li.dataset.i], act = ev.target.closest("[data-act]");
+      if (act && act.dataset.act === "comparer") { ev.stopPropagation(); it.comparer(); return; }
       if (act && act.dataset.act === "reseau") { ev.stopPropagation(); it.reseau(); return; }      // la liste reste ouverte : on peut en ajouter plusieurs
       if (act && act.dataset.act === "onglet") it.onglet(); else it.go();
       this.close();

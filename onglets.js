@@ -185,7 +185,7 @@ const Onglets = {
     id = id || ("c" + Date.now().toString(36));
     const cle = "cmpc:" + id, etat = { ...ComparaisonCircuits.defaut(), ...(opt.etat || {}) };
     const nom = k => { const c = k && typeof Circuits !== "undefined" ? Circuits.parId(k) : null; return c ? Circuits.nomCourt(c) : ""; };
-    const titre = () => "Comparaison" + (etat.a || etat.b ? " — " + [nom(etat.a), nom(etat.b)].filter(Boolean).join(" / ") : "");
+    const titre = () => { const l = (Array.isArray(etat.ids) ? etat.ids : [etat.a, etat.b]).map(nom).filter(Boolean); return "Comparaison" + (l.length ? " — " + l.join(" / ") : ""); };
     return this.ouvrir(cle, titre(), "⇄", async zone => {
       const o = this.liste.find(x => x.id === cle);
       await ComparaisonCircuits.rendre(zone, etat, () => { if (o) { o.titre = titre(); o.desc.titre = o.titre; o.desc.etat = etat; } this.rendreBarre(); this.memoriser(); });
@@ -290,7 +290,7 @@ const Onglets = {
   async envoyer() {
     if (!this.enLigne()) return;
     const etat = this.etat();
-    etat.onglets = (etat.onglets || []).filter(d => d.kind !== "presc" && d.kind !== "cmpc");            // poids, budget, formule d'une patiente : jamais synchronisés
+    etat.onglets = (etat.onglets || []).filter(d => d.kind !== "presc");            // poids, budget, formule d'une patiente : jamais synchronisés
     try { await Store.writeJSON(this.FICHIER_SYNCHRO, etat); }
     catch (e) {
       try { await Store._ghGet(this.FICHIER_SYNCHRO).catch(() => null); await Store.writeJSON(this.FICHIER_SYNCHRO, etat); }   // un autre appareil a écrit entre-temps : on relit et on réessaie une fois
@@ -306,7 +306,7 @@ const Onglets = {
     const voulus = (d.onglets || []).map(x => ({ x, id: this.idDesc(x) })).filter(v => v.id);
     const ids = new Set(voulus.map(v => v.id));
     this._restauration = true;
-    for (const o of [...this.liste]) if (!ids.has(o.id) && !(o.desc && (o.desc.kind === "presc" || o.desc.kind === "cmpc"))) this.fermer(o.id);
+    for (const o of [...this.liste]) if (!ids.has(o.id) && !(o.desc && o.desc.kind === "presc")) this.fermer(o.id);
     for (const v of voulus) {
       const x = v.x;
       try {
@@ -315,6 +315,11 @@ const Onglets = {
         else if (x.kind === "tung") await this.ouvrirTung(x.id, { differe: true, titre: x.titre, fenetre: x.fenetre });
         else if (x.kind === "form") await this.ouvrirFormule(x.id, { differe: true, fenetre: x.fenetre });
         else if (x.kind === "circ") await this.ouvrirCircuit(x.id, { differe: true, fenetre: x.fenetre });
+        else if (x.kind === "cmpc") {                                   // comparaison de circuits : si elle a changé sur l'autre appareil, on la rouvre avec ses circuits
+          const o = this.liste.find(y => y.id === v.id);
+          if (o && JSON.stringify((o.desc || {}).etat || {}) !== JSON.stringify(x.etat || {})) this.fermer(o.id);
+          await this.ouvrirComparaisonCircuits(x.id, { differe: true, etat: x.etat, fenetre: x.fenetre });
+        }
       } catch (e) { /* fiche disparue */ }
     }
     this._restauration = false;
@@ -352,7 +357,7 @@ const Onglets = {
     let m = distant && (!local || (distant.maj || 0) > (local.maj || 0)) ? distant : local;
     this._maj = (m && m.maj) || 0;
     if (!m) { this.demarrerSynchro(); return; }
-    if (local && m !== local) m = { ...m, onglets: [...(m.onglets || []), ...(local.onglets || []).filter(d => d.kind === "presc" || d.kind === "cmpc")] };
+    if (local && m !== local) m = { ...m, onglets: [...(m.onglets || []), ...(local.onglets || []).filter(d => d.kind === "presc")] };
     this._restauration = true;
     for (const d of (m.onglets || [])) {
       try {

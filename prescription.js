@@ -98,28 +98,32 @@ const Prescription = {
 /* ============================= Comparaison de circuits =============================
    Deux circuits côte à côte : schéma, mots clés, canaux (en commun ou non), indications, actions, ajouts. Un onglet par comparaison (on peut en ouvrir plusieurs). */
 const ComparaisonCircuits = {
-  defaut() { return { a: "", b: "" }; },
+  MAX: 4,
+  defaut() { return { ids: [] }; },
   async rendre(zone, e, changer) {
     try { await Circuits.ensureLoaded(); } catch (x) { zone.innerHTML = `<p class="muted">Circuits indisponibles.</p>`; return; }
-    const liste = Circuits.liste, A = e.a ? Circuits.parId(e.a) : null, B = e.b ? Circuits.parId(e.b) : null;
-    const opts = v => `<option value="">— choisir un circuit —</option>` + liste.map(c => `<option value="${escapeHtml(c.id)}"${v === c.id ? " selected" : ""}>${escapeHtml(Circuits.nomCourt(c))} (${c.grille.join(" ")})</option>`).join("");
-    const commun = A && B ? A.grille.filter(k => B.grille.includes(k)) : [];
-    const colonne = (c, autre) => {
-      if (!c) return `<div class="cmpc-col cmpc-vide muted">Choisis un circuit.</div>`;
-      const seuls = c.grille.filter(k => !(autre && autre.grille.includes(k)));
+    if (!Array.isArray(e.ids)) e.ids = [e.a, e.b].filter(Boolean);                       // ancien format : deux circuits a et b
+    e.ids = e.ids.filter(id => Circuits.parId(id)).slice(0, this.MAX);
+    const L = e.ids.map(id => Circuits.parId(id));
+    const commun = L.length > 1 ? L[0].grille.filter(k => L.every(c => c.grille.includes(k))) : [];
+    const reste = Circuits.liste.filter(c => !e.ids.includes(c.id));
+    const maj = () => { if (changer) changer(); this.rendre(zone, e, changer); };
+    const liste2 = (t, l, n) => l && l.length ? `<h4>${t}</h4><ul>${l.slice(0, n).map(x => `<li>${escapeHtml(sansHanzi(x))}</li>`).join("")}${l.length > n ? `<li class="muted">… (+${l.length - n})</li>` : ""}</ul>` : "";
+    const colonne = c => {
+      const seuls = c.grille.filter(k => !L.some(o => o !== c && o.grille.includes(k)));
       const ajouts = (c.ajouts || []).filter(a => (a.canaux || []).length).map(a => Circuits.ajoutLigne({ canaux: a.canaux, ensemble: a.ensemble, action: "", texte: "" }, c.grille));
-      const liste2 = (t, l, n) => l && l.length ? `<h4>${t}</h4><ul>${l.slice(0, n).map(x => `<li>${escapeHtml(sansHanzi(x))}</li>`).join("")}${l.length > n ? `<li class="muted">… (+${l.length - n})</li>` : ""}</ul>` : "";
-      return `<div class="cmpc-col"><h3>${escapeHtml(Circuits.nomCourt(c))}</h3>
+      return `<div class="cmpc-col"><div class="cmpc-tete"><h3><button type="button" class="circ-lien-couple" data-circ-fiche="${escapeHtml(c.id)}" title="Ouvrir la fiche du circuit">${escapeHtml(Circuits.nomCourt(c))}</button></h3><button type="button" class="reseau-ic2" data-x="${escapeHtml(c.id)}" title="Retirer de la comparaison" aria-label="Retirer de la comparaison">✕</button></div>
         ${(c.mots_cles || []).length ? `<ul class="circ-motscles">${c.mots_cles.map(m => `<li>${escapeHtml(m)}</li>`).join("")}</ul>` : ""}
         <div class="circ-sch-dessin">${Circuits.dessin(c, { taille: 170, etiquettes: true })}</div>
-        ${autre ? `<p class="cmpc-canaux">${c.grille.map(k => `<span class="${commun.includes(k) ? "commun" : "seul"}">${Circuits.pastilleCanal(k)}</span>`).join(" ")} <span class="muted">${seuls.length ? "seuls ici : " + seuls.join(", ") : "mêmes canaux"}</span></p>` : ""}
+        ${L.length > 1 ? `<p class="cmpc-canaux">${c.grille.map(k => `<span class="${commun.includes(k) ? "commun" : "seul"}">${Circuits.pastilleCanal(k)}</span>`).join(" ")} <span class="muted">${seuls.length ? "seuls ici : " + seuls.join(", ") : ""}</span></p>` : ""}
         ${liste2("Indications", c.indications, 6)}${liste2("Actions", c.actions, 6)}${ajouts.length ? `<h4>Ajouts possibles</h4><ul>${ajouts.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : ""}</div>`;
     };
     zone.innerHTML = `<section class="cmpc"><h3>Comparaison de circuits</h3>
-      <div class="cmpc-choix"><select class="cc-a" aria-label="Premier circuit">${opts(e.a)}</select><span class="muted">contre</span><select class="cc-b" aria-label="Deuxième circuit">${opts(e.b)}</select></div>
-      ${A && B ? `<p class="cmpc-resume">${commun.length ? "Canaux en commun : " + commun.map(k => Circuits.pastilleCanal(k)).join(" ") : "Aucun canal en commun."}</p>` : ""}
-      <div class="cmpc-cols">${colonne(A, B)}${colonne(B, A)}</div></section>`;
-    zone.querySelector(".cc-a").addEventListener("change", ev => { e.a = ev.target.value; if (changer) changer(); this.rendre(zone, e, changer); });
-    zone.querySelector(".cc-b").addEventListener("change", ev => { e.b = ev.target.value; if (changer) changer(); this.rendre(zone, e, changer); });
+      <div class="cmpc-choix">${L.length < this.MAX ? `<select class="cc-plus" aria-label="Ajouter un circuit à la comparaison"><option value="">＋ Ajouter un circuit…</option>${reste.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(Circuits.nomCourt(c))} (${c.grille.join(" ")})</option>`).join("")}</select>` : `<span class="muted">${this.MAX} circuits au maximum.</span>`}</div>
+      ${L.length > 1 ? `<p class="cmpc-resume">${commun.length ? "Canaux communs à tous : " + commun.map(k => Circuits.pastilleCanal(k)).join(" ") : "Aucun canal commun à tous."}</p>` : ""}
+      <div class="cmpc-cols">${L.length ? L.map(colonne).join("") : `<div class="cmpc-col cmpc-vide muted">Ajoute au moins deux circuits.</div>`}</div></section>`;
+    const s = zone.querySelector(".cc-plus");
+    if (s) s.addEventListener("change", ev => { if (ev.target.value) { e.ids.push(ev.target.value); maj(); } });
+    zone.querySelectorAll("[data-x]").forEach(b => b.addEventListener("click", () => { e.ids = e.ids.filter(id => id !== b.dataset.x); maj(); }));
   }
 };

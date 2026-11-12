@@ -1561,3 +1561,17 @@ article.formule-detail, .vue-travail { border-radius: 12px !important; }
 #global-search-results li.gsr-plus { color: var(--muted); font-size: 0.82rem; }
 @media (min-width: 900px) { .global-search-wrap { max-width: 560px; } }
 #global-search-results { z-index: 60; }
+/* plateau de comparaison */
+body:has(#tab-comparer.active) #cmp-pastille { display: inline-block; }
+#cmp-pastille { border-radius: 999px !important; }
+#cmp-plateau { position: fixed; left: 1rem; bottom: 4rem; z-index: 91; width: min(24rem, calc(100vw - 2rem)); max-height: 70vh; overflow-y: auto; background: var(--panel); color: var(--ink); border: 2px solid var(--ink); border-radius: 14px !important; padding: 0.7rem 0.8rem; box-shadow: 4px 4px 0 var(--ink); }
+.cmp-pl-tete, .cmp-pl-titre { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.cmp-pl-fermer, .cmp-pl-vider { border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; }
+.cmp-pl-fermer:hover, .cmp-pl-vider:hover { color: var(--ink); }
+#cmp-plateau section { border-top: 1px solid var(--line); margin-top: 0.5rem; padding-top: 0.5rem; }
+#cmp-plateau h4 { margin: 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.cmp-pl-items { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem; }
+.cmp-pl-pied { margin: 0.6rem 0 0; text-align: right; font-size: 0.82rem; }
+.cmpc-tete { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.4rem; }
+@media (max-width: 700px) { #cmp-plateau { bottom: 7rem; } }
+@media print { #cmp-plateau { display: none !important; } }
