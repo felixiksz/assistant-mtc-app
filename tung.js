@@ -43,9 +43,9 @@ const Tung = {
       const blocs = [...f.blocs];
       if (a && a.champs && a.champs.length) blocs.push({ source: "perso", page: "", champs: a.champs, titre: a.source || "" });
       const canaux = a && a.canaux !== undefined ? { codes: a.canaux, statut: "toi", source: "" } : (f.canaux || { codes: [], statut: "", source: "" });
-      return { ...f, alias: [...(f.alias || []), ...((a && a.alias) || [])], blocs, canaux, origine: "base", complete: !!a };
+      return { ...f, alias: [...(f.alias || []), ...((a && a.alias) || [])], images: [...(f.images || []), ...((a && a.images) || [])], imagesPerso: (a && a.images) || [], blocs, canaux, origine: "base", complete: !!a };
     });
-    const p = (this.perso.fiches || []).map(f => ({ zh: "", trad: "", numeros: [], alias: [], membres: [], images: [], a_verifier: [], canaux: { codes: [], statut: "", source: "" }, ...f, origine: "perso" }));
+    const p = (this.perso.fiches || []).map(f => ({ zh: "", trad: "", numeros: [], alias: [], membres: [], images: [], a_verifier: [], canaux: { codes: [], statut: "", source: "" }, ...f, imagesPerso: f.images || [], origine: "perso" }));
     this.liste = [...b, ...p];
     // familles : les points cités avec leur fiche dans « membres » sont rangés sous la fiche du groupe, dans l'ordre du groupe (celui des numéros)
     this.liste.forEach(f => { f.enfants = []; });
@@ -162,9 +162,53 @@ const Tung = {
     Store.hydrateImages(z);
   },
 
-  img(f) {
+  img(f, retirable) {
     const rel = "tung/images/" + f, gh = Store.mode === "github";
-    return `<a class="tung-img" ${gh ? `data-gh-rel="${rel}" href="#"` : `href="data/${rel}"`} target="_blank" rel="noopener"><img loading="lazy" alt="Schéma" ${gh ? "" : `src="data/${rel}"`}></a>`;
+    const a = `<a class="tung-img" ${gh ? `data-gh-rel="${rel}" href="#"` : `href="data/${rel}"`} target="_blank" rel="noopener"><img loading="lazy" alt="Schéma" ${gh ? "" : `src="data/${rel}"`}></a>`;
+    return retirable ? `<span class="tung-img-wrap">${a}<button type="button" class="tung-img-x" data-img-x="${escapeHtml(f)}" title="Retirer cette image de la fiche" aria-label="Retirer cette image de la fiche">✕</button></span>` : a;
+  },
+
+  // ---------- images ajoutées à une fiche (photo, schéma) : réduites puis rangées dans tung/images/, et notées dans ton fichier personnel
+  async reduireImage(file) {
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return file;
+    try {
+      const bmp = await createImageBitmap(file), ech = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+      const cv = document.createElement("canvas"); cv.width = Math.round(bmp.width * ech); cv.height = Math.round(bmp.height * ech);
+      const cx = cv.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(bmp, 0, 0, cv.width, cv.height);
+      const blob = await new Promise(ok => cv.toBlob(ok, "image/jpeg", 0.85));
+      return blob && (ech < 1 || blob.size < file.size) ? blob : file;
+    } catch (e) { return file; }
+  },
+  imagesDe(f) { return f.origine === "perso" ? (this.perso.fiches.find(x => x.id === f.id) || {}).images || [] : ((this.perso.ajouts || {})[f.id] || {}).images || []; },
+  poserImages(f, liste) {
+    if (f.origine === "perso") { const x = this.perso.fiches.find(y => y.id === f.id); if (x) x.images = liste; return; }
+    const aj = this.perso.ajouts[f.id] = this.perso.ajouts[f.id] || { alias: [], champs: [], source: "" };
+    if (liste.length) aj.images = liste; else delete aj.images;
+    if (!liste.length && !(aj.champs || []).length && !(aj.alias || []).length && aj.canaux === undefined) delete this.perso.ajouts[f.id];
+  },
+  async ajouterImages(f, fichiers, statut) {
+    const dire = m => { if (statut) statut.textContent = m; };
+    const liste = [...this.imagesDe(f)];
+    let n = 0;
+    for (const file of fichiers) {
+      if (!/^image\//.test(file.type)) { dire("« " + file.name + " » n'est pas une image."); continue; }
+      n++; dire("Envoi de l'image " + n + " sur " + fichiers.length + "…");
+      const blob = await this.reduireImage(file);
+      const ext = blob.type === "image/jpeg" ? "jpg" : (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "png";
+      const nom = "perso_" + String(f.id).replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 40) + "_" + Date.now().toString(36) + n + "." + ext;
+      try { await Store.writeBinary("tung/images/" + nom, blob); } catch (e) { dire("Image non enregistrée : " + e.message); return false; }
+      liste.push(nom);
+    }
+    if (!n) return false;
+    this.poserImages(f, liste);
+    try { await this.ecrire(); } catch (e) { dire("Image envoyée, mais la fiche n'a pas pu être mise à jour : " + e.message); return false; }
+    return true;
+  },
+  async retirerImage(f, nom) {
+    if (!confirm("Retirer cette image de la fiche ?")) return false;
+    this.poserImages(f, this.imagesDe(f).filter(x => x !== nom));
+    try { await this.ecrire(); } catch (e) { alert("Impossible : " + e.message); return false; }
+    return true;
   },
 
   // abréviations des sources, écrites seulement quand une information ne vient pas de la source dominante du champ
@@ -217,6 +261,7 @@ const Tung = {
       (c.a_verifier.length ? `<p class="muted">À vérifier : ${escapeHtml(c.a_verifier.join(" · "))}</p>` : "") + `</details>`).join("");
     z.innerHTML = `
       <div class="circ-barre barre-flottante">
+        <button type="button" class="edit-toggle-btn" id="tung-img-add" title="Ajouter une image (photo, schéma)" aria-label="Ajouter une image">📷</button><input type="file" id="tung-img-fichier" accept="image/*" multiple hidden>
         <button type="button" class="edit-toggle-btn" id="tung-edit" title="${f.origine === "perso" ? "Modifier cette fiche" : "Compléter cette fiche"}" aria-label="${f.origine === "perso" ? "Modifier cette fiche" : "Compléter cette fiche"}">✏️</button>
         ${f.origine === "perso" ? `<button type="button" class="edit-toggle-btn" id="tung-suppr" title="Supprimer cette fiche" aria-label="Supprimer cette fiche">🗑</button>` : f.complete ? `<button type="button" class="edit-toggle-btn" id="tung-retablir" title="Retirer mes ajouts" aria-label="Retirer mes ajouts">↺</button>` : ""}
       </div>
@@ -227,7 +272,8 @@ const Tung = {
       ${f.trad ? `<p class="muted">${escapeHtml(f.trad)}</p>` : ""}
       ${(f.alias || []).length ? `<p class="muted">Aussi : ${escapeHtml(f.alias.join(" ; "))}</p>` : ""}
       ${membres ? `<div class="cat-chip-row">${membres}</div>` : ""}
-      ${(f.images || []).length ? `<div class="tung-imgs">${f.images.map(i => this.img(i)).join("")}</div>` : ""}
+      <p id="tung-img-statut" class="muted" aria-live="polite"></p>
+      ${(f.images || []).length ? `<div class="tung-imgs">${f.images.map(i => this.img(i, !lecture && (f.imagesPerso || []).includes(i))).join("")}</div>` : ""}
       ${blocs}
       ${prot.length ? `<section><h3>Dans les protocoles</h3><div class="circ-synd-liste">${prot.map(p => `<button type="button" class="edit-toggle-btn" data-tung-proto="${escapeHtml(p.id)}">${escapeHtml(p.nom)}</button>`).join(" ")}</div></section>` : ""}
       ${casHtml ? `<section><h3>Cas cliniques du livre de Tan</h3><p class="muted">Résumés traduits en français, pas le texte du livre.</p>${casHtml}</section>` : ""}
@@ -240,6 +286,11 @@ const Tung = {
     const dansOnglet = z !== document.getElementById("tung-detail");
     const ctx = () => { this._ctx = dansOnglet ? { zone: z, id: f.id } : null; };
     z.querySelector("#tung-edit").addEventListener("click", () => { ctx(); this.modifier(f); });
+    const apresImage = () => { ctx(); this.recomposer(); this.actif = f.id; this.rendreDetail(); };
+    const fi = z.querySelector("#tung-img-fichier");
+    z.querySelector("#tung-img-add").addEventListener("click", () => fi.click());
+    fi.addEventListener("change", async () => { const l = [...fi.files]; fi.value = ""; if (l.length && await this.ajouterImages(f, l, z.querySelector("#tung-img-statut"))) apresImage(); });
+    z.querySelectorAll("[data-img-x]").forEach(b => b.addEventListener("click", async () => { if (await this.retirerImage(f, b.dataset.imgX)) apresImage(); }));
     const s = z.querySelector("#tung-suppr"); if (s) s.addEventListener("click", () => { ctx(); this.supprimer(f); });
     const r = z.querySelector("#tung-retablir"); if (r) r.addEventListener("click", () => { ctx(); this.retablir(f); });
   },
@@ -387,7 +438,9 @@ const Tung = {
       const o = { alias, champs, source };
       const orig = (f.canaux || {}).statut === "toi" ? null : (f.canaux || {}).codes || [];
       if (!(orig && JSON.stringify(canaux) === JSON.stringify(orig))) o.canaux = canaux;
-      if (champs.length || alias.length || o.canaux) this.perso.ajouts[f.id] = o; else delete this.perso.ajouts[f.id];
+      const imgs = ((this.perso.ajouts || {})[f.id] || {}).images || [];
+      if (imgs.length) o.images = imgs;
+      if (champs.length || alias.length || o.canaux || imgs.length) this.perso.ajouts[f.id] = o; else delete this.perso.ajouts[f.id];
     }
     
     statut.textContent = "Enregistrement…";

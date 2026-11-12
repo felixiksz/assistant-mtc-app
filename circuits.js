@@ -135,9 +135,10 @@ const Circuits = {
       const badge = code && !dit ? `<rect x="${x - wB / 2}" y="${yB}" width="${wB}" height="9" rx="4.5" fill="${yin ? col : "var(--bg)"}" stroke="${col}" stroke-width="1.3"${ajout ? ` stroke-dasharray="2.4 1.6"` : ""}/><text x="${x}" y="${yB + 7}" text-anchor="middle" font-size="6.6" font-weight="700" ${police} fill="${this.texteRond(code)}">${escapeHtml(code)}</text>` : "";
       const y0 = y - tot / 2;
       const pil = aff.map((t, k) => {
-        const mv = this._mouv ? this._mouv.get(this.cleP(t)) : "", fond = mv ? this.COULEUR_MOUV[mv] : "var(--bg)", w = Math.max(20, t.length * 5.4 + 8);
-        return `<g${t.startsWith("+") ? "" : ` class="circ-pill" data-p="${escapeHtml(t)}"`}><title>${escapeHtml(t + (mv ? " — " + this.NOM_MOUV[mv] : ""))}</title><rect x="${x - w / 2}" y="${y0 + k * (hP + ec)}" width="${w}" height="${hP}" rx="3" fill="${fond}" stroke="#1d1d1b" stroke-width="0.8"/>` +
-          `<text x="${x}" y="${y0 + k * (hP + ec) + 8.2}" text-anchor="middle" font-size="8.8" font-weight="700" ${police} fill="${mv === "eau" ? "#FFFFFF" : "#1d1d1b"}">${escapeHtml(t)}</text></g>`;
+        const nomP = (o.libelles && o.libelles[t]) || t;                 // point Tung : son nom, pas sa clé
+        const mv = this._mouv ? this._mouv.get(this.cleP(t)) : "", fond = mv ? this.COULEUR_MOUV[mv] : "var(--bg)", w = Math.max(20, nomP.length * 5.4 + 8);
+        return `<g${t.startsWith("+") ? "" : ` class="circ-pill" data-p="${escapeHtml(t)}"`}><title>${escapeHtml(nomP + (mv ? " — " + this.NOM_MOUV[mv] : ""))}</title><rect x="${x - w / 2}" y="${y0 + k * (hP + ec)}" width="${w}" height="${hP}" rx="3" fill="${fond}" stroke="#1d1d1b" stroke-width="0.8"/>` +
+          `<text x="${x}" y="${y0 + k * (hP + ec) + 8.2}" text-anchor="middle" font-size="8.8" font-weight="700" ${police} fill="${mv === "eau" ? "#FFFFFF" : "#1d1d1b"}">${escapeHtml(nomP)}</text></g>`;
       }).join("");
       return badge + pil;
     };
@@ -392,6 +393,10 @@ const Circuits = {
     }
     zone.querySelectorAll("[data-synd]").forEach(b => b.addEventListener("click", () => { const e = this.entreeSynd(b.dataset.synd); if (e) this.ouvrirSyndrome(e); }));
     this.assocActive = null;
+    zone.querySelectorAll(".circ-assoc-table .circ-pt").forEach(e => {
+      e.addEventListener("mouseenter", () => zone.querySelectorAll('.circ-assoc-table .circ-pt[data-p="' + e.dataset.p + '"]').forEach(x => x.classList.add("h")));
+      e.addEventListener("mouseleave", () => zone.querySelectorAll(".circ-assoc-table .circ-pt.h").forEach(x => x.classList.remove("h")));
+    });
     zone.querySelectorAll(".circ-ass-ligne").forEach(r => r.addEventListener("click", ev => {
       if (ev.target.closest("[data-reseau], a")) return;
       const k = r.dataset.k, v = k[0] === "w" ? k : +k.slice(1);
@@ -489,19 +494,31 @@ const Circuits = {
   assocTableHtml(c) {
     const res = this.recettesWjy(c);
     this._wjyListe = res.liste;
+    const G = c.grille, nbCol = G.length + 3;
     const ok = lst => `<button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify(lst))}" title="Choisir ces points pour le réseau de la patiente" aria-label="Choisir ces points pour le réseau de la patiente">✓</button>`;
-    const ligne = (cle, pts, ind, wjy, lst) => `<tr class="circ-ass-ligne" data-k="${cle}"><td class="circ-ass-p">${escapeHtml(pts)}</td><td class="circ-ass-i">${escapeHtml(ind)}</td><td class="circ-ass-s">${wjy ? "WJY" : ""}</td><td class="circ-ass-ok">${ok(lst)}</td></tr>` +
-      `<tr class="circ-ass-det" data-k="${cle}" hidden><td colspan="4"></td></tr>`;
-    const siennes = (c.associations || []).map((a, i) => {
-      const pts = [...new Set(Object.values(a.points || {}).flat().map(p => this.clePoint(p)).filter(Boolean))];
-      const lst = Object.entries(a.points || {}).flatMap(([k, v]) => v.map(p => ({ point: this.clePoint(p), canal: k, raison: sansHanzi(a.tableau), source: "ton tableau" })));
-      return ligne("a" + i, pts.join(" · "), sansHanzi(a.tableau), false, lst);
-    });
-    const wjy = this.wjyGroupes(res.liste).map(g => `<tr class="circ-ass-grp"><td colspan="4">Wang Ju Yi — ${g.ajout.length ? "avec ajout : " + g.ajout.map(k => this.pastilleCanal(k)).join(" + ") : "dans les quatre canaux du circuit, sans ajout"} <span class="muted">(${g.items.length})</span></td></tr>` +
-      g.items.map(({ w, i }) => ligne("w" + i, this.nomRecette(w.r), w.r.puces[0] || w.r.groupe || "", true,
-        w.r.points.map(p => ({ point: p, raison: "Wang Ju Yi " + w.r.points.join(" – ") + (w.r.puces[0] ? " : " + w.r.puces[0] : ""), source: "Wang Ju Yi" })))).join(""));
-    const tout = [...siennes, ...wjy];
-    return tout.length ? `<table class="circ-assoc-table"><tbody>${tout.join("")}</tbody></table>` : "";
+    const siennes = (c.associations || []).map((a, i) => ({ cle: "a" + i, pts: a.points || {}, ind: this.indicationsDe(a.tableau), wjy: false,
+      lst: Object.entries(a.points || {}).flatMap(([k, v]) => v.map(p => ({ point: this.clePoint(p), canal: k, raison: sansHanzi(a.tableau), source: "ton tableau" }))) }));
+    const groupes = this.wjyGroupes(res.liste).map(g => ({ g, items: g.items.map(({ w, i }) => {
+      const o = { ...w.r.canaux }; (w.r.axe || []).forEach(pt => { const k = (pt.match(/^[A-Za-z]+/) || [""])[0].toUpperCase(); (o[k] = o[k] || []).push(pt); });
+      return { cle: "w" + i, pts: o, ind: [sansHanzi(w.r.puces[0] || w.r.groupe || "")], wjy: true,
+        lst: w.r.points.map(p => ({ point: p, raison: "Wang Ju Yi " + w.r.points.join(" – ") + (w.r.puces[0] ? " : " + w.r.puces[0] : ""), source: "Wang Ju Yi" })) };
+    }) }));
+    const toutes = [...siennes, ...groupes.flatMap(x => x.items)];
+    if (!toutes.length) return "";
+    // un point utilisé par plusieurs associations ressort (fond plein) : on voit d'un coup d'œil le noyau commun et ce qui change
+    const compte = {};
+    toutes.forEach(l => new Set(Object.values(l.pts).flat().map(p => this.clePoint(p)).filter(Boolean)).forEach(k => { compte[k] = (compte[k] || 0) + 1; }));
+    const pil = p => { const k = this.clePoint(p); return k ? `<span class="circ-pt${compte[k] > 1 ? " commun" : ""}" data-p="${escapeHtml(k)}"${compte[k] > 1 ? ` title="Dans ${compte[k]} associations"` : ""}>${escapeHtml(k)}</span>` : ""; };
+    const ligne = l => {
+      const hors = Object.keys(l.pts).filter(k => !G.includes(k) && (l.pts[k] || []).length);
+      return `<tr class="circ-ass-ligne" data-k="${l.cle}"><td class="circ-ass-i"><strong>${escapeHtml(l.ind[0] || "")}</strong>${l.ind.slice(1).map(x => `<span>${escapeHtml(x)}</span>`).join("")}</td>` +
+        G.map(k => `<td class="circ-ass-c">${(l.pts[k] || []).map(pil).join("")}</td>`).join("") +
+        `<td class="circ-ass-c circ-ass-h">${hors.map(k => `<span class="circ-ass-hk">${this.pastilleCanal(k)}${(l.pts[k] || []).map(pil).join("")}</span>`).join("")}</td>` +
+        `<td class="circ-ass-ok">${ok(l.lst)}</td></tr><tr class="circ-ass-det" data-k="${l.cle}" hidden><td colspan="${nbCol}"></td></tr>`;
+    };
+    const tete = `<thead><tr><th>Pour…</th>${G.map(k => `<th class="circ-ass-ck">${this.pastilleCanal(k)}</th>`).join("")}<th class="circ-ass-ck">Ajout, axe</th><th></th></tr></thead>`;
+    const corps = siennes.map(ligne).join("") + groupes.map(x => `<tr class="circ-ass-grp"><td colspan="${nbCol}">Wang Ju Yi — ${x.g.ajout.length ? "avec ajout : " + x.g.ajout.map(k => this.pastilleCanal(k)).join(" + ") : "dans les quatre canaux du circuit, sans ajout"} <span class="muted">(${x.items.length})</span></td></tr>` + x.items.map(ligne).join("")).join("");
+    return `<div class="circ-assoc-scroll"><table class="circ-assoc-table circ-assoc-canaux">${tete}<tbody>${corps}</tbody></table></div><p class="muted circ-ass-legende"><span class="circ-pt commun">P7</span> point présent dans plusieurs associations · <span class="circ-pt">P9</span> propre à une seule · un clic sur une ligne la montre sur le schéma, avec ses détails.</p>`;
   },
   wjyChipsHtml(c) {
     const res = this.recettesWjy(c);

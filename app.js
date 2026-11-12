@@ -112,6 +112,20 @@ const Store = {
     return DataDir.writeWholeFile(relPath, JSON.stringify(obj, null, 2));
   },
 
+  // enregistre un fichier binaire (image) dans le dossier de données : sur le disque en mode local, dans le dépôt en mode GitHub
+  async writeBinary(relPath, blob) {
+    if (this.mode !== "github") {
+      const { dir, filename } = await DataDir.getDirFor(relPath);
+      const fh = await dir.getFileHandle(filename, { create: true }), w = await fh.createWritable();
+      await w.write(blob); await w.close();
+      return;
+    }
+    const b64 = await new Promise((oui, non) => { const fr = new FileReader(); fr.onload = () => oui(String(fr.result).split(",")[1]); fr.onerror = () => non(fr.error); fr.readAsDataURL(blob); });
+    const res = await fetch(this._ghUrl(relPath), { method: "PUT", headers: this._ghHeaders(true), body: JSON.stringify({ message: "Assistant Diagnostic MTC : image " + relPath, content: b64, branch: this.gh.branch }) });
+    if (!res.ok) throw new Error("envoi de l'image refusé par GitHub (" + res.status + ")");
+    this._img.delete(relPath);
+  },
+
   async writeArrayItem(relPath, matchField, matchValue, updatedObj) {
     if (this.mode === "github") {
       let arr = [];

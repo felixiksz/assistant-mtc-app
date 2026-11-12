@@ -197,10 +197,17 @@ const Reseau = {
   schema() {
     const c = this.etat.circuit && typeof Circuits !== "undefined" ? Circuits.parId(this.etat.circuit) : null;
     if (!c) return `<p class="muted">Choisis un circuit pour voir le schéma.</p>`;
-    const pts = {}, horsGrille = {}, tung = [];
+    const pts = {}, horsGrille = {}, tung = [], libelles = {};
     this.ordonne().forEach(p => {
-      if (p.tung) { tung.push(p.point); return; }                       // les points Tung ne s'écrivent pas près des canaux : ils sont listés à la fin
       const k = p.canal;
+      if (p.tung) {
+        // un point Tung rattaché à un canal s'écrit à la place de ce canal, comme les autres points (son nom sans le numéro) ; sans canal, il est listé sous le schéma
+        if (!k || !Circuits.canaux.has(k)) { tung.push(p.point); return; }
+        const court = p.point.replace(/\s+\d[\d./]*$/, "").trim() || p.point;
+        libelles[Circuits.clePoint(p.point)] = court.length > 16 ? court.slice(0, 15) + "…" : court;
+        if (c.grille.includes(k)) (pts[k] = pts[k] || []).push(p.point); else (horsGrille[k] = horsGrille[k] || []).push(p.point);
+        return;
+      }
       if (!k) return;
       if (c.grille.includes(k)) (pts[k] = pts[k] || []).push(p.point.replace(/\s+/g, ""));
       else (horsGrille[k] = horsGrille[k] || []).push(p.point.replace(/\s+/g, ""));
@@ -212,9 +219,9 @@ const Reseau = {
     const pseudo = { grille: c.grille, figure: c.figure, ajouts: [...groupes, ...extras.filter(k => !dessines.has(k)).map(k => ({ canaux: [k], action: "" }))] };
     ["RM", "DM"].forEach(k => { if (horsGrille[k]) pts[k] = horsGrille[k]; });                 // l'axe s'écrit sous le dessin
     extras.forEach(k => { pts[k] = horsGrille[k]; });                                             // un canal ajouté devient une bulle, avec ses points dedans
-    const svg = Circuits.dessin(pseudo, { taille: 180, etiquettes: true, points: pts, ajouts: !!pseudo.ajouts.length });
+    const svg = Circuits.dessin(pseudo, { taille: 180, etiquettes: true, points: pts, libelles, ajouts: !!pseudo.ajouts.length });
     const hors = Object.entries(horsGrille).filter(([k]) => k !== "RM" && k !== "DM" && !extras.includes(k)).map(([k, l]) => `<span class="sx-code">${escapeHtml(k)}</span> ${escapeHtml(l.join(", "))}`).join(" · ");
-    return `<div class="reseau-schema">${svg}</div>` + (hors ? `<p class="muted reseau-hors">Hors des quatre canaux : ${hors}</p>` : "") + (tung.length ? `<p class="reseau-hors reseau-tung"><strong>Points Tung</strong><br>${tung.map(escapeHtml).join("<br>")}</p>` : "");
+    return `<div class="reseau-schema">${svg}</div>` + (hors ? `<p class="muted reseau-hors">Hors des quatre canaux : ${hors}</p>` : "") + (tung.length ? `<p class="reseau-hors reseau-tung"><strong>Points Tung sans canal</strong><br>${tung.map(escapeHtml).join("<br>")}</p>` : "");
   },
 
   vue: "reseau",          // onglet de la fenêtre : « reseau » (en cours) ou « archives » (enregistrés)

@@ -1627,3 +1627,32 @@ body:has(#tab-comparer.active) #cmp-pastille { display: inline-block; }
   #global-search-results { left: 1rem; right: 1rem; top: calc(100% - 0.3rem); }
 }
 #global-search-results .gsr-sub { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* grille de comparaison : défile horizontalement dans son cadre, la colonne des canaux reste visible */
+.circ-grille-scroll, .circ-assoc-scroll { overflow-x: auto; max-width: 100%; }
+.circ-grille td.circ-g-canal, .circ-grille th.circ-g-vide { position: sticky; left: 0; z-index: 1; background: var(--panel); }
+/* tableau des associations : une ligne par indication, une colonne par canal */
+.circ-assoc-canaux { table-layout: fixed; min-width: 34rem; }
+.circ-assoc-canaux th { text-align: left; padding: 0.3rem 0.4rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; background: var(--panel) !important; color: var(--ink) !important; border-bottom: 2px solid var(--ink); position: sticky; top: 0; }
+.circ-assoc-canaux th:first-child { width: 32%; }
+.circ-assoc-canaux th:last-child { width: 2.4rem; }
+.circ-assoc-canaux th.circ-ass-ck { text-align: center; }
+.circ-assoc-canaux th .circ-pastille { min-width: 1.7rem; height: 1.7rem; font-size: 0.72rem; }
+.circ-assoc-canaux td { border-top: 1px solid var(--line); padding: 0.45rem 0.4rem; vertical-align: middle; }
+.circ-assoc-canaux td.circ-ass-c { text-align: center; border-left: 1px dotted var(--line); }
+.circ-assoc-canaux .circ-ass-i { width: auto; line-height: 1.3; }
+.circ-assoc-canaux .circ-ass-i strong { display: block; font-size: 0.95rem; }
+.circ-assoc-canaux .circ-ass-i span { display: block; font-size: 0.8rem; color: var(--muted); }
+.circ-assoc-canaux .circ-pt, .circ-ass-legende .circ-pt { font-size: 0.92rem; padding: 0.05rem 0.45rem; margin: 0.1rem; border: 1.5px solid var(--ink); border-radius: 999px !important; background: var(--bg); color: var(--ink); font-weight: 600; }
+.circ-assoc-canaux .circ-pt.commun, .circ-ass-legende .circ-pt.commun { background: var(--ink); color: var(--bg); }
+.circ-assoc-canaux .circ-pt.h { outline: 3px solid var(--accent); outline-offset: 1px; }
+.circ-ass-hk { display: inline-flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.15rem; margin: 0.1rem; max-width: 100%; }
+.circ-ass-hk .circ-pastille { min-width: 1.3rem; height: 1.3rem; font-size: 0.6rem; }
+.circ-ass-legende { font-size: 0.78rem; margin: 0.3rem 0 0; }
+.circ-assoc-canaux .circ-ass-ligne.actif { font-weight: inherit; }
+.circ-assoc-canaux .circ-ass-ligne.actif > td { background: var(--accent-soft, rgba(0,0,0,.08)); }
+/* images ajoutées aux fiches Tung */
+.tung-img-wrap { position: relative; display: inline-block; }
+.tung-img-x { position: absolute; top: 0.25rem; right: 0.25rem; width: 1.7rem; height: 1.7rem; border: 1.5px solid var(--ink); background: var(--bg); color: var(--ink); cursor: pointer; border-radius: 999px !important; font: inherit; line-height: 1; }
+#tung-img-statut:empty { display: none; }
+/* un tableau large défile dans son cadre au lieu d'élargir la fiche (et de passer sous le panneau de droite) */
+.formules-layout > *, .circ-t2 > *, .circ-onglet { min-width: 0; }
