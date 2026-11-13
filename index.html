@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&family=Noto+Serif:wght@700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=173">
+<link rel="stylesheet" href="style.css?v=176">
 <script src="theme.js?v=5"></script>
 </head>
 <body>
@@ -401,6 +401,8 @@
         <div class="sidebar-header-row">
           <input type="search" id="tung-search" placeholder="Rechercher : point, numéro, indication...">
           <button type="button" id="tung-nouveau" class="edit-toggle-btn" title="Créer une fiche (ou un protocole, dans la vue Protocoles)">+ Nouveau</button>
+          <button type="button" id="tung-dossier" class="edit-toggle-btn" title="Choisir un dossier d'images de localisation : chaque image est rangée dans la fiche du point dont elle porte le nom (fichier ou sous-dossier)" aria-label="Importer un dossier d'images">📁 Images</button>
+          <input type="file" id="tung-dossier-fichiers" webkitdirectory multiple hidden>
         </div>
         <div id="tung-vues" class="cat-chip-row" aria-label="Vue"></div>
         <div id="tung-zones" class="cat-chip-row" aria-label="Filtrer par zone"></div>
@@ -489,12 +491,12 @@
 
 </main>
 
-<script src="app.js?v=148"></script>
-<script src="circuits.js?v=105"></script>
-<script src="tung.js?v=17"></script>
+<script src="app.js?v=152"></script>
+<script src="circuits.js?v=107"></script>
+<script src="tung.js?v=19"></script>
 <script src="prescription.js?v=3"></script>
 <script src="onglets.js?v=28"></script>
-<script src="reseau.js?v=18"></script>
+<script src="reseau.js?v=19"></script>
 <script src="carnet.js?v=14"></script>
 </body>
 </html>

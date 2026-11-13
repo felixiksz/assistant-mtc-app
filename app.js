@@ -2410,6 +2410,75 @@ function dsMarque(texte, q) {
   return html + escapeHtml(chars.slice(i).join(""));
 }
 
+// plusieurs mots : chacun est surligné en fluo (accents et casse ignorés)
+function dsMarqueMots(texte, mots) {
+  const m = (mots || []).map(x => dsNorm(x)).filter(Boolean);
+  if (!m.length) return escapeHtml(texte);
+  const chars = Array.from(texte), nt = Array.from(dsNorm(texte));
+  if (chars.length !== nt.length) return escapeHtml(texte);
+  const nts = nt.join(""), marque = new Array(chars.length).fill(false);
+  m.forEach(w => { let j, i = 0; while ((j = nts.indexOf(w, i)) >= 0) { for (let k = j; k < j + w.length; k++) marque[k] = true; i = j + w.length; } });
+  let html = "", k = 0;
+  while (k < chars.length) {
+    let e = k; while (e < chars.length && marque[e] === marque[k]) e++;
+    const s = escapeHtml(chars.slice(k, e).join(""));
+    html += marque[k] ? `<mark class="surlignage">${s}</mark>` : s;
+    k = e;
+  }
+  return html;
+}
+// extrait du texte autour du premier mot trouvé (le champ qui contient le plus de mots est choisi)
+function dsExtrait(champs, mots, avant = 60, apres = 130, titre = "") {
+  const nt = dsNorm(String(titre || "")).trim();
+  const m = (mots || []).map(x => dsNorm(x)).filter(Boolean);
+  let meilleur = null;
+  (champs || []).forEach(c => {
+    let t = String(c == null ? "" : c).replace(/\S*_\S*/g, " ").replace(/\s+/g, " ").trim();      // sans les identifiants (froid_humidite…)
+    if (nt.length > 3) for (let g = 0; g < 4; g++) { const p = dsNorm(t).indexOf(nt); if (p < 0 || p > 300) break; t = (t.slice(0, p) + " " + t.slice(p + nt.length)).replace(/\s+/g, " ").trim(); }      // le titre de la fiche n'est pas un contexte
+    if (!t) return;
+    const n = dsNorm(t); let nb = 0, idx = -1;
+    m.forEach(w => { const j = n.indexOf(w); if (j >= 0) { nb++; if (idx < 0 || j < idx) idx = j; } });
+    if (nb && (!meilleur || nb > meilleur.nb)) meilleur = { t, idx, nb };
+  });
+  if (!meilleur) return "";
+  const { t, idx } = meilleur;
+  let d = Math.max(0, idx - avant), f = Math.min(t.length, idx + apres);
+  if (d > 0) { const e = t.indexOf(" ", d); if (e >= 0 && e < idx) d = e + 1; }
+  if (f < t.length) { const e = t.lastIndexOf(" ", f); if (e > idx) f = e; }
+  return (d > 0 ? "… " : "") + t.slice(d, f).trim() + (f < t.length ? " …" : "");
+}
+// surligne les mots cherchés dans la fiche qui vient de s'ouvrir (et la fait défiler jusqu'au premier)
+function dsSurlignerOuvert(mots, essai = 0) {
+  const m = (mots || []).map(x => dsNorm(x)).filter(Boolean);
+  if (!m.length) return;
+  const actif = typeof Onglets !== "undefined" && Onglets.actif ? Onglets.liste.find(o => o.id === Onglets.actif) : null;
+  const racine = actif ? actif.zone : document.querySelector(".tab-panel.active");
+  if (!racine) return;
+  racine.querySelectorAll("mark.gsr-fluo").forEach(x => { const p = x.parentNode; p.replaceChild(document.createTextNode(x.textContent), x); p.normalize(); });
+  const SAUTE = "mark, script, style, textarea, input, select, svg, aside, .formules-sidebar, .gsr-filtres, #global-search-results, #reseau-fenetre, #cmp-barre, #cmp-plateau, .menu-onglets";
+  const noeuds = [], tw = document.createTreeWalker(racine, NodeFilter.SHOW_TEXT);
+  for (let n = tw.nextNode(); n; n = tw.nextNode()) { if (n.nodeValue.trim() && !(n.parentElement && n.parentElement.closest(SAUTE))) noeuds.push(n); }
+  let premier = null;
+  noeuds.forEach(n => {
+    const txt = n.nodeValue, nt = dsNorm(txt);
+    if (Array.from(txt).length !== Array.from(nt).length) return;
+    const plages = [];
+    m.forEach(w => { let j, i = 0; while ((j = nt.indexOf(w, i)) >= 0) { plages.push([j, j + w.length]); i = j + w.length; } });
+    if (!plages.length) return;
+    plages.sort((x, y) => x[0] - y[0]);
+    const fus = []; plages.forEach(p => { const l = fus[fus.length - 1]; if (l && p[0] <= l[1]) l[1] = Math.max(l[1], p[1]); else fus.push([...p]); });
+    const frag = document.createDocumentFragment(); let i = 0;
+    fus.forEach(([d, f]) => {
+      if (d > i) frag.appendChild(document.createTextNode(txt.slice(i, d)));
+      const mk = document.createElement("mark"); mk.className = "surlignage gsr-fluo"; mk.textContent = txt.slice(d, f); frag.appendChild(mk); if (!premier) premier = mk; i = f;
+    });
+    if (i < txt.length) frag.appendChild(document.createTextNode(txt.slice(i)));
+    n.parentNode.replaceChild(frag, n);
+  });
+  if (premier) premier.scrollIntoView({ block: "center", behavior: "auto" });
+  else if (essai < 5) setTimeout(() => dsSurlignerOuvert(mots, essai + 1), 700);          // la fiche se charge encore
+}
+
 function dsEnGras(sign, cat, q) {
   const def = DS_CATEGORIES.find(c => c[0] === cat);
   if (!def || DS_CATEGORIES.filter(([, re]) => re.test(sign)).length < 2) return dsMarque(sign, q);
@@ -6066,7 +6135,7 @@ const GlobalSearch = {
     (Formules.index || []).forEach(f => {
       const hay = [f.pinyin, f.nom_fr, f.indications_syndrome, f.categorie_nom].filter(Boolean).join(" ");
       if (ok(hay)) out.push({
-        group: "Formules", title: f.pinyin || f.id, sub: f.indications_syndrome || f.categorie_nom || "",
+        group: "Formules", title: f.pinyin || f.id, sub: f.indications_syndrome || f.categorie_nom || "", champs: () => [f.indications_syndrome, f.nom_fr, f.categorie_nom],
         go: () => { this.gotoTab("formules"); Formules.showDetail(f); },
         onglet: () => Onglets.ouvrirFormule(f.id),
         comparer: () => Comparateur.ajouterFormule(f.id),
@@ -6077,7 +6146,7 @@ const GlobalSearch = {
     (Psy.entries || []).forEach(e => {
       const hay = [e.nom, e.categorie_source, e.resume_court, e._searchText].filter(Boolean).join(" ");
       if (ok(hay)) out.push({
-        group: "Principes Taoïstes", title: e.nom, sub: e.kind === "niveau" ? "Farrell — Niveau de latence" : e.kind === "vaisseau" ? "Farrell — Vaisseau / confluence" : e.kind === "yuen" ? "Jeffrey Yuen — " + (e.categorie_source || "") : "Sterman — " + (e.categorie_source || ""),
+        group: "Principes Taoïstes", champs: () => [e.resume_court, e._searchText], title: e.nom, sub: e.kind === "niveau" ? "Farrell — Niveau de latence" : e.kind === "vaisseau" ? "Farrell — Vaisseau / confluence" : e.kind === "yuen" ? "Jeffrey Yuen — " + (e.categorie_source || "") : "Sterman — " + (e.categorie_source || ""),
         go: () => { this.gotoTab("psy"); Psy.showDetail(e); }
       });
     });
@@ -6085,7 +6154,7 @@ const GlobalSearch = {
     (Syndromes.entries || []).forEach(e => {
       const hay = [e.nom, e.sousLabel, e._searchText].filter(Boolean).join(" ");
       if (ok(hay)) out.push({
-        group: "Syndromes", title: e.nom, sub: (Syndromes.domaineLabels[e.domaine] || "") + (e.sousLabel ? " · " + e.sousLabel : ""),
+        group: "Syndromes", champs: () => [e._searchText, e.sousLabel], title: e.nom, sub: (Syndromes.domaineLabels[e.domaine] || "") + (e.sousLabel ? " · " + e.sousLabel : ""),
         go: () => { this.gotoTab("syndromes"); Syndromes.showDetail(e); },
         onglet: () => Onglets.ouvrirSyndrome(e),
         comparer: () => Comparateur.ajouterSyndrome(e),
@@ -6096,7 +6165,7 @@ const GlobalSearch = {
     (CasPratique.cas || []).forEach(c => {
       const hay = [c.titre_original, c.resume_court, c._searchText].filter(Boolean).join(" ");
       if (ok(hay)) out.push({
-        group: "Exemples de cas cliniques", title: c.titre_original || c.id, sub: CasPratique.sources[c.source_id] || "",
+        group: "Exemples de cas cliniques", champs: () => [c.resume_court, c._searchText], title: c.titre_original || c.id, sub: CasPratique.sources[c.source_id] || "",
         go: () => { this.gotoTab("cas-pratique"); CasPratique.showDetail(c); }
       });
     });
@@ -6104,7 +6173,7 @@ const GlobalSearch = {
     (Points.entries || []).forEach(e => {
       const hay = [e.id, e.data.pinyin, e.data.nom_fr, e._searchText].filter(Boolean).join(" ");
       if (ok(hay)) out.push({
-        group: "Points", title: e.id + (e.data.pinyin ? " — " + e.data.pinyin : ""), sub: e.canalNom,
+        group: "Points", champs: () => [e._searchText, e.data.nom_fr], title: e.id + (e.data.pinyin ? " — " + e.data.pinyin : ""), sub: e.canalNom,
         onglet: () => Onglets.ouvrirPoint(e.id),
         reseau: () => Reseau.ajouter({ point: e.id, source: "recherche" }),
         go: () => {
@@ -6119,7 +6188,7 @@ const GlobalSearch = {
     ((window.TdahData && window.TdahData.types) || []).forEach(t => {
       const hay = [t.nom, t.mecanisme, t.approche, ...(t.signes_cles || [])].filter(Boolean).join(" ");
       if (ok(hay)) out.push({
-        group: "TDAH", title: t.nom, sub: t.approche || "",
+        group: "TDAH", champs: () => [t.mecanisme, t.approche, ...(t.signes_cles || [])], title: t.nom, sub: t.approche || "",
         go: () => {
           this.gotoTab("tableaux-psy");
           document.querySelector('#tableaux-psy-switch .cat-chip[data-subtab="tdah"]').click();
@@ -6180,7 +6249,7 @@ const GlobalSearch = {
 
     if (typeof Circuits !== "undefined" && (Circuits.liste || []).length) Circuits.liste.forEach(c => {
       if (ok(Circuits.texteRecherche(c))) out.push({
-        group: "Circuits", title: Circuits.nomCourt(c), sub: c.grille.join(" · ") + ((c.mots_cles || []).length ? " — " + c.mots_cles.slice(0, 2).join(" · ") : ""),
+        group: "Circuits", champs: () => [...(c.mots_cles || []), ...(c.indications || []), ...(c.actions || []), ...(c.alias || []), ...(c.associations || []).map(x => x.tableau)], title: Circuits.nomCourt(c), sub: c.grille.join(" · ") + ((c.mots_cles || []).length ? " — " + c.mots_cles.slice(0, 2).join(" · ") : ""),
         go: () => Onglets.ouvrirCircuit(c.id),
         comparer: () => Comparateur.ajouterCircuit(c.id),
         reseau: () => Reseau.choisirCircuit(c.id)
@@ -6189,7 +6258,7 @@ const GlobalSearch = {
     if (typeof Tung !== "undefined" && (Tung.liste || []).length) Tung.liste.forEach(f => {
       if (f._rech === undefined) f._rech = Tung.texteRecherche(f);
       if (ok(f._rech)) out.push({
-        group: "Points Tung", title: f.nom + ((f.numeros || []).length ? " " + f.numeros.join("/") : ""), sub: [((f.canaux || {}).codes || []).join("+"), sansHanzi(Tung.action(f) || "")].filter(Boolean).join(" — "),
+        group: "Points Tung", champs: () => f.blocs.flatMap(b => b.champs.map(x => [x.k, ...(Array.isArray(x.v) ? x.v : [x.v])].join(" "))), title: f.nom + ((f.numeros || []).length ? " " + f.numeros.join("/") : ""), sub: [((f.canaux || {}).codes || []).join("+"), sansHanzi(Tung.action(f) || "")].filter(Boolean).join(" — "),
         go: () => Onglets.ouvrirTung(f.id),
         reseau: () => Reseau.ajouterTung(f)
       });
@@ -6217,7 +6286,7 @@ const GlobalSearch = {
   },
 
   render(items) {
-    const q = this.input.value.trim();
+    const q = this.input.value.trim(), mots = normalizeSearch(q).split(" ").filter(Boolean);
     if (!q) { this.results.innerHTML = ""; this.results.classList.remove("open"); return; }
     if (!items.length) { this.results.innerHTML = `<p class="gsr-empty">Aucun résultat pour « ${escapeHtml(q)} ».</p>`; this.results.classList.add("open"); return; }
     const nb = {}; items.forEach(it => { nb[it.type] = (nb[it.type] || 0) + 1; });
@@ -6236,7 +6305,8 @@ const GlobalSearch = {
       html += `<div class="gsr-groupe"><div class="gsr-group-label">${escapeHtml(group)} (${list.length})</div><ul>`;
       list.slice(0, max).forEach(it => {
         const i = flat.push(it) - 1;
-        html += `<li data-i="${i}"><span class="gsr-txt"><span class="gsr-title">${dsMarque(it.title, q)}</span>${it.sub ? `<span class="gsr-sub">${dsMarque(it.sub, q)}</span>` : ""}</span>` +
+        const ctx = it.champs ? dsExtrait(it.champs(), mots, 60, 130, it.title) : "";
+        html += `<li data-i="${i}"><span class="gsr-txt"><span class="gsr-title">${dsMarqueMots(it.title, mots)}</span>${it.sub ? `<span class="gsr-sub">${dsMarqueMots(it.sub, mots)}</span>` : ""}${ctx ? `<span class="gsr-ctx">${dsMarqueMots(ctx, mots)}</span>` : ""}</span>` +
           `<span class="gsr-actions">${it.comparer ? `<button type="button" data-act="comparer" title="Mettre sur le plateau de comparaison" aria-label="Mettre sur le plateau de comparaison">⇄</button>` : ""}${it.onglet ? `<button type="button" data-act="onglet" title="Ouvrir dans un onglet de travail" aria-label="Ouvrir dans un onglet de travail">⧉</button>` : ""}${it.reseau ? `<button type="button" data-act="reseau" title="Ajouter à la consultation en cours" aria-label="Ajouter à la consultation en cours">＋</button>` : ""}</span></li>`;
       });
       if (list.length > max) html += `<li class="gsr-plus" data-f="${list[0].type}">Voir les ${list.length} résultats…</li>`;
@@ -6253,6 +6323,7 @@ const GlobalSearch = {
       if (act && act.dataset.act === "onglet") it.onglet(); else it.go();
       this.close();
       this.input.value = "";
+      setTimeout(() => dsSurlignerOuvert(mots), 450);
     }));
   }
 };

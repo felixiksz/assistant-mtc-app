@@ -12,6 +12,8 @@ const Reseau = {
   CLE_ETAT: "reseau_patiente_v1",
   CLE_ARCHIVES: "reseau_archives_v1",
   CLE_FENETRE: "reseau_fenetre_v1",
+  CLE_SUPPR: "reseau_supprimes_v1",
+  CHEMIN_SYNCHRO: "reseaux_patientes.json",         // dans ton dépôt de données privé ; seulement si tu actives la synchronisation
   etat: { patiente: "", circuit: null, verrou: false, points: [] },
   archives: [],
   hist: [], futur: [],                 // annuler / rétablir (en mémoire seulement)
@@ -20,7 +22,45 @@ const Reseau = {
   // ---------- mémoire locale
   lire(cle, defaut) { try { const v = JSON.parse(localStorage.getItem(cle) || "null"); return v == null ? defaut : v; } catch (e) { return defaut; } },
   ecrire(cle, v) { try { localStorage.setItem(cle, JSON.stringify(v)); } catch (e) { /* stockage indisponible */ } },
-  sauver() { this.etat.maj = Date.now(); this.ecrire(this.CLE_ETAT, this.etat); this.majLanceur(); },
+  sauver() { this.etat.maj = Date.now(); this.ecrire(this.CLE_ETAT, this.etat); this.majLanceur(); this.planifierSynchro(); },
+  syncPossible() { return typeof Store !== "undefined" && Store.mode === "github"; },
+  syncActive() { return !!this.fenetre.synchro && this.syncPossible(); },
+  planifierSynchro() { if (!this.syncActive()) return; clearTimeout(this._ts); this._ts = setTimeout(() => this.synchroniser(), 4000); },
+  async synchroniser(manuel) {
+    if (!this.syncActive() || this._enSynchro) return;
+    this._enSynchro = true;
+    const avis = t => { if (manuel) this.avertir(t); };
+    try {
+      let d = null; try { d = await Store.readJSON(this.CHEMIN_SYNCHRO); } catch (e) { d = null; }
+      // consultation en cours : la plus récente l'emporte ; l'autre est gardée dans les enregistrées pour ne rien perdre
+      let etat = this.etat, adopte = false;
+      if (d && d.etat && d.appareil !== (typeof Onglets !== "undefined" ? Onglets.appareilId() : "") && (d.etat.maj || 0) > (this.etat.maj || 0)) {
+        if (this.aContenu() && !this.identique(this.etat, d.etat)) this.archiver();
+        etat = { patiente: "", circuit: null, verrou: false, points: [], diagnostic: [], formules: [], ...d.etat }; adopte = true;
+      }
+      const tomb = { ...((d && d.supprimes) || {}), ...this.lire(this.CLE_SUPPR, {}) };
+      // réseaux enregistrés : réunis par identifiant, le plus récent l'emporte, les suppressions sont respectées
+      const m = new Map();
+      [...((d && d.archives) || []), ...this.archives].forEach(a => { const v = m.get(a.id); if (!v || (a.maj || 0) > (v.maj || 0)) m.set(a.id, a); });
+      const archives = [...m.values()].filter(a => !(tomb[a.id] && tomb[a.id] >= (a.maj || 0))).sort((a, b) => (b.maj || 0) - (a.maj || 0)).slice(0, 50);
+      const nouvelles = JSON.stringify(archives.map(a => [a.id, a.maj]));
+      this.archives = archives; this.ecrire(this.CLE_ARCHIVES, archives);
+      if (adopte) { this.etat = etat; this.hist = []; this.futur = []; this.ecrire(this.CLE_ETAT, this.etat); this.rendre(); this.majLanceur(); }
+      const contenu = { maj: Date.now(), appareil: typeof Onglets !== "undefined" ? Onglets.appareilId() : "", etat: this.etat, archives: this.archives, supprimes: tomb };
+      if (adopte || !d || JSON.stringify([d.etat, (d.archives || []).map(a => [a.id, a.maj])]) !== JSON.stringify([this.etat, JSON.parse(nouvelles)])) {
+        try { await Store.writeJSON(this.CHEMIN_SYNCHRO, contenu); }
+        catch (e) { try { await Store._ghGet(this.CHEMIN_SYNCHRO).catch(() => null); await Store.writeJSON(this.CHEMIN_SYNCHRO, contenu); } catch (e2) { avis("Synchronisation impossible : " + e2.message); return; } }
+      }
+      avis("Synchronisé avec tes autres appareils.");
+      if (this.vue === "archives" || manuel) this.rendre();
+    } catch (e) { avis("Synchronisation impossible : " + e.message); }
+    finally { this._enSynchro = false; }
+  },
+  htmlSynchro() {
+    if (!this.syncPossible()) return `<p class="muted reseau-confid">Gardée uniquement dans cet appareil. La synchronisation entre appareils demande le mode GitHub (⚙).</p>`;
+    return `<label class="reseau-sync"><input type="checkbox" id="reseau-synchro"${this.fenetre.synchro ? " checked" : ""}> Synchroniser les consultations entre mes appareils</label>` +
+      `<p class="muted reseau-confid">${this.fenetre.synchro ? "Écrites dans ton dépôt de données privé (fichier reseaux_patientes.json) : n'y mets que des initiales ou un repère." : "Pour l'instant, gardées uniquement dans cet appareil. Activée, elles sont écrites dans ton dépôt de données privé : n'y mets que des initiales ou un repère."}${this.fenetre.synchro ? ` <button type="button" class="edit-toggle-btn" id="reseau-sync-now">Synchroniser maintenant</button>` : ""}</p>`;
+  },
 
   snap() { this.hist.push(JSON.stringify(this.etat)); if (this.hist.length > 60) this.hist.shift(); this.futur = []; },
   annuler() { if (!this.hist.length) return; this.futur.push(JSON.stringify(this.etat)); this.etat = JSON.parse(this.hist.pop()); this.sauver(); this.rendre(); },
@@ -37,6 +77,11 @@ const Reseau = {
     this.snap();
     nouveaux.forEach(x => this.etat.points.push({ id: "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), point: String(x.point).replace(/\s+/g, ""), canal: x.canal || this.canalDe(x.point), cote: "", raison: x.raison, source: x.source, tung: false }));
     this.sauver(); this.rendre(); this.avertir(nouveaux.length + " point(s) favori(s) ajouté(s).");
+  },
+  // « p7 », « rn 3 » -> « P7 », « Rn3 » (code du canal bien écrit)
+  nomPoint(p) {
+    const s = String(p || "").replace(/\s+/g, ""), m = s.match(/^([A-Za-z]{1,3})(\d+)$/);
+    return m ? (this.canalDe(s) || m[1].toUpperCase()) + m[2] : s;
   },
   cleP(s) { return String(s || "").toUpperCase().replace(/[\s.\-]/g, ""); },
   ALIAS: { SI: "IG", LI: "GI", SP: "RT", UB: "V", BL: "V", KI: "RN", LU: "P", HT: "C", ST: "E", GB: "VB", LR: "F", LV: "F", CV: "RM", GV: "DM", PC: "EC", SJ: "TF" },
@@ -79,7 +124,7 @@ const Reseau = {
     if (deja) { this.ouvrir(); this.avertir(nom + " est déjà dans le réseau."); this.surligner(deja.id); return; }
     const id = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     this.snap();
-    this.etat.points.push({ id, point: nom, canal: p.canal || (p.tung ? "" : this.canalDe(nom)), cote: "", raison: p.raison || "", source: p.source || "", tung: !!p.tung });
+    this.etat.points.push({ id, point: nom, canal: p.canal || (p.tung ? "" : this.canalDe(nom)), cote: "", raison: p.raison || "", source: p.source || "", tung: !!p.tung, tungId: p.tungId || "" });
     this.sauver();
     this.ouvrir();
     this.surligner(id);
@@ -147,10 +192,16 @@ const Reseau = {
     return Tung.liste.map(f => ({ f, s: sc(f) })).filter(x => x.s < 9).sort((a, b) => a.s - b.s || a.f.nom.localeCompare(b.f.nom, "fr")).slice(0, 8).map(x => x.f);
   },
   ajouterTung(f) {
-    this.ajouter({ point: this.nomTung(f), canal: ((f.canaux || {}).codes || [])[0] || "", raison: typeof Tung.action === "function" ? sansHanzi(Tung.action(f)) : "", source: "point Tung", tung: true });
+    this.ajouter({ point: this.nomTung(f), canal: ((f.canaux || {}).codes || [])[0] || "", raison: typeof Tung.action === "function" ? sansHanzi(Tung.action(f)) : "", source: "point Tung", tung: true, tungId: f.id });
   },
   retirer(id) { this.snap(); this.etat.points = this.etat.points.filter(x => x.id !== id); this.sauver(); this.rendre(); },
   maj(id, champs) { const x = this.etat.points.find(y => y.id === id); if (x) { Object.assign(x, champs); this.sauver(); } },
+  ouvrirFiche(p) {
+    if (p.tung) {
+      const f = (p.tungId && Tung.parId && Tung.parId(p.tungId)) || (Tung.liste || []).find(x => String(p.point).startsWith(x.nom));
+      if (f) Onglets.ouvrirTung(f.id);
+    } else Onglets.ouvrirPoint(p.point);
+  },
   surligner(id) { setTimeout(() => { const l = document.querySelector('#reseau-fenetre [data-id="' + id + '"]'); if (l) { l.classList.add("reseau-nouveau"); l.scrollIntoView({ block: "nearest" }); setTimeout(() => l.classList.remove("reseau-nouveau"), 1600); } }, 60); },
   avertir(t) { const a = document.getElementById("reseau-avis"); if (a) { a.textContent = t; setTimeout(() => { if (a.textContent === t) a.textContent = ""; }, 3500); } },
 
@@ -209,8 +260,8 @@ const Reseau = {
         return;
       }
       if (!k) return;
-      if (c.grille.includes(k)) (pts[k] = pts[k] || []).push(p.point.replace(/\s+/g, ""));
-      else (horsGrille[k] = horsGrille[k] || []).push(p.point.replace(/\s+/g, ""));
+      if (c.grille.includes(k)) (pts[k] = pts[k] || []).push(this.nomPoint(p.point));
+      else (horsGrille[k] = horsGrille[k] || []).push(this.nomPoint(p.point));
     });
     const extras = Object.keys(horsGrille).filter(k => Circuits.canaux.has(k));
     // tous les ajouts possibles du circuit sont dessinés (rond pointillé vide s'ils n'ont pas de point), plus les canaux hors circuit qui portent des points
@@ -219,7 +270,7 @@ const Reseau = {
     const pseudo = { grille: c.grille, figure: c.figure, ajouts: [...groupes, ...extras.filter(k => !dessines.has(k)).map(k => ({ canaux: [k], action: "" }))] };
     ["RM", "DM"].forEach(k => { if (horsGrille[k]) pts[k] = horsGrille[k]; });                 // l'axe s'écrit sous le dessin
     extras.forEach(k => { pts[k] = horsGrille[k]; });                                             // un canal ajouté devient une bulle, avec ses points dedans
-    const svg = Circuits.dessin(pseudo, { taille: 180, etiquettes: true, points: pts, libelles, ajouts: !!pseudo.ajouts.length });
+    const svg = Circuits.dessin(pseudo, { taille: 200, etiquettes: true, points: pts, libelles, ajouts: !!pseudo.ajouts.length, gros: true });
     const hors = Object.entries(horsGrille).filter(([k]) => k !== "RM" && k !== "DM" && !extras.includes(k)).map(([k, l]) => `<span class="sx-code">${escapeHtml(k)}</span> ${escapeHtml(l.join(", "))}`).join(" · ");
     return `<div class="reseau-schema">${svg}</div>` + (hors ? `<p class="muted reseau-hors">Hors des quatre canaux : ${hors}</p>` : "") + (tung.length ? `<p class="reseau-hors reseau-tung"><strong>Points Tung sans canal</strong><br>${tung.map(escapeHtml).join("<br>")}</p>` : "");
   },
@@ -235,7 +286,7 @@ const Reseau = {
     const existant = e.archiveId ? this.archives.find(a => a.id === e.archiveId) : null;
     if (existant && this.identique(existant.etat, e)) return existant;
     const id = e.archiveId || "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-    const entree = { id, nom: (e.patiente || "Sans nom").trim(), date: new Date().toLocaleString("fr-FR"), etat: { ...JSON.parse(JSON.stringify(e)), archiveId: id } };
+    const entree = { id, maj: Date.now(), nom: (e.patiente || "Sans nom").trim(), date: new Date().toLocaleString("fr-FR"), etat: { ...JSON.parse(JSON.stringify(e)), archiveId: id } };
     if (existant) this.archives.splice(this.archives.indexOf(existant), 1);
     this.archives.unshift(entree);
     this.archives = this.archives.slice(0, 50);
@@ -262,7 +313,7 @@ const Reseau = {
     const nbA = this.archives.length, nbP = e.points.length;
     const COTES = [["D", "D"], ["G", "G"], ["D + G", "D+G"]];
     const lignes = this.ordonne().map(p => `<li class="reseau-ligne" data-id="${escapeHtml(p.id)}">
-        <div class="reseau-ligne-tete"><span class="sx-code">${escapeHtml(p.canal || "?")}</span> ${p.tung ? `<strong>${escapeHtml(p.point)}</strong>` : `<a href="#" class="circ-ptlien" data-pt-fiche="${escapeHtml(p.point)}" title="Ouvrir la fiche du point dans un nouvel onglet"><strong>${escapeHtml(p.point)}</strong></a>`}
+        <div class="reseau-ligne-tete"><span class="sx-code">${escapeHtml(p.canal || "?")}</span> ${p.tung ? `<a href="#" class="reseau-tlien" data-tung-id="${escapeHtml(p.tungId || "")}" data-tung-nom="${escapeHtml(p.point)}" title="Ouvrir la fiche du point Tung à gauche"><strong>${escapeHtml(p.point)}</strong></a>` : `<a href="#" class="circ-ptlien" data-pt-fiche="${escapeHtml(p.point)}" title="Ouvrir la fiche du point dans un nouvel onglet"><strong>${escapeHtml(p.point)}</strong></a>`}
           ${p.canal === "RM" || p.canal === "DM" ? `<span class="muted reseau-median">ligne médiane</span>` : `<span class="reseau-cotes" role="group" aria-label="Côté">${COTES.map(([v, l]) => `<button type="button" class="reseau-cote-btn${p.cote === v ? " on" : ""}" data-cote="${v}" aria-pressed="${p.cote === v}"${dis}>${l}</button>`).join("")}</span>`}
           ${verrou ? "" : `<button type="button" class="reseau-x" data-x="${escapeHtml(p.id)}" title="Retirer du réseau" aria-label="Retirer ${escapeHtml(p.point)} du réseau">✕</button>`}</div>
         <textarea class="reseau-raison" rows="1" placeholder="Raison du choix…"${dis}>${escapeHtml(p.raison)}</textarea>
@@ -316,7 +367,7 @@ const Reseau = {
       </div>
       <div class="reseau-corps">
         ${this.vue === "archives" ? corpsArchives : corpsEnCours}
-        <p class="muted reseau-confid">Données gardées uniquement dans ce navigateur : jamais envoyées au dépôt ni synchronisées.</p>
+        ${this.htmlSynchro()}
       </div>`;
     this.brancher(f);
     f.querySelectorAll(".reseau-raison").forEach(t => { t.style.height = "auto"; t.style.height = Math.max(t.scrollHeight, 28) + "px"; });
@@ -327,7 +378,26 @@ const Reseau = {
   brancher(f) {
     const q = s => f.querySelector(s);
     q("#reseau-fermer").addEventListener("click", () => this.fermer());
+    // clic sur un point (nom dans la liste, ou pastille du schéma) : sa fiche s'ouvre dans un onglet, à gauche
+    if (!f._clicPoints) {
+      f._clicPoints = true;
+      f.addEventListener("click", ev => {
+        const t = ev.target.closest(".reseau-tlien"), pill = ev.target.closest("#reseau-schema .circ-pill");
+        if (t) { ev.preventDefault(); this.ouvrirFiche({ tung: true, tungId: t.dataset.tungId, point: t.dataset.tungNom }); return; }
+        if (pill) {
+          const cle = pill.dataset.p, p = this.etat.points.find(x => (x.tung ? Circuits.clePoint(x.point) : this.nomPoint(x.point)) === cle || this.cleP(x.point) === this.cleP(cle));
+          this.ouvrirFiche(p || { point: cle });
+        }
+      });
+    }
     q("#reseau-reduire").addEventListener("click", () => this.reduire());
+    const sy = q("#reseau-synchro");
+    if (sy) sy.addEventListener("change", () => {
+      if (sy.checked && !confirm("Les consultations (initiales, circuit, points, formules) seront écrites dans ton dépôt de données privé pour être lues sur tes autres appareils. Continuer ?")) { sy.checked = false; return; }
+      this.fenetre.synchro = sy.checked; this.ecrire(this.CLE_FENETRE, this.fenetre); this.rendre();
+      if (sy.checked) this.synchroniser(true);
+    });
+    const sn = q("#reseau-sync-now"); if (sn) sn.addEventListener("click", () => this.synchroniser(true));
     const anc = q("#reseau-ancrer"); if (anc) anc.addEventListener("click", () => { this.fenetre.ancre = !this.fenetre.ancre; this.ecrire(this.CLE_FENETRE, this.fenetre); this.rendre(); });
     f.querySelectorAll("[data-vue]").forEach(b => b.addEventListener("click", () => { this.vue = b.dataset.vue; this.rendre(); }));
     // déplacement par la barre de titre (souris ou doigt)
@@ -358,8 +428,9 @@ const Reseau = {
         const a = this.archives[+b.dataset.suppr];
         if (!a || !confirm("Supprimer le réseau enregistré « " + a.nom + " » ? Cela ne peut pas être annulé.")) return;
         this.archives.splice(+b.dataset.suppr, 1);
+        const tomb = this.lire(this.CLE_SUPPR, {}); tomb[a.id] = Date.now(); this.ecrire(this.CLE_SUPPR, tomb);          // pour que la suppression se propage aux autres appareils
         if (this.etat.archiveId === a.id) { delete this.etat.archiveId; this.sauver(); }
-        this.ecrire(this.CLE_ARCHIVES, this.archives); this.rendre();
+        this.ecrire(this.CLE_ARCHIVES, this.archives); this.rendre(); this.planifierSynchro();
       }));
       return;
     }
@@ -478,6 +549,9 @@ const Reseau = {
       const k = ev.key.toLowerCase();
       if (k === "z" && !ev.shiftKey) { ev.preventDefault(); this.annuler(); } else if (k === "y" || (k === "z" && ev.shiftKey)) { ev.preventDefault(); this.refaire(); }
     });
+    setTimeout(() => this.synchroniser(), 4000);
+    setInterval(() => this.synchroniser(), 60000);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") this.synchroniser(); });
     // la liste des circuits n'est connue qu'une fois Circuits chargé : on réaffiche alors
     if (typeof Circuits !== "undefined") Circuits.ensureLoaded().then(() => { if (this.fenetre.ouvert) this.rendre(); }).catch(() => {});
   },

@@ -43,7 +43,7 @@ const Tung = {
       const blocs = [...f.blocs];
       if (a && a.champs && a.champs.length) blocs.push({ source: "perso", page: "", champs: a.champs, titre: a.source || "" });
       const canaux = a && a.canaux !== undefined ? { codes: a.canaux, statut: "toi", source: "" } : (f.canaux || { codes: [], statut: "", source: "" });
-      return { ...f, alias: [...(f.alias || []), ...((a && a.alias) || [])], images: [...(f.images || []), ...((a && a.images) || [])], imagesPerso: (a && a.images) || [], blocs, canaux, origine: "base", complete: !!a };
+      return { ...f, nomBase: f.nom, numerosBase: f.numeros || [], nom: (a && a.nom) || f.nom, numeros: a && Array.isArray(a.numeros) ? a.numeros : f.numeros, alias: [...(f.alias || []), ...((a && a.alias) || [])], images: [...(f.images || []), ...((a && a.images) || [])], imagesPerso: (a && a.images) || [], blocs, canaux, origine: "base", complete: !!a };
     });
     const p = (this.perso.fiches || []).map(f => ({ zh: "", trad: "", numeros: [], alias: [], membres: [], images: [], a_verifier: [], canaux: { codes: [], statut: "", source: "" }, ...f, imagesPerso: f.images || [], origine: "perso" }));
     this.liste = [...b, ...p];
@@ -78,6 +78,8 @@ const Tung = {
   init() {
     document.getElementById("tung-search").addEventListener("input", e => { this.recherche = e.target.value; this.rendreListe(); });
     document.getElementById("tung-nouveau").addEventListener("click", () => this.nouveau());
+    const bd = document.getElementById("tung-dossier"), fd = document.getElementById("tung-dossier-fichiers");
+    if (bd && fd) { bd.addEventListener("click", () => fd.click()); fd.addEventListener("change", () => { const l = [...fd.files]; fd.value = ""; if (l.length) this.importerDossier(l); }); }
     document.querySelector('.tab-btn[data-tab="tung"]').addEventListener("click", () => this.ouvert());
     document.addEventListener("click", async e => {
       const b = e.target.closest("[data-tung-fiche]");
@@ -203,6 +205,48 @@ const Tung = {
     this.poserImages(f, liste);
     try { await this.ecrire(); } catch (e) { dire("Image envoyée, mais la fiche n'a pas pu être mise à jour : " + e.message); return false; }
     return true;
+  },
+  // ---------- un dossier d'images d'un coup : chaque image va dans la fiche dont elle porte le nom (nom du fichier, ou nom de son sous-dossier)
+  cleImage(nom) {
+    let s = String(nom || "").replace(/\.[A-Za-z0-9]+$/, "");
+    s = s.replace(/[\s_.\-]*(?:\(\d+\)|\d{1,2})$/, "").replace(/[\s_\-]*(?:localisation|loc|image|img|schema|photo)$/i, "");      // « Shui Jin 2 », « shui_jin-loc »
+    return this.cleNom(s);
+  },
+  fichePourImage(fichier) {
+    const chemin = (fichier.webkitRelativePath || fichier.name).split("/"), nomFichier = chemin[chemin.length - 1], dossier = chemin.length > 1 ? chemin[chemin.length - 2] : "";
+    const brut = this.cleNom(nomFichier.replace(/\.[A-Za-z0-9]+$/, "")), propre = this.cleImage(nomFichier), dos = this.cleImage(dossier);
+    const cles = f => [f.nom, ...(f.alias || []), ...(f.numeros || []), f.id, ...((f.numeros || []).length ? [f.nom + " " + f.numeros[0]] : [])].map(x => this.cleNom(x)).filter(Boolean);
+    const cherche = k => k ? this.liste.find(f => cles(f).includes(k)) : null;
+    return cherche(brut) || cherche(propre) || cherche(dos) || (propre.length > 4 ? this.liste.find(f => cles(f).some(x => x.length > 4 && propre.startsWith(x))) : null) || null;
+  },
+  async importerDossier(fichiers) {
+    try { await this.ensureLoaded(); } catch (e) { alert("Fiches Tung indisponibles : " + e.message); return; }
+    const images = fichiers.filter(x => /^image\//.test(x.type) || /\.(jpe?g|png|webp|gif)$/i.test(x.name));
+    if (!images.length) { alert("Ce dossier ne contient aucune image."); return; }
+    const parFiche = new Map(), sans = [];
+    images.forEach(x => { const f = this.fichePourImage(x); if (f) { if (!parFiche.has(f.id)) parFiche.set(f.id, []); parFiche.get(f.id).push(x); } else sans.push(x.webkitRelativePath || x.name); });
+    const resume = () => parFiche.size + " fiche(s) reconnue(s), " + [...parFiche.values()].reduce((s, l) => s + l.length, 0) + " image(s)" + (sans.length ? " ; " + sans.length + " image(s) sans fiche : " + sans.slice(0, 8).join(", ") + (sans.length > 8 ? "…" : "") : "");
+    if (!parFiche.size) { alert("Aucune image ne porte le nom d'un point Tung.\n" + resume() + "\n\nNomme chaque image comme le point (ex. Shui Jin.png, Shui Jin 2.png) ou range-les dans un sous-dossier du nom du point."); return; }
+    if (!confirm("Envoyer ces images dans les fiches ?\n" + resume())) return;
+    const zone = document.getElementById("tung-detail"), avis = t => { if (zone) zone.insertAdjacentHTML("afterbegin", ""); const s = document.getElementById("tung-dossier"); if (s) s.textContent = t; };
+    let fait = 0, deja = 0, echec = 0, n = 0;
+    const total = images.length - sans.length;
+    for (const [id, liste] of parFiche) {
+      const f = this.parId(id); if (!f) continue;
+      const imgs = [...this.imagesDe(f)];
+      for (const file of liste) {
+        n++; avis("📁 " + n + "/" + total);
+        const nom = "perso_" + String(f.id).replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 40) + "_" + this.cleNom(file.name.replace(/\.[A-Za-z0-9]+$/, "")).slice(0, 24) + "_" + file.size.toString(36);
+        if (imgs.some(x => x.startsWith(nom))) { deja++; continue; }                                       // déjà envoyée avec ce dossier
+        const blob = await this.reduireImage(file), ext = blob.type === "image/jpeg" ? "jpg" : ((file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "png");
+        try { await Store.writeBinary("tung/images/" + nom + "." + ext, blob); imgs.push(nom + "." + ext); fait++; } catch (e) { echec++; }
+      }
+      this.poserImages(f, imgs);
+    }
+    try { await this.ecrire(); } catch (e) { alert("Images envoyées, mais les fiches n'ont pas pu être mises à jour : " + e.message); }
+    avis("📁 Images");
+    this.recomposer(); this.rendreListe(); this.rendreDetail();
+    alert(fait + " image(s) ajoutée(s)" + (deja ? ", " + deja + " déjà présente(s)" : "") + (echec ? ", " + echec + " en échec" : "") + (sans.length ? ".\nSans fiche : " + sans.slice(0, 10).join(", ") + (sans.length > 10 ? "…" : "") : "."));
   },
   async retirerImage(f, nom) {
     if (!confirm("Retirer cette image de la fiche ?")) return false;
@@ -393,9 +437,9 @@ const Tung = {
     z.innerHTML = `<h2>${d.nouveau ? "Nouvelle fiche Tung" : (complet ? "Modifier : " : "Compléter : ") + escapeHtml(f.nom)}</h2>
       ${complet ? "" : `<p class="muted">Les informations des livres ne sont pas modifiées : ce que tu écris ici s'ajoute à ces informations.</p>`}
       <form class="circ-form" id="tung-form">
-        ${complet ? `<label>Nom<input type="text" id="te-nom" value="${escapeHtml(d.nom)}"></label>
-        <label>Caractères chinois (facultatif)<input type="text" id="te-zh" value="${escapeHtml(d.zh)}"></label>
+        <label>Nom (titre de la fiche)<input type="text" id="te-nom" value="${escapeHtml(d.nom)}"></label>
         <label>Numéro(s) Tung (séparés par des virgules, ex. 88.01, 88.02)<input type="text" id="te-numeros" value="${escapeHtml(d.numeros)}"></label>
+        ${complet ? `<label>Caractères chinois (facultatif)<input type="text" id="te-zh" value="${escapeHtml(d.zh)}"></label>
         <label>Zone<select id="te-zone"><option value="">— non précisée / déduite du numéro —</option>${this.base.zones.map(x => `<option value="${x.n}"${d.zone === x.n ? " selected" : ""}>${x.n} · ${escapeHtml(x.nom)}</option>`).join("")}</select></label>
         <label>Type<select id="te-type"><option value="point"${d.type === "point" ? " selected" : ""}>Point</option><option value="groupe"${d.type === "groupe" ? " selected" : ""}>Groupe de points (Dao Ma)</option></select></label>
         ${T("membres", "Points du groupe (un par ligne)", 3, d.membres)}` : ""}
@@ -420,7 +464,7 @@ const Tung = {
   async sauver(f) {
     const v = id => { const e = document.getElementById("te-" + id); return e ? e.value : ""; }, statut = document.getElementById("te-statut"), d = this.edition;
     const complet = d.nouveau || f.origine === "perso";
-    if (complet && !v("nom").trim()) { statut.textContent = "Le nom est obligatoire."; return; }
+    if (!v("nom").trim()) { statut.textContent = "Le nom est obligatoire."; return; }
     const champs = [["Localisation", this.lignes(v("localisation"))], ["Indications", this.lignes(v("indications"))], ["Technique", this.lignes(v("technique"))],
                     ["Associations", this.lignes(v("associations"))], ["Notes", this.lignes(v("notes"))]]
       .filter(x => x[1].length).map(([k, l]) => ({ k, v: l.length > 1 ? l : l[0] }));
@@ -436,11 +480,14 @@ const Tung = {
       if (d.nouveau) this.perso.fiches.push(fiche); else this.perso.fiches[this.perso.fiches.findIndex(x => x.id === f.id)] = fiche;
     } else {
       const o = { alias, champs, source };
+      const nomNouveau = v("nom").trim(), numNouveaux = v("numeros").split(/[,;]\s*/).map(x => x.trim()).filter(Boolean);
+      if (nomNouveau !== (f.nomBase || f.nom)) o.nom = nomNouveau;                                                   // titre changé : on garde l'original dans les livres
+      if (JSON.stringify(numNouveaux) !== JSON.stringify(f.numerosBase || f.numeros || [])) o.numeros = numNouveaux;
       const orig = (f.canaux || {}).statut === "toi" ? null : (f.canaux || {}).codes || [];
       if (!(orig && JSON.stringify(canaux) === JSON.stringify(orig))) o.canaux = canaux;
       const imgs = ((this.perso.ajouts || {})[f.id] || {}).images || [];
       if (imgs.length) o.images = imgs;
-      if (champs.length || alias.length || o.canaux || imgs.length) this.perso.ajouts[f.id] = o; else delete this.perso.ajouts[f.id];
+      if (champs.length || alias.length || o.canaux || imgs.length || o.nom !== undefined || o.numeros !== undefined) this.perso.ajouts[f.id] = o; else delete this.perso.ajouts[f.id];
     }
     
     statut.textContent = "Enregistrement…";

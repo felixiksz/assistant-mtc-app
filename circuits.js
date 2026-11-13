@@ -88,6 +88,7 @@ const Circuits = {
   recomposer() {
     const surch = this.perso.surcharges || {};
     const vide = { mots_cles: [], ajouts: [], actions: [], indications: [], indications_groupes: [], syndromes: [], alias: [], notes: [], syndromes_lies: [], niveaux: [], associations: [], formules: [], formules_note: "" };
+    this._vide = vide;
     const b = this.base.circuits.map(c => ({ ...vide, mots_cles: (this.motsDefaut || {})[c.id] || [], ...c, ...(surch[c.id] || {}), origine: "cours", modifie: !!surch[c.id], de_base: c }));
     const p = (this.perso.circuits || []).map(c => ({ ...vide, figure: 1, ...c, origine: "perso", modifie: false }));
     this.liste = [...b, ...p];
@@ -112,7 +113,7 @@ const Circuits = {
 
   dessin(c, o = {}) {
     const taille = o.taille || 120, fig = this.LIENS[c.figure] ? c.figure : 3;
-    const pos = this.POSITIONS, g = c.grille || [], pts = o.points || null, marge = 0;
+    const pos = this.POSITIONS, g = c.grille || [], pts = o.points || null, E = o.gros ? 1.3 : 1, marge = o.gros ? 6 : 0;      // gros : noms de points plus grands (fenêtre de consultation)
     const rayon = pts ? 24 : 16;
     const police = `font-family="var(--font-body, sans-serif)"`;
     const paires = (g.length === 4 && g.every(Boolean)) ? this.liensReels(g) : this.LIENS[fig].flatMap(t => this.PAIRES[t]);
@@ -128,7 +129,7 @@ const Circuits = {
     const pile = (code, x, y, ajout) => {
       const liste = [...new Set(((pts && pts[code]) || []).map(t => this.clePoint(t)).filter(Boolean))];
       const aff = liste.length > 3 ? [...liste.slice(0, 2), "+" + (liste.length - 2)] : liste;
-      const hP = 11, ec = 1.6, tot = aff.length * hP + Math.max(0, aff.length - 1) * ec, yin = this.polarite(code) === "yin", col = this.couleurCanal(code);
+      const hP = 11 * E, ec = 1.6, tot = aff.length * hP + Math.max(0, aff.length - 1) * ec, yin = this.polarite(code) === "yin", col = this.couleurCanal(code);
       const wB = code.length * 5 + 7, yB = y - tot / 2 - 11.5;
       // le nom d'un point de canal contient déjà le canal (TF5, Rt3…) : l'étiquette ne sert que pour des points qui ne le disent pas (points Tung)
       const dit = aff.filter(t => !t.startsWith("+")).every(t => new RegExp("^" + this.cleP(code) + "\\d").test(this.cleP(t)));
@@ -136,9 +137,9 @@ const Circuits = {
       const y0 = y - tot / 2;
       const pil = aff.map((t, k) => {
         const nomP = (o.libelles && o.libelles[t]) || t;                 // point Tung : son nom, pas sa clé
-        const mv = this._mouv ? this._mouv.get(this.cleP(t)) : "", fond = mv && !this._nb ? this.COULEUR_MOUV[mv] : "var(--bg)", w = Math.max(20, nomP.length * 5.4 + 8);
+        const mv = this._mouv ? this._mouv.get(this.cleP(t)) : "", fond = mv && !this._nb ? this.COULEUR_MOUV[mv] : "var(--bg)", w = Math.max(20 * E, (nomP.length * 5.4 + 8) * E);
         return `<g${t.startsWith("+") ? "" : ` class="circ-pill" data-p="${escapeHtml(t)}"`}><title>${escapeHtml(nomP + (mv ? " — " + this.NOM_MOUV[mv] : ""))}</title><rect x="${x - w / 2}" y="${y0 + k * (hP + ec)}" width="${w}" height="${hP}" rx="3" fill="${fond}" stroke="#1d1d1b" stroke-width="0.8"/>` +
-          `<text x="${x}" y="${y0 + k * (hP + ec) + 8.2}" text-anchor="middle" font-size="8.8" font-weight="700" ${police} fill="${mv === "eau" && !this._nb ? "#FFFFFF" : "#1d1d1b"}">${escapeHtml(nomP)}</text></g>`;
+          `<text x="${x}" y="${y0 + k * (hP + ec) + 8.2 * E}" text-anchor="middle" font-size="${8.8 * E}" font-weight="700" ${police} fill="${mv === "eau" && !this._nb ? "#FFFFFF" : "#1d1d1b"}">${escapeHtml(nomP)}</text></g>`;
       }).join("");
       return badge + pil;
     };
@@ -159,10 +160,10 @@ const Circuits = {
     // points de l'axe (RM, DM) : juste les noms, de haut en bas, comme les autres points mais en couleur neutre ; RM à gauche, DM à droite
     const axe = pts ? this.AXE.filter(k => (pts[k] || []).length) : [];
     const axeCols = axe.map(k => [...new Set((pts[k] || []).map(t => this.clePoint(t)).filter(Boolean))]);
-    const hAx = 11, ecAx = 1.6, nAx = axeCols.length ? Math.max(...axeCols.map(l => l.length)) : 0;
+    const hAx = 11 * E, ecAx = 1.6, nAx = axeCols.length ? Math.max(...axeCols.map(l => l.length)) : 0;
     const axeH = axe.length ? nAx * (hAx + ecAx) + 8 : 0;
-    const axeSvg = axeCols.map((l, ci) => { const x = axeCols.length === 1 ? 60 : (ci === 0 ? 33 : 87); return l.map((t, r) => { const w = Math.max(20, t.length * 5.4 + 8), y = 122 + marge + r * (hAx + ecAx);
-      return `<g class="circ-pill" data-p="${escapeHtml(t)}"><title>${escapeHtml(t)}</title><rect x="${x - w / 2}" y="${y}" width="${w}" height="${hAx}" rx="3" fill="#E4E2DA" stroke="#1d1d1b" stroke-width="0.8"/><text x="${x}" y="${y + 8.2}" text-anchor="middle" font-size="8.8" font-weight="700" ${police} fill="#1d1d1b">${escapeHtml(t)}</text></g>`; }).join(""); }).join("");
+    const axeSvg = axeCols.map((l, ci) => { const x = axeCols.length === 1 ? 60 : (ci === 0 ? 33 : 87); return l.map((t, r) => { const w = Math.max(20 * E, (t.length * 5.4 + 8) * E), y = 122 + marge + r * (hAx + ecAx);
+      return `<g class="circ-pill" data-p="${escapeHtml(t)}"><title>${escapeHtml(t)}</title><rect x="${x - w / 2}" y="${y}" width="${w}" height="${hAx}" rx="3" fill="#E4E2DA" stroke="#1d1d1b" stroke-width="0.8"/><text x="${x}" y="${y + 8.2 * E}" text-anchor="middle" font-size="${8.8 * E}" font-weight="700" ${police} fill="#1d1d1b">${escapeHtml(t)}</text></g>`; }).join(""); }).join("");
     // ajouts possibles : canaux en pointillé sous la figure, « + » devant, trait entre eux quand ils vont ensemble
     const groupes = o.ajouts ? (c.ajouts || []).filter(a => (a.canaux || []).length) : [];
     const grosse = a => !!pts && a.canaux.some(k => ((pts[k]) || []).length);
@@ -313,8 +314,17 @@ const Circuits = {
     window.scrollTo({ top: 0 });
   },
 
+  // la version du cours d'un circuit que tu as modifié, en lecture seule (tes modifications restent enregistrées)
+  _vueCours: new Set(),
+  versionCours(c) {
+    const b = { ...this._vide, mots_cles: (this.motsDefaut || {})[c.id] || [], ...c.de_base, origine: "cours", modifie: false, de_base: c.de_base, _lectureCours: true };
+    b.figure = this.figureDe(b.grille) || 3; b.ajouts = (b.ajouts || []).map(a => this.reparserAjout(a));
+    return b;
+  },
   rendreFiche() {
-    const zone = document.getElementById("circuit-detail"), c = this.parId(this.actif);
+    const zone = document.getElementById("circuit-detail");
+    let c = this.parId(this.actif);
+    if (c && c.modifie && c.de_base && this._vueCours.has(c.id) && !this.edition) c = this.versionCours(c);
     document.getElementById("tab-circuits").classList.toggle("fiche-seule", !!c);          // fiche ouverte : la liste disparaît (on choisit un autre circuit avec le ☰ de la barre fixe)
     if (!c) { zone.innerHTML = `<p class="muted">Choisis un circuit avec « ▾ Circuits » dans la barre du haut pour voir sa fiche.</p>`; return; }
     if (this.edition) { this.rendreEdition(c); return; }
@@ -338,9 +348,11 @@ const Circuits = {
       return `<details class="circ-synd"><summary><span class="sx-code">${code}</span> ${escapeHtml((this.canaux.get(code) || {}).nom || "")} <span class="muted">(${l.length})</span></summary><div class="circ-synd-liste">${l.map(e => `<button type="button" class="edit-toggle-btn" data-synd="${escapeHtml(this.cleSynd(e))}">${escapeHtml(sansHanzi(e.nom))}</button>`).join(" ")}</div></details>`;
     }).join("");
     zone.innerHTML = `
+      ${c._lectureCours ? `<div class="circ-bandeau-cours"><strong>Version du cours</strong> : lecture seule. Tes modifications sont gardées. <button type="button" class="edit-toggle-btn" id="circ-ma-version">↩ Revenir à ma version</button></div>` : ""}
       <div class="circ-barre barre-flottante">
-        <button type="button" class="edit-toggle-btn" id="circ-edit" title="Modifier cette fiche" aria-label="Modifier cette fiche">✏️</button>
-        ${c.origine === "perso" ? `<button type="button" class="edit-toggle-btn" id="circ-suppr" title="Supprimer ce circuit" aria-label="Supprimer ce circuit">🗑</button>` : c.modifie ? `<button type="button" class="edit-toggle-btn" id="circ-retablir" title="Revenir à la version du cours" aria-label="Revenir à la version du cours">↺</button>` : ""}
+        ${c._lectureCours ? "" : `<button type="button" class="edit-toggle-btn" id="circ-edit" title="Modifier cette fiche" aria-label="Modifier cette fiche">✏️</button>`}
+        ${c.modifie ? `<button type="button" class="edit-toggle-btn" id="circ-voir-cours" title="Consulter la version du cours, sans perdre tes modifications" aria-label="Consulter la version du cours">📖 Cours</button>` : ""}
+        ${c._lectureCours ? "" : c.origine === "perso" ? `<button type="button" class="edit-toggle-btn" id="circ-suppr" title="Supprimer ce circuit" aria-label="Supprimer ce circuit">🗑</button>` : c.modifie ? `<button type="button" class="edit-toggle-btn" id="circ-retablir" title="Revenir à la version du cours" aria-label="Revenir à la version du cours">↺</button>` : ""}
       </div>
       <div class="circ-bandeau">
         <span class="circ-mini-bandeau" aria-hidden="true">${this.dessin(c, { taille: 76, etiquettes: true })}</span>
@@ -420,16 +432,19 @@ const Circuits = {
     if (!(Onglets.actif || "").startsWith("circ:")) Fenetre.boutonOnglet(zone, () => Onglets.ouvrirCircuit(c.id));
     if (typeof Comparateur !== "undefined" && !zone.querySelector(".cmp-add")) zone.prepend(Comparateur.bouton("", () => Comparateur.ajouterCircuit(c.id)));
     if (typeof Reseau !== "undefined" && !zone.querySelector(".consult-add")) zone.prepend(Reseau.bouton(() => Reseau.choisirCircuit(c.id), "Choisir ce circuit pour la consultation en cours"));
-    this.crayonsChamps(zone, c);
+    if (!c._lectureCours) this.crayonsChamps(zone, c);
     this.annoterCroisements(zone);
     const ajp = document.getElementById("circ-aj-prop"); if (ajp) ajp.addEventListener("click", () => this.proposerAjouts(c));
-    document.getElementById("circ-edit").addEventListener("click", () => this.modifier(c));
+    const ed = document.getElementById("circ-edit"); if (ed) ed.addEventListener("click", () => this.modifier(c));
+    const vc = document.getElementById("circ-voir-cours"); if (vc) vc.addEventListener("click", () => { this._vueCours.add(c.id); this.rendreFiche(); });
+    const mv = document.getElementById("circ-ma-version"); if (mv) mv.addEventListener("click", () => { this._vueCours.delete(c.id); this.rendreFiche(); });
     const s = document.getElementById("circ-suppr"); if (s) s.addEventListener("click", () => this.supprimer(c));
     const r = document.getElementById("circ-retablir"); if (r) r.addEventListener("click", () => this.retablir(c));
   },
 
   // enregistre des champs du circuit (surcharge d'un circuit du cours, ou le circuit créé par toi) puis réaffiche la fiche
   async enregistrerChamps(c, champs) {
+    if (c._lectureCours) return;                                      // la version du cours ne se modifie pas
     if (c.origine === "perso") { const i = this.perso.circuits.findIndex(x => x.id === c.id); this.perso.circuits[i] = { ...this.perso.circuits[i], ...champs }; }
     else this.perso.surcharges[c.id] = { ...(this.perso.surcharges[c.id] || {}), ...champs };
     try { await Store.writeJSON(this.CHEMIN_PERSO, { titre: this.perso.titre, circuits: this.perso.circuits, surcharges: this.perso.surcharges }); }
