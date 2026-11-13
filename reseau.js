@@ -36,7 +36,7 @@ const Reseau = {
       let etat = this.etat, adopte = false;
       if (d && d.etat && d.appareil !== (typeof Onglets !== "undefined" ? Onglets.appareilId() : "") && (d.etat.maj || 0) > (this.etat.maj || 0)) {
         if (this.aContenu() && !this.identique(this.etat, d.etat)) this.archiver();
-        etat = { patiente: "", circuit: null, verrou: false, points: [], diagnostic: [], formules: [], ...d.etat }; adopte = true;
+        etat = { patiente: "", circuit: null, verrou: false, points: [], diagnostic: [], strategie: "", formules: [], ...d.etat }; adopte = true;
       }
       const tomb = { ...((d && d.supprimes) || {}), ...this.lire(this.CLE_SUPPR, {}) };
       // réseaux enregistrés : réunis par identifiant, le plus récent l'emporte, les suppressions sont respectées
@@ -130,7 +130,7 @@ const Reseau = {
     this.surligner(id);
   },
   // ---------- consultation : le diagnostic (syndromes) et les formules, à côté du circuit et des points
-  aContenu(e) { e = e || this.etat; return !!((e.points || []).length || (e.diagnostic || []).length || (e.formules || []).length); },
+  aContenu(e) { e = e || this.etat; return !!((e.points || []).length || (e.strategie || "").trim() || (e.diagnostic || []).length || (e.formules || []).length); },
   syndDe(k) { return typeof Syndromes !== "undefined" ? (Syndromes.entries || []).find(x => x.domaine + "/" + x.chemin === k) || null : null; },
   formDe(id) { return typeof Formules !== "undefined" && Formules.byId ? Formules.byId.get(id) || null : null; },
   ajouterA(champ, k, nom) {
@@ -214,7 +214,7 @@ const Reseau = {
     document.body.appendChild(bouton);
     const f = document.createElement("div");
     f.id = "reseau-fenetre"; f.className = "reseau-fenetre"; f.hidden = true;
-    f.setAttribute("role", "dialog"); f.setAttribute("aria-label", "Consultation : diagnostic, circuit et points, formule");
+    f.setAttribute("role", "dialog"); f.setAttribute("aria-label", "Consultation : diagnostic, stratégie thérapeutique, circuit et points, formule");
     document.body.appendChild(f);
     this.majLanceur();
   },
@@ -237,6 +237,7 @@ const Reseau = {
     const d = new Date().toLocaleDateString("fr-FR");
     const l = ["Consultation — " + (e.patiente || "patiente") + " — " + d + (e.verrou ? " (arrêtée)" : "")];
     if ((e.diagnostic || []).length) l.push("Diagnostic : " + e.diagnostic.map(k => { const s = this.syndDe(k); return s ? sansChinois(s.nom) : k; }).join(" ; "));
+    l.push("Stratégie thérapeutique : " + ((e.strategie || "").trim() || "à renseigner"));
     l.push(c ? "Circuit : " + Circuits.nomCourt(c) + " (" + c.grille.join(", ") + ")" : "Circuit : non choisi");
     if ((e.points || []).length) l.push("");
     this.ordonne(e).forEach(p => l.push("• " + p.point + (p.cote ? " (" + p.cote + ")" : "") + (p.raison ? " : " + p.raison : "")));
@@ -278,7 +279,7 @@ const Reseau = {
   vue: "reseau",          // onglet de la fenêtre : « reseau » (en cours) ou « archives » (enregistrés)
 
   // réseau en cours identique à son enregistrement ? (pour ne rien perdre sans demander)
-  identique(a, b) { const n = x => JSON.stringify({ ...x, maj: 0, archiveId: 0 }); return n(a) === n(b); },
+  identique(a, b) { const n = x => JSON.stringify({ ...x, strategie: x.strategie || "", maj: 0, archiveId: 0 }); return n(a) === n(b); },
   // garde le réseau en cours parmi les enregistrés (mis à jour s'il en vient déjà)
   archiver() {
     const e = this.etat;
@@ -322,6 +323,7 @@ const Reseau = {
     const arch = this.archives.map((a, i) => `<li class="reseau-arch${e.archiveId === a.id ? " en-cours" : ""}">
         <div class="reseau-arch-texte"><strong>${escapeHtml(a.nom)}</strong>${a.etat.verrou ? " 🔒" : ""}${e.archiveId === a.id ? ` <span class="reseau-arch-tag">en cours</span>` : ""}
           <span class="muted">${escapeHtml(a.date)} · ${(a.etat.diagnostic || []).length ? a.etat.diagnostic.length + " syndrome(s) · " : ""}${a.etat.points.length} point(s)${nomCirc(a.etat) ? " · " + escapeHtml(nomCirc(a.etat)) : ""}${(a.etat.formules || []).length ? " · " + a.etat.formules.length + " formule(s)" : ""}</span>
+          ${(a.etat.strategie || "").trim() ? `<span class="muted reseau-arch-strat">Stratégie : ${escapeHtml(a.etat.strategie.trim().replace(/\s+/g, " ").slice(0, 110))}${a.etat.strategie.trim().length > 110 ? "…" : ""}</span>` : ""}
           <span class="reseau-arch-pts">${this.ordonne(a.etat).map(p => escapeHtml(p.point)).join(" · ")}</span></div>
         <div class="reseau-arch-btns"><button type="button" class="reseau-ic2" data-ouvrir="${i}" title="Ouvrir ce réseau" aria-label="Ouvrir ce réseau">↗</button><button type="button" class="reseau-ic2" data-copier="${i}" title="Copier le résumé" aria-label="Copier le résumé">📄</button><button type="button" class="reseau-ic2" data-suppr="${i}" title="Supprimer" aria-label="Supprimer ce réseau enregistré">🗑</button></div></li>`).join("");
     const blocs = { diag: true, circ: true, form: true, ...(this.fenetre.blocs || {}) };
@@ -336,13 +338,18 @@ const Reseau = {
         ${bloc("diag", "1 · Diagnostic", diag.length, `
           <div class="consult-chips">${diag.map(puceS).join("") || `<span class="muted">Aucun syndrome : cherche-le ci-dessous, ou utilise « ＋ Consultation » sur une fiche.</span>`}</div>
           ${verrou ? "" : `<input type="search" id="consult-synd-q" class="consult-q" placeholder="Ajouter un syndrome…" autocomplete="off" aria-label="Ajouter un syndrome au diagnostic"><ul id="consult-synd-sugg" class="prop-sugg reseau-sugg"></ul>`}`)}
-        ${bloc("circ", "2 · Circuit et points", nbP, `
+        <section class="consult-bloc consult-obligatoire${(e.strategie || "").trim() ? "" : " a-remplir"}" data-bloc="strat" aria-labelledby="consult-strat-titre">
+          <h4 class="consult-bloc-titre" id="consult-strat-titre">2 · Stratégie thérapeutique <span class="consult-oblig">obligatoire</span></h4>
+          <textarea id="consult-strat" class="consult-strat" rows="3" required aria-required="true" placeholder="Principe de traitement : que traiter en premier, dans quel ordre, avec quels moyens (circuit, points, formule…) ?"${dis}>${escapeHtml(e.strategie || "")}</textarea>
+          <p class="muted consult-strat-aide">${(e.strategie || "").trim() ? "Stratégie renseignée." : "À renseigner avant d'arrêter la consultation."}</p>
+        </section>
+        ${bloc("circ", "3 · Circuit et points", nbP, `
           <div id="consult-sugg-circ" class="consult-sugg"></div>
           <div class="reseau-rang"><select id="reseau-circuit" aria-label="Circuit"${dis}><option value="">Circuit…</option>${circuits.map(c => `<option value="${escapeHtml(c.id)}"${e.circuit === c.id ? " selected" : ""}>${escapeHtml(Circuits.nomCourt(c))} (${c.grille.join(" ")})</option>`).join("")}</select></div>
           <details class="reseau-schema-d"${this.fenetre.schemaFerme ? "" : " open"}><summary>Schéma</summary><div id="reseau-schema">${this.schema()}</div></details>
           <ul class="reseau-liste">${lignes || `<li class="muted reseau-vide">Aucun point : utilise le ✓ à côté d'un point, ou tape-le ci-dessous.</li>`}</ul>
           ${verrou ? "" : `<form id="reseau-ajout" class="reseau-ajout"><input type="text" id="reseau-point" placeholder="Ajouter un point (ex. TF5, Rt 4, Shui Jin)" autocomplete="off"><button type="submit" class="reseau-ic2" title="Ajouter" aria-label="Ajouter ce point">＋</button></form><ul id="reseau-sugg" class="prop-sugg reseau-sugg"></ul>`}`)}
-        ${bloc("form", "3 · Formule", forms.length, `
+        ${bloc("form", "4 · Formule", forms.length, `
           <div id="consult-sugg-form" class="consult-sugg"></div>
           <div class="consult-chips">${forms.map(puceF).join("") || `<span class="muted">Aucune formule.</span>`}</div>
           ${verrou ? "" : `<input type="search" id="consult-form-q" class="consult-q" placeholder="Ajouter une formule…" autocomplete="off" aria-label="Ajouter une formule"><ul id="consult-form-sugg" class="prop-sugg reseau-sugg"></ul>`}`)}
@@ -420,7 +427,7 @@ const Reseau = {
         const cible = this.archives[+b.dataset.ouvrir];
         if (!cible) return;
         if (this.etat.archiveId !== cible.id) this.archiver();          // le réseau en cours n'est pas perdu
-        this.etat = { patiente: "", circuit: null, verrou: false, points: [], diagnostic: [], formules: [], ...JSON.parse(JSON.stringify(cible.etat)), archiveId: cible.id };
+        this.etat = { patiente: "", circuit: null, verrou: false, points: [], diagnostic: [], strategie: "", formules: [], ...JSON.parse(JSON.stringify(cible.etat)), archiveId: cible.id };
         this.vue = "reseau"; this.sauver(); this.rendre();
       }));
       f.querySelectorAll("[data-copier]").forEach(b => b.addEventListener("click", () => { const a = this.archives[+b.dataset.copier]; if (a) copier(this.resume(a.etat)); }));
@@ -435,6 +442,20 @@ const Reseau = {
       return;
     }
     q("#reseau-nom").addEventListener("input", ev => { this.etat.patiente = ev.target.value; this.sauver(); const t = q("#reseau-tete strong"); if (t) t.textContent = "📋 Consultation" + (this.etat.patiente ? " — " + this.etat.patiente : "") + (this.etat.verrou ? " 🔒" : ""); });
+    const st = q("#consult-strat");
+    if (st) {
+      const haut = () => { st.style.height = "auto"; st.style.height = Math.max(st.scrollHeight, 64) + "px"; };
+      let pris = false; haut();
+      st.addEventListener("input", () => {
+        if (!pris) { pris = true; const av = JSON.parse(JSON.stringify(this.etat)); av.strategie = st.dataset.avant || ""; this.hist.push(JSON.stringify(av)); this.futur = []; }
+        this.etat.strategie = st.value; this.sauver(); haut();
+        const vide = !st.value.trim(), sec = st.closest(".consult-obligatoire"), aide = sec && sec.querySelector(".consult-strat-aide");
+        if (sec) sec.classList.toggle("a-remplir", vide);
+        if (aide) aide.textContent = vide ? "À renseigner avant d'arrêter la consultation." : "Stratégie renseignée.";
+      });
+      st.dataset.avant = st.value;
+      st.addEventListener("blur", () => { st.dataset.avant = st.value; pris = false; });
+    }
     q("#reseau-circuit").addEventListener("change", ev => { this.etat.circuit = ev.target.value || null; this.sauver(); q("#reseau-schema").innerHTML = this.schema(); });
     f.querySelectorAll(".consult-bloc").forEach(b => b.addEventListener("toggle", () => { this.fenetre.blocs = { ...(this.fenetre.blocs || {}), [b.dataset.bloc]: b.open }; this.ecrire(this.CLE_FENETRE, this.fenetre); }));
     f.querySelectorAll("[data-diag-o]").forEach(b => b.addEventListener("click", () => { const s = this.syndDe(b.dataset.diagO); if (s) Onglets.ouvrirSyndrome(s); }));
@@ -514,22 +535,28 @@ const Reseau = {
     q("#reseau-annuler").addEventListener("click", () => this.annuler());
     q("#reseau-refaire").addEventListener("click", () => this.refaire());
     q("#reseau-favoris").addEventListener("click", () => this.ajouterFavoris());
-    q("#reseau-verrou").addEventListener("click", () => { this.snap(); this.etat.verrou = !this.etat.verrou; this.sauver(); this.rendre(); });
+    q("#reseau-verrou").addEventListener("click", () => {
+      if (!this.etat.verrou && !(this.etat.strategie || "").trim()) {
+        this.avertir("La stratégie thérapeutique est obligatoire : renseigne-la avant d'arrêter la consultation.");
+        const t = q("#consult-strat"); if (t) { t.focus(); t.scrollIntoView({ block: "center" }); }
+        return;
+      }
+      this.snap(); this.etat.verrou = !this.etat.verrou; this.sauver(); this.rendre(); });
     q("#reseau-copier").addEventListener("click", () => copier(this.resume()));
     q("#reseau-enreg").addEventListener("click", () => {
       if (!this.aContenu()) { this.avertir("Rien à enregistrer."); return; }
-      this.archiver(); this.rendre(); this.avertir("Consultation enregistrée.");
+      this.archiver(); this.rendre(); this.avertir((this.etat.strategie || "").trim() ? "Consultation enregistrée." : "Consultation enregistrée. La stratégie thérapeutique (obligatoire) reste à renseigner.");
     });
     q("#reseau-nouveau").addEventListener("click", () => {
       const garde = this.aContenu() ? this.archiver() : null;                               // la consultation en cours est gardée dans les enregistrées
-      this.etat = { patiente: "", circuit: null, verrou: false, points: [], diagnostic: [], formules: [] };
+      this.etat = { patiente: "", circuit: null, verrou: false, points: [], diagnostic: [], strategie: "", formules: [] };
       this.sauver(); this.rendre();
       if (garde) this.avertir("Consultation précédente gardée dans « Enregistrés ».");
     });
   },
 
   init() {
-    this.etat = { patiente: "", circuit: null, verrou: false, points: [], diagnostic: [], formules: [], ...this.lire(this.CLE_ETAT, {}) };
+    this.etat = { patiente: "", circuit: null, verrou: false, points: [], diagnostic: [], strategie: "", formules: [], ...this.lire(this.CLE_ETAT, {}) };
     this.archives = this.lire(this.CLE_ARCHIVES, []);
     this.fenetre = { ouvert: false, reduit: false, x: null, y: null, ...this.lire(this.CLE_FENETRE, {}) };
     if (this.fenetre.ancre === undefined) { this.fenetre.ancre = true; if (this.large()) this.fenetre.ouvert = true; this.ecrire(this.CLE_FENETRE, this.fenetre); }   // première fois : ancrée et visible sur grand écran
