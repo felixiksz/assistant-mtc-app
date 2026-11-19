@@ -4045,7 +4045,7 @@ const Croisement = {
     if (colName === point.canal_principal) return `<td class="croise-self" title="Canal propre du point"></td>`;
     if (!found) return `<td></td>`;
     const cls = found.type === "confirme" ? "croise-confirme" : "croise-secondaire";
-    return `<td class="${cls}" title="${escapeHtml(colName)} — ${found.type === "confirme" ? "recoupement confirmé" : "recoupement secondaire (à vérifier)"}"></td>`;
+    return `<td class="${cls}" title="${escapeHtml(colName)} — ${found.type === "confirme" ? "recoupement confirmé" : "recoupement secondaire (à vérifier)"}">${escapeHtml(point.point)}</td>`;       // le nom du point est écrit dans la case, qu'elle soit noire ou grise
   },
 
   // ----- sélection de plusieurs canaux : le tableau ne garde que leurs colonnes et leurs points d'intersection, rangés sous une rubrique par canal
