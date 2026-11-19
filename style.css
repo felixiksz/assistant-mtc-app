@@ -1678,3 +1678,4 @@ mark.gsr-fluo { scroll-margin-top: 8rem; }
 .consult-strat { width: 100%; box-sizing: border-box; min-height: 4rem; resize: vertical; font: inherit; font-size: 0.9rem; }
 .consult-strat-aide { margin: 0.25rem 0 0; font-size: 0.78rem; }
 .reseau-arch-strat { display: block; font-size: 0.78rem; }
+#global-search-results .gsr-exact { margin-left: auto; }

@@ -6126,10 +6126,26 @@ const GlobalSearch = {
     if (btn) btn.click();
   },
 
+  // termes de la recherche : chaque mot séparément (tous doivent être présents), ou une expression exacte entre guillemets
+  // (« foie gras » ne trouve que « foie gras », pas « foie » ici et « gras » là) ; le bouton « Expression exacte » fait de toute la saisie une expression
+  exact: (() => { try { return localStorage.getItem("gsr_exact") === "1"; } catch (e) { return false; } })(),
+  termes(query) {
+    const brut = String(query || "");
+    if (this.exact) { const t = normalizeSearch(brut.replace(/["«»“”]/g, " ")); return t ? [t] : []; }
+    const res = [];
+    let reste = brut.replace(/["«“]([^"»”]+)["»”]/g, (_, p) => { const t = normalizeSearch(p); if (t) res.push(t); return " "; });
+    const ouv = reste.match(/["«“]([^"»”]*)$/);                              // guillemet pas encore refermé : la fin est déjà une expression
+    if (ouv) { const t = normalizeSearch(ouv[1]); if (t) res.push(t); reste = reste.slice(0, ouv.index); }
+    normalizeSearch(reste).split(" ").filter(Boolean).forEach(w => res.push(w));
+    return res;
+  },
+  barreExact() {
+    return `<button type="button" class="cat-chip gsr-exact${this.exact ? " active" : ""}" data-exact="1" aria-pressed="${this.exact}" title="Cherche la suite de mots telle quelle (ex. « foie gras » sans « foie » seul ni « gras » seul). Tu peux aussi mettre l'expression entre guillemets.">« » Expression exacte</button>`;
+  },
   collect(query) {
-    const q = normalizeSearch(query);
-    if (!q) return [];
-    const mots = q.split(" ").filter(Boolean), ok = hay => { const h = normalizeSearch(hay); return mots.every(m => h.includes(m)); };
+    const mots = this.termes(query);
+    if (!mots.length) return [];
+    const ok = hay => { const h = normalizeSearch(hay); return mots.every(m => h.includes(m)); };
     const out = [];
 
     (Formules.index || []).forEach(f => {
@@ -6286,14 +6302,15 @@ const GlobalSearch = {
   },
 
   render(items) {
-    const q = this.input.value.trim(), mots = normalizeSearch(q).split(" ").filter(Boolean);
-    if (!q) { this.results.innerHTML = ""; this.results.classList.remove("open"); return; }
-    if (!items.length) { this.results.innerHTML = `<p class="gsr-empty">Aucun résultat pour « ${escapeHtml(q)} ».</p>`; this.results.classList.add("open"); return; }
+    const q = this.input.value.trim(), mots = this.termes(q);
+    if (!mots.length) { this.results.innerHTML = ""; this.results.classList.remove("open"); return; }
+    const brancherExact = () => { const b = this.results.querySelector("[data-exact]"); if (b) b.addEventListener("click", ev => { ev.stopPropagation(); this.exact = !this.exact; try { localStorage.setItem("gsr_exact", this.exact ? "1" : "0"); } catch (e) { /* stockage indisponible */ } this.runSearch(); }); };
+    if (!items.length) { this.results.innerHTML = `<div class="gsr-filtres">${this.barreExact()}</div><p class="gsr-empty">Aucun résultat pour ${this.exact || mots.some(m => m.includes(" ")) ? "l'expression exacte " : ""}« ${escapeHtml(mots.join(" + "))} ».</p>`; this.results.classList.add("open"); brancherExact(); return; }
     const nb = {}; items.forEach(it => { nb[it.type] = (nb[it.type] || 0) + 1; });
     if (this.filtre !== "tout" && !nb[this.filtre]) this.filtre = "tout";
     const tout = this.filtre === "tout", max = tout ? 5 : 80;
     const chips = `<div class="gsr-filtres">` + this.TYPES.filter(([k]) => k === "tout" || nb[k]).map(([k, lib]) =>
-      `<button type="button" class="cat-chip${k === this.filtre ? " active" : ""}" data-f="${k}">${lib} <span class="gsr-nb">${k === "tout" ? items.length : nb[k]}</span></button>`).join("") + `</div>`;
+      `<button type="button" class="cat-chip${k === this.filtre ? " active" : ""}" data-f="${k}">${lib} <span class="gsr-nb">${k === "tout" ? items.length : nb[k]}</span></button>`).join("") + this.barreExact() + `</div>`;
     const groups = new Map();
     items.filter(it => tout || it.type === this.filtre).forEach(it => { if (!groups.has(it.group)) groups.set(it.group, []); groups.get(it.group).push(it); });
     const ordre = ["Syndromes", "Formules", "Circuits", "Points", "Points Tung"];
@@ -6315,6 +6332,7 @@ const GlobalSearch = {
     html += `</div>`;
     this.results.innerHTML = html;
     this.results.classList.add("open");
+    brancherExact();
     this.results.querySelectorAll("[data-f]").forEach(x => x.addEventListener("click", ev => { ev.stopPropagation(); this.filtre = x.dataset.f; this.results.scrollTop = 0; this.runSearch(); }));
     this.results.querySelectorAll("li[data-i]").forEach(li => li.addEventListener("click", ev => {
       const it = flat[+li.dataset.i], act = ev.target.closest("[data-act]");
