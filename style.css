@@ -500,9 +500,6 @@ table.croise-table th, table.croise-table td { border: 1px solid var(--line); pa
 table.croise-table thead th, table.croise-table tr > th:first-child { position: sticky; background: var(--ink); color: var(--bg); z-index: 1; }
 table.croise-table tr > th:first-child { left: 0; text-align: left; text-transform: none; }
 table.croise-table thead th { top: 0; text-transform: uppercase; letter-spacing: 0.02em; }
-table.croise-table td.croise-confirme { background: var(--ink); }
-table.croise-table td.croise-secondaire { background: var(--cell-sec); }
-table.croise-table td.croise-self { background: var(--accent-soft); }
 
 .tcm-mini-table { width: 100%; border-collapse: collapse; margin: 0.5rem 0 1rem; font-size: 0.88rem; }
 .tcm-mini-table th, .tcm-mini-table td { border: 1px solid var(--line); padding: 0.45rem 0.6rem; text-align: left; vertical-align: top; }
@@ -1700,6 +1697,21 @@ table.croise-table tr.croise-rubrique > th { background: var(--accent-soft); col
 table.croise-table.croise-choix th.croise-th, table.croise-table.croise-choix td { min-width: 5.5rem; }
 table.croise-table.croise-choix td { height: 2.2rem; }
 /* le nom du point est écrit dans les cases de croisement (noires ou grises) */
-table.croise-table td.croise-confirme { color: var(--bg); font-weight: 600; }
-table.croise-table td.croise-secondaire { color: var(--ink); font-weight: 600; }
-table.croise-table td.croise-confirme, table.croise-table td.croise-secondaire { font-size: 0.72rem; }
+/* tableau des croisements : cases neutres, pastilles du nom du point, icônes, points de transport colorés */
+table.croise-table td.croise-c { padding: 0.25rem 0.3rem; background: transparent; }
+table.croise-table tr.z1 > td.croise-c { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+table.croise-table td.croise-c.c1 { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--ink) 5%, transparent); }
+.croise-dot { display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 50% !important; background: var(--ink); vertical-align: middle; }
+.croise-pt { display: inline-flex; align-items: center; gap: 2px; padding: 1px 6px; border-radius: 999px !important; background: var(--ink); color: var(--bg); font-weight: 800; font-size: 0.68rem; line-height: 1.25; white-space: nowrap; }
+.croise-pt.mvt { background: var(--m); color: var(--f); box-shadow: 0 0 0 1px var(--ring); }
+.croise-pt.maybe { background: none; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }
+.croise-pt.maybe.mvt { background: none; color: var(--ink); box-shadow: inset 0 0 0 2px var(--m), 0 0 0 1px var(--ring); }
+.croise-pt svg.pi { width: 10px; height: 10px; }
+svg.pi { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; vertical-align: -2px; }
+svg.pi.key { color: var(--accent); }
+table.croise-table th.croise-point-label { min-width: 8.5rem; }
+table.croise-table th.croise-point-label svg.pi.key { color: inherit; }
+.ics { display: inline-flex; gap: 3px; align-items: center; margin-left: 6px; vertical-align: middle; }
+.cd { display: inline-block; padding: 0 4px; border-radius: 6px !important; background: var(--m); color: var(--f); box-shadow: 0 0 0 1px var(--ring); }
+.croise-legende { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 1rem; margin: 0.35rem 0; font-size: 0.78rem; color: var(--muted, inherit); }
+.croise-legende > span { display: inline-flex; align-items: center; gap: 0.3rem; }

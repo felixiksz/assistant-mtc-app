@@ -4011,7 +4011,7 @@ const Points = {
 };
 
 document.getElementById("pts-search").addEventListener("input", (e) => Points.renderList(Points.search(e.target.value)));
-Points.load();
+Points.pret = Points.load();
 
 /* ================= Tableau des croisements de canaux ================= */
 const Croisement = {
@@ -4027,6 +4027,7 @@ const Croisement = {
       wrap.innerHTML = `<p class="muted">Base pas encore prête (${e.message}).</p>`;
       return;
     }
+    try { await Points.pret; } catch (e) { /* sans les fiches des points : pas d'icônes ni de couleurs */ }
     this.render(this.data.points);
     const editZone = document.getElementById("croise-edit-zone");
     if (editZone) {
@@ -4037,15 +4038,63 @@ const Croisement = {
     }
   },
 
-  cellFor(point, colName) {
+  // ---- attributs des points, lus dans la rubrique « Catégories du point » des fiches : luò-liaison, xì-crevasse, yuán-source,
+  // point d'ouverture d'un des huit vaisseaux, et point de transport (wǔ shū xué) avec son mouvement
+  YIN12: new Set(["P", "Rt", "C", "Rn", "EC", "F"]),
+  YANG12: new Set(["GI", "E", "IG", "V", "TF", "VB"]),
+  SHU: { yin: ["bois", "feu", "terre", "metal", "eau"], yang: ["metal", "eau", "bois", "feu", "terre"] },
+  SHU_NOM: ["jǐng-puits", "yíng-jaillissement", "shū-rivière", "jīng-fleuve", "hé-réunion"],
+  MV_FR: { bois: "bois", feu: "feu", terre: "terre", metal: "métal", eau: "eau" },
+  // fond, texte et liseré de la nomenclature d'un point de transport, selon son mouvement
+  MV_STYLE: { bois: ["#2f9a3c", "#fff", "rgba(0,0,0,.5)"], feu: ["#e0261b", "#fff", "rgba(0,0,0,.5)"], terre: ["#d9a400", "#1d1d1f", "rgba(0,0,0,.5)"], metal: ["#ffffff", "#1d1d1f", "#1d1d1f"], eau: ["#1d1d1f", "#fff", "rgba(255,255,255,.75)"] },
+  OUVRE: { "Rt 4": "chōng mài", "EC 6": "yīn wéi mài", "IG 3": "DM", "V 62": "yáng qiāo mài", "P 7": "RM", "Rn 6": "yīn qiāo mài", "VB 41": "dài mài", "TF 5": "yáng wéi mài" },
+  ICONES: {
+    key: ['<circle cx="7" cy="12" r="3.8"/><path d="M10.8 12H21M17 12v3.6M20.8 12v2.6"/>', "ouverture d'un vaisseau"],
+    luo: ['<rect x="2.6" y="8.4" width="11.4" height="7.2" rx="3.6" transform="rotate(-28 8.3 12)"/><rect x="10" y="8.4" width="11.4" height="7.2" rx="3.6" transform="rotate(-28 15.7 12)"/>', "luò-liaison"],
+    xi: ['<circle cx="12" cy="12" r="8.6"/><path d="M13.4 3.8l-3.8 5.8 4.2 2.2-3.2 8.2"/>', "xì-crevasse"],
+    yuan: ['<circle cx="12" cy="12" r="3"/><path d="M12 3.4v3.4M12 17.2v3.4M3.4 12h3.4M17.2 12h3.4M6 6l2.4 2.4M15.6 15.6L18 18M18 6l-2.4 2.4M8.4 15.6L6 18"/>', "yuán-source"]
+  },
+  _att: {}, _idx: null,
+  svg(k) { return `<svg class="pi${k === "key" ? " key" : ""}" viewBox="0 0 24 24" aria-hidden="true">${this.ICONES[k][0]}</svg>`; },
+  attrs(code) {
+    const cle = String(code).replace(/\s+/g, "");
+    if (this._att[cle]) return this._att[cle];
+    if (!this._idx) { if (!(Points.entries || []).length) return {}; this._idx = new Map(Points.entries.map(e => [String(e.id).replace(/\s+/g, ""), e])); }     // fiches pas encore chargées : rien n'est mémorisé
+    const e = this._idx.get(cle), r = {};
+    if (e) {
+      const own = String(code).split(/\s+/)[0];
+      const lignes = String(e.data.categories_point || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/\n/).map(l => l.replace(/^[^a-z]+/, ""));
+      if (lignes.some(l => /^point (grande? |du grand )?luo-liaison/.test(l))) r.luo = 1;
+      if (lignes.some(l => /^point xi-crevasse/.test(l))) r.xi = 1;
+      if (lignes.some(l => /^point yuan-source/.test(l))) r.yuan = 1;
+      let t = -1;
+      lignes.forEach(l => { if (/^point jing-puits/.test(l)) t = 0; else if (/^point ying-jaillissement/.test(l)) t = 1; else if (/^point shu-riviere/.test(l)) t = 2; else if (/^point jing-fleuve/.test(l)) t = 3; else if (/^point he-reunion/.test(l) && !/xia/.test(l)) t = 4; });
+      if (t >= 0 && (this.YIN12.has(own) || this.YANG12.has(own))) { r.shu = t; r.mov = this.SHU[this.YIN12.has(own) ? "yin" : "yang"][t]; }
+    }
+    if (this.OUVRE[String(code).replace(/\s+/g, " ")]) r.key = 1;
+    return (this._att[cle] = r);
+  },
+  mvVars(m) { const s = this.MV_STYLE[m]; return `--m:${s[0]};--f:${s[1]};--ring:${s[2]}`; },
+  // nomenclature d'un point : en pastille à la couleur de son mouvement quand c'est un point de transport (et seulement eux)
+  cd(code) { const a = this.attrs(code); return a.mov ? `<span class="cd" style="${this.mvVars(a.mov)}" title="${escapeHtml(this.SHU_NOM[a.shu] + " · " + this.MV_FR[a.mov])}">${escapeHtml(code)}</span>` : escapeHtml(code); },
+  icones(code) { const a = this.attrs(code), l = ["key", "luo", "xi", "yuan"].filter(k => a[k]).slice(0, 3); return l.length ? `<span class="ics">${l.map(k => this.svg(k)).join("")}</span>` : ""; },
+  legende() {
+    return `<div class="croise-legende"><span><span class="croise-pt">P 1</span> recoupement confirmé</span><span><span class="croise-pt maybe">P 1</span> recoupement secondaire (gris dans la source, à vérifier)</span><span><i class="croise-dot"></i> canal propre du point</span></div>` +
+      `<div class="croise-legende">${["key", "luo", "xi", "yuan"].map(k => `<span>${this.svg(k)} ${this.ICONES[k][1]}</span>`).join("")}</div>` +
+      `<div class="croise-legende"><span>Points de transport :</span>${Object.keys(this.MV_STYLE).map(m => `<span class="cd" style="${this.mvVars(m)}">${this.MV_FR[m]}</span>`).join("")}</div>`;
+  },
+
+  cellFor(point, colName, j) {
     const isVessel = this.vessels.includes(colName);
     const list = isVessel ? point.vaisseaux_extraordinaires_recoupes : point.canaux_recoupes;
     const key = isVessel ? "vaisseau" : "canal";
     const found = (list || []).find(x => x[key] === colName);
-    if (colName === point.canal_principal) return `<td class="croise-self" title="Canal propre du point"></td>`;
-    if (!found) return `<td></td>`;
-    const cls = found.type === "confirme" ? "croise-confirme" : "croise-secondaire";
-    return `<td class="${cls}" title="${escapeHtml(colName)} — ${found.type === "confirme" ? "recoupement confirmé" : "recoupement secondaire (à vérifier)"}">${escapeHtml(point.point)}</td>`;       // le nom du point est écrit dans la case, qu'elle soit noire ou grise
+    const c1 = j % 2 ? " c1" : "";
+    if (colName === point.canal_principal) return `<td class="croise-c${c1}" title="Canal propre du point"><i class="croise-dot"></i></td>`;
+    if (!found) return `<td class="croise-c${c1}"></td>`;
+    const sec = found.type !== "confirme", a = this.attrs(point.point);
+    const ouvre = this.OUVRE[String(point.point).replace(/\s+/g, " ")] === colName ? this.svg("key") : "";
+    return `<td class="croise-c${c1}" title="${escapeHtml(colName)} — ${sec ? "recoupement secondaire (à vérifier)" : "recoupement confirmé"}"><span class="croise-pt${sec ? " maybe" : ""}${a.mov ? " mvt" : ""}"${a.mov ? ` style="${this.mvVars(a.mov)}"` : ""}>${ouvre}${escapeHtml(point.point)}</span></td>`;
   },
 
   // ----- sélection de plusieurs canaux : le tableau ne garde que leurs colonnes et leurs points d'intersection, rangés sous une rubrique par canal
@@ -4080,17 +4129,17 @@ const Croisement = {
     if (n) pts = pts.map((p, i) => [p, i]).sort((a, b) => (tousCols.indexOf(a[0].canal_principal) < 0 ? 99 : tousCols.indexOf(a[0].canal_principal)) - (tousCols.indexOf(b[0].canal_principal) < 0 ? 99 : tousCols.indexOf(b[0].canal_principal)) || a[1] - b[1]).map(x => x[0]);
     if (!pts.length) { wrap.innerHTML = n > 1 ? `<p class="muted">Aucun point partagé.${this.mode === "entre" ? " Essaie « Tous leurs points »." : ""}</p>` : `<p class="muted">Aucun résultat.</p>`; return; }
     const header = `<tr><th>Point</th>${allCols.map(c => `<th class="croise-th${this.sel.has(c) ? " sel" : ""}" data-croise-col="${escapeHtml(c)}" title="${escapeHtml(this.nom(c))} : clique pour le choisir">${escapeHtml(c)}</th>`).join("")}</tr>`;
-    let last = null, rows = "";
+    let last = null, rows = "", zi = 0;
     pts.forEach(p => {
       if (n && p.canal_principal !== last) { rows += `<tr class="croise-rubrique"><th colspan="${allCols.length + 1}">${escapeHtml(this.nom(p.canal_principal))}</th></tr>`; last = p.canal_principal; }
-      rows += `<tr><th class="croise-point-label">${escapeHtml(p.point)}</th>${allCols.map(c => this.cellFor(p, c)).join("")}</tr>`;
+      rows += `<tr${zi++ % 2 ? ' class="z1"' : ""}><th class="croise-point-label">${this.cd(p.point)}${this.icones(p.point)}</th>${allCols.map((c, j) => this.cellFor(p, c, j)).join("")}</tr>`;
     });
     const info = !n ? `${pts.length} point(s) de croisement affiché(s). Clique sur des canaux (au-dessus, ou sur leur en-tête de colonne) pour ne voir que leurs croisements.`
       : n === 1 ? `<b>${escapeHtml(this.nom(choisis[0]))}</b> : ${pts.length} point${pts.length > 1 ? "s" : ""} d'intersection. Ajoute un autre canal pour ne voir que leurs croisements.`
       : `<b>${pts.length} point${pts.length > 1 ? "s" : ""}</b> ${this.mode === "entre" ? "partagé" + (pts.length > 1 ? "s" : "") + " par au moins deux de ces canaux." : "où passe l'un de ces canaux."}`;
     wrap.innerHTML = `<div class="croise-table-scroll"><table class="croise-table${n > 1 ? " croise-choix" : ""}">${header}${rows}</table></div>
       <p class="muted croise-info" aria-live="polite">${info}</p>
-      <p class="muted" data-aide>Case sombre = recoupement confirmé (noir dans la source). Case claire = recoupement secondaire (gris dans la source, sans légende explicite — à vérifier).</p>`;
+      ${this.legende()}`;
   },
 
   search(query) {
