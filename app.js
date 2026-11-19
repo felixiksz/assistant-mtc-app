@@ -4048,14 +4048,48 @@ const Croisement = {
     return `<td class="${cls}" title="${escapeHtml(colName)} — ${found.type === "confirme" ? "recoupement confirmé" : "recoupement secondaire (à vérifier)"}"></td>`;
   },
 
+  // ----- sélection de plusieurs canaux : le tableau ne garde que leurs colonnes et leurs points d'intersection, rangés sous une rubrique par canal
+  sel: new Set(),
+  mode: "entre",            // « entre eux » : au moins deux des canaux choisis passent par le point ; « tous » : au moins un
+  DOUZE: ["P", "GI", "E", "Rt", "C", "IG", "V", "Rn", "EC", "TF", "VB", "F"],
+  HUIT: ["RM", "DM", "chōng mài", "dài mài", "yáng qiāo mài", "yáng wéi mài", "yīn qiāo mài", "yīn wéi mài"],
+  NOMS: { P: "shǒu tài yīn", GI: "shǒu yáng míng", E: "zú yáng míng", Rt: "zú tài yīn", C: "shǒu shào yīn", IG: "shǒu tài yáng", V: "zú tài yáng", Rn: "zú shào yīn", EC: "shǒu jué yīn", TF: "shǒu shào yáng", VB: "zú shào yáng", F: "zú jué yīn", RM: "rèn mài", DM: "dū mài" },
+  nom(l) { return this.NOMS[l] || l; },
+  // un canal passe par un point si c'est le canal du point, ou s'il figure dans ses recoupements
+  passe(p, l) {
+    return p.canal_principal === l || (p.canaux_recoupes || []).some(c => c.canal === l) || (p.vaisseaux_extraordinaires_recoupes || []).some(v => v.vaisseau === l);
+  },
+  basculer(l) { this.sel.has(l) ? this.sel.delete(l) : this.sel.add(l); this.rerendre(); },
+  rerendre() { this.render(this.search(document.getElementById("croise-search").value)); },
+  pastilles() {
+    const z = document.getElementById("croise-pastilles");
+    if (!z) return;
+    const n = this.sel.size;
+    const rang = (titre, liste) => `<div class="croise-pastilles-rang"><span class="croise-pastilles-titre">${titre}</span>${liste.map(l => `<button type="button" class="cat-chip croise-pastille${this.sel.has(l) ? " active" : ""}" data-croise-col="${escapeHtml(l)}" aria-pressed="${this.sel.has(l)}" title="${escapeHtml(this.nom(l))}">${escapeHtml(l)}</button>`).join("")}</div>`;
+    z.innerHTML = rang("Les douze canaux", this.DOUZE) + rang("Les huit merveilleux vaisseaux", this.HUIT) +
+      (n ? `<div class="croise-pastilles-rang">${n > 1 ? `<span class="croise-mode" role="group" aria-label="Points à montrer"><button type="button" class="cat-chip${this.mode === "entre" ? " active" : ""}" data-croise-mode="entre" aria-pressed="${this.mode === "entre"}">Entre eux</button><button type="button" class="cat-chip${this.mode === "tous" ? " active" : ""}" data-croise-mode="tous" aria-pressed="${this.mode === "tous"}">Tous leurs points</button></span>` : ""}<button type="button" class="edit-toggle-btn" data-croise-effacer>Effacer</button></div>` : "");
+  },
   render(points) {
     const wrap = document.getElementById("croise-table-wrap");
-    if (!points.length) { wrap.innerHTML = `<p class="muted">Aucun résultat.</p>`; return; }
-    const allCols = [...this.cols, ...this.vessels];
-    const header = `<tr><th>Point</th>${allCols.map(c => `<th>${escapeHtml(c)}</th>`).join("")}</tr>`;
-    const rows = points.map(p => `<tr><th class="croise-point-label">${escapeHtml(p.point)}</th>${allCols.map(c => this.cellFor(p, c)).join("")}</tr>`).join("");
-    wrap.innerHTML = `<div class="croise-table-scroll"><table class="croise-table">${header}${rows}</table></div>
-      <p class="muted">${points.length} point(s) de croisement affiché(s).</p>
+    this.pastilles();
+    const n = this.sel.size, choisis = [...this.sel];
+    const garde = p => { const k = choisis.filter(l => this.passe(p, l)).length; return n === 0 ? true : (n === 1 || this.mode === "tous") ? k >= 1 : k >= 2; };
+    let pts = points.filter(garde);
+    const tousCols = [...this.cols, ...this.vessels];
+    const allCols = n > 1 ? tousCols.filter(c => this.sel.has(c)) : tousCols;
+    if (n) pts = pts.map((p, i) => [p, i]).sort((a, b) => (tousCols.indexOf(a[0].canal_principal) < 0 ? 99 : tousCols.indexOf(a[0].canal_principal)) - (tousCols.indexOf(b[0].canal_principal) < 0 ? 99 : tousCols.indexOf(b[0].canal_principal)) || a[1] - b[1]).map(x => x[0]);
+    if (!pts.length) { wrap.innerHTML = n > 1 ? `<p class="muted">Aucun point partagé.${this.mode === "entre" ? " Essaie « Tous leurs points »." : ""}</p>` : `<p class="muted">Aucun résultat.</p>`; return; }
+    const header = `<tr><th>Point</th>${allCols.map(c => `<th class="croise-th${this.sel.has(c) ? " sel" : ""}" data-croise-col="${escapeHtml(c)}" title="${escapeHtml(this.nom(c))} : clique pour le choisir">${escapeHtml(c)}</th>`).join("")}</tr>`;
+    let last = null, rows = "";
+    pts.forEach(p => {
+      if (n && p.canal_principal !== last) { rows += `<tr class="croise-rubrique"><th colspan="${allCols.length + 1}">${escapeHtml(this.nom(p.canal_principal))}</th></tr>`; last = p.canal_principal; }
+      rows += `<tr><th class="croise-point-label">${escapeHtml(p.point)}</th>${allCols.map(c => this.cellFor(p, c)).join("")}</tr>`;
+    });
+    const info = !n ? `${pts.length} point(s) de croisement affiché(s). Clique sur des canaux (au-dessus, ou sur leur en-tête de colonne) pour ne voir que leurs croisements.`
+      : n === 1 ? `<b>${escapeHtml(this.nom(choisis[0]))}</b> : ${pts.length} point${pts.length > 1 ? "s" : ""} d'intersection. Ajoute un autre canal pour ne voir que leurs croisements.`
+      : `<b>${pts.length} point${pts.length > 1 ? "s" : ""}</b> ${this.mode === "entre" ? "partagé" + (pts.length > 1 ? "s" : "") + " par au moins deux de ces canaux." : "où passe l'un de ces canaux."}`;
+    wrap.innerHTML = `<div class="croise-table-scroll"><table class="croise-table${n > 1 ? " croise-choix" : ""}">${header}${rows}</table></div>
+      <p class="muted croise-info" aria-live="polite">${info}</p>
       <p class="muted" data-aide>Case sombre = recoupement confirmé (noir dans la source). Case claire = recoupement secondaire (gris dans la source, sans légende explicite — à vérifier).</p>`;
   },
 
@@ -4073,6 +4107,13 @@ const Croisement = {
 };
 document.getElementById("croise-search").addEventListener("input", (e) => {
   if (Croisement.data) Croisement.render(Croisement.search(e.target.value));
+});
+document.getElementById("pts-view-croisements-panel").addEventListener("click", (e) => {
+  if (!Croisement.data) return;
+  const col = e.target.closest("[data-croise-col]"), mode = e.target.closest("[data-croise-mode]"), eff = e.target.closest("[data-croise-effacer]");
+  if (col) Croisement.basculer(col.dataset.croiseCol);
+  else if (mode) { Croisement.mode = mode.dataset.croiseMode; Croisement.rerendre(); }
+  else if (eff) { Croisement.sel = new Set(); Croisement.rerendre(); }
 });
 Croisement.load();
 /* ============================= Points > Canaux distincts : tableaux pathologiques =============================
