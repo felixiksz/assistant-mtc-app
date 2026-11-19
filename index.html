@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Young+Serif&family=Noto+Serif:wght@700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=178">
+<link rel="stylesheet" href="style.css?v=179">
 <script src="theme.js?v=5"></script>
 </head>
 <body>
@@ -333,6 +333,7 @@
       <button type="button" id="pts-view-fiches" class="cat-chip active">Fiches par point</button>
       <button type="button" id="pts-view-croisements" class="cat-chip">Tableau des croisements de canaux</button>
       <button type="button" id="pts-view-distincts" class="cat-chip">Canaux distincts : tableaux pathologiques</button>
+      <button type="button" id="pts-view-nada" class="cat-chip">Oreille : protocole NADA</button>
       <button type="button" id="pts-load-local-images" class="cat-chip">📁 Charger les images depuis ce téléphone/dossier</button>
       <button type="button" id="pts-clear-local-images" class="cat-chip">🗑 Effacer les images locales enregistrées</button>
       <input type="file" id="pts-local-images-input" webkitdirectory multiple style="display:none;">
@@ -349,6 +350,25 @@
         <article id="pts-detail" class="formule-detail">
           <p class="muted">Sélectionne un canal puis un point.</p>
         </article>
+      </div>
+    </div>
+    <div id="pts-view-nada-panel" style="display:none;">
+      <div class="nada-layout">
+        <figure class="nada-fig">
+          <a id="nada-lien" href="#" target="_blank" rel="noopener" title="Ouvrir l'image en grand"><img id="nada-img" alt="Oreille : les cinq points du protocole NADA"></a>
+          <figcaption class="muted">Image : yinyanghouse.com, © 2002-2005 (mention portée sur l'image).</figcaption>
+        </figure>
+        <div class="nada-texte">
+          <h3>Protocole NADA <span class="muted">(auriculothérapie)</span></h3>
+          <p>Cinq points de l'oreille, tels qu'ils sont repérés sur l'image :</p>
+          <ol class="nada-points">
+            <li><strong>Point autonome</strong> <span class="muted">(Autonomic Point, sympathique)</span></li>
+            <li><strong>Shén mén</strong> <span class="muted">(Shen Men)</span></li>
+            <li><strong>Rein</strong> <span class="muted">(Kidney)</span></li>
+            <li><strong>Foie</strong> <span class="muted">(Liver)</span></li>
+            <li><strong>Poumon</strong> <span class="muted">(Lung 2)</span></li>
+          </ol>
+        </div>
       </div>
     </div>
     <div id="pts-view-croisements-panel" style="display:none;">
@@ -491,7 +511,7 @@
 
 </main>
 
-<script src="app.js?v=153"></script>
+<script src="app.js?v=154"></script>
 <script src="circuits.js?v=107"></script>
 <script src="tung.js?v=19"></script>
 <script src="prescription.js?v=3"></script>

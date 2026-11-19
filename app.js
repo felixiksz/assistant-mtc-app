@@ -4081,7 +4081,8 @@ Croisement.load();
 const PTS_VIEWS = [
   ["pts-view-fiches", "pts-view-fiches-panel"],
   ["pts-view-croisements", "pts-view-croisements-panel"],
-  ["pts-view-distincts", "pts-view-distincts-panel"]
+  ["pts-view-distincts", "pts-view-distincts-panel"],
+  ["pts-view-nada", "pts-view-nada-panel"]
 ];
 function showPtsView(btnId) {
   PTS_VIEWS.forEach(([b, p]) => {
@@ -4248,6 +4249,19 @@ document.getElementById("pts-view-fiches").addEventListener("click", () => showP
 document.getElementById("pts-view-croisements").addEventListener("click", () => {
   showPtsView("pts-view-croisements");
   if (Croisement.data) Croisement.render(Croisement.data.points);
+});
+
+// Points > Oreille : protocole NADA (image rangée dans le dépôt de données privé : acupuncture/auriculo/nada.png)
+document.getElementById("pts-view-nada").addEventListener("click", async () => {
+  showPtsView("pts-view-nada");
+  const img = document.getElementById("nada-img");
+  if (img.dataset.ok) return;
+  try {
+    const url = await Store.imageUrl("acupuncture/auriculo/nada.png");
+    img.src = url; document.getElementById("nada-lien").href = url; img.dataset.ok = "1";
+  } catch (e) {
+    img.insertAdjacentHTML("afterend", `<p class="muted">Image indisponible (${escapeHtml(e.message)}).</p>`);
+  }
 });
 
 /* ============================= Comparer (syndromes ou formules côte à côte) ============================= */
@@ -6215,6 +6229,12 @@ const GlobalSearch = {
         }
       });
     });
+
+    { const hay = "protocole nada auriculotherapie oreille auriculaire point autonome sympathique shen men shén mén rein kidney foie liver poumon lung";
+      if (ok(hay)) out.push({
+        group: "Points", champs: () => [hay], title: "Oreille : protocole NADA", sub: "Auriculothérapie · 5 points (point autonome, Shén mén, rein, foie, poumon)",
+        go: () => { this.gotoTab("points"); document.getElementById("pts-view-nada").click(); }
+      }); }
 
     const PSY_THEME_LABELS = { depression: "Dépression", anxiete: "Anxiété", insomnie: "Insomnie" };
     ((window.DepressionAnxieteInsomnieData && window.DepressionAnxieteInsomnieData.types) || []).forEach(t => {

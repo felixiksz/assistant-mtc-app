@@ -1679,3 +1679,10 @@ mark.gsr-fluo { scroll-margin-top: 8rem; }
 .consult-strat-aide { margin: 0.25rem 0 0; font-size: 0.78rem; }
 .reseau-arch-strat { display: block; font-size: 0.78rem; }
 #global-search-results .gsr-exact { margin-left: auto; }
+/* Points > oreille : protocole NADA */
+.nada-layout { display: flex; flex-wrap: wrap; gap: 1.2rem; align-items: flex-start; margin-top: 0.6rem; }
+.nada-fig { margin: 0; max-width: 440px; flex: 0 1 440px; }
+.nada-fig img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px !important; background: #fff; }
+.nada-fig figcaption { font-size: 0.78rem; margin-top: 0.3rem; }
+.nada-texte { flex: 1 1 260px; min-width: 0; }
+.nada-points { padding-left: 1.3rem; line-height: 1.7; }
