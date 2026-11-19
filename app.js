@@ -6142,10 +6142,23 @@ const GlobalSearch = {
 
   // termes de la recherche : chaque mot séparément (tous doivent être présents), ou une expression exacte entre guillemets
   // (« foie gras » ne trouve que « foie gras », pas « foie » ici et « gras » là) ; le bouton « Expression exacte » fait de toute la saisie une expression
-  exact: (() => { try { return localStorage.getItem("gsr_exact") === "1"; } catch (e) { return false; } })(),
+  // quatre façons de chercher (au choix, mémorisées) : tous les mots n'importe où / mots proches (même passage) / expression exacte / un des mots
+  MODES: [["tous", "Tous les mots", "Tous les mots doivent être dans la fiche, où que ce soit."],
+    ["proches", "Mots proches", "Tous les mots, mais rapprochés : dans un même passage (quelques mots d'écart au plus)."],
+    ["exact", "« » Expression exacte", "La suite de mots telle quelle (ex. « foie gras » sans « foie » seul ni « gras » seul). Tu peux aussi mettre une expression entre guillemets dans n'importe quel mode."],
+    ["un", "Un des mots", "Au moins un des mots ; les fiches qui en contiennent le plus sont en tête."]],
+  mode: (() => { try { const m = localStorage.getItem("gsr_mode"); if (m) return m; return localStorage.getItem("gsr_exact") === "1" ? "exact" : "tous"; } catch (e) { return "tous"; } })(),
+  // les mots sont-ils rapprochés ? chacun doit avoir une occurrence à moins de `fen` caractères d'une occurrence du mot le plus rare
+  proche(h, mots, fen = 80) {
+    if (mots.length < 2) return true;
+    const pos = mots.map(m => { const l = []; let i = 0, j; while ((j = h.indexOf(m, i)) >= 0 && l.length < 400) { l.push(j); i = j + 1; } return l; });
+    if (pos.some(l => !l.length)) return false;
+    let bi = 0; pos.forEach((l, k) => { if (l.length < pos[bi].length) bi = k; });
+    return pos[bi].some(p => pos.every((l, k) => k === bi || l.some(q => Math.abs(q - p) <= fen)));
+  },
   termes(query) {
     const brut = String(query || "");
-    if (this.exact) { const t = normalizeSearch(brut.replace(/["«»“”]/g, " ")); return t ? [t] : []; }
+    if (this.mode === "exact") { const t = normalizeSearch(brut.replace(/["«»“”]/g, " ")); return t ? [t] : []; }
     const res = [];
     let reste = brut.replace(/["«“]([^"»”]+)["»”]/g, (_, p) => { const t = normalizeSearch(p); if (t) res.push(t); return " "; });
     const ouv = reste.match(/["«“]([^"»”]*)$/);                              // guillemet pas encore refermé : la fin est déjà une expression
@@ -6154,12 +6167,13 @@ const GlobalSearch = {
     return res;
   },
   barreExact() {
-    return `<button type="button" class="cat-chip gsr-exact${this.exact ? " active" : ""}" data-exact="1" aria-pressed="${this.exact}" title="Cherche la suite de mots telle quelle (ex. « foie gras » sans « foie » seul ni « gras » seul). Tu peux aussi mettre l'expression entre guillemets.">« » Expression exacte</button>`;
+    return `<span class="gsr-modes" role="group" aria-label="Façon de chercher">${this.MODES.map(([k, lib, aide]) => `<button type="button" class="cat-chip gsr-mode${k === this.mode ? " active" : ""}" data-mode="${k}" aria-pressed="${k === this.mode}" title="${escapeHtml(aide)}">${escapeHtml(lib)}</button>`).join("")}</span>`;
   },
   collect(query) {
     const mots = this.termes(query);
     if (!mots.length) return [];
-    const ok = hay => { const h = normalizeSearch(hay); return mots.every(m => h.includes(m)); };
+    const un = this.mode === "un", proches = this.mode === "proches";
+    const ok = hay => { const h = normalizeSearch(hay); return un ? mots.some(m => h.includes(m)) : mots.every(m => h.includes(m)) && (!proches || this.proche(h, mots)); };
     const out = [];
 
     (Formules.index || []).forEach(f => {
@@ -6301,8 +6315,9 @@ const GlobalSearch = {
     });
     // dans chaque groupe : d'abord les résultats dont le titre contient les mots cherchés
     const sc = it => { const t = normalizeSearch(it.title); return mots.every(m => t.includes(m)) ? 0 : mots.some(m => t.includes(m)) ? 1 : 2; };
-    out.forEach((it, i) => { it._s = sc(it); it._i = i; it.type = this.TYPE_GROUPE[it.group] || "autres"; });
-    return out.sort((x, y) => x._s - y._s || x._i - y._i);
+    out.forEach((it, i) => { it._s = sc(it); it._i = i; it.type = this.TYPE_GROUPE[it.group] || "autres"; it._n = 0; });
+    if (un) out.forEach(it => { const t = normalizeSearch([it.title, it.sub, ...(it.champs ? it.champs() : [])].join(" ")); it._n = mots.filter(m => t.includes(m)).length; });       // « un des mots » : ceux qui en ont le plus d'abord
+    return out.sort((x, y) => y._n - x._n || x._s - y._s || x._i - y._i);
   },
 
   // un seul champ pour tout : filtres par type, et sur chaque résultat ⧉ (onglet de travail) et ＋ (réseau de la patiente)
@@ -6324,8 +6339,8 @@ const GlobalSearch = {
   render(items) {
     const q = this.input.value.trim(), mots = this.termes(q);
     if (!mots.length) { this.results.innerHTML = ""; this.results.classList.remove("open"); return; }
-    const brancherExact = () => { const b = this.results.querySelector("[data-exact]"); if (b) b.addEventListener("click", ev => { ev.stopPropagation(); this.exact = !this.exact; try { localStorage.setItem("gsr_exact", this.exact ? "1" : "0"); } catch (e) { /* stockage indisponible */ } this.runSearch(); }); };
-    if (!items.length) { this.results.innerHTML = `<div class="gsr-filtres">${this.barreExact()}</div><p class="gsr-empty">Aucun résultat pour ${this.exact || mots.some(m => m.includes(" ")) ? "l'expression exacte " : ""}« ${escapeHtml(mots.join(" + "))} ».</p>`; this.results.classList.add("open"); brancherExact(); return; }
+    const brancherExact = () => this.results.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", ev => { ev.stopPropagation(); this.mode = b.dataset.mode; try { localStorage.setItem("gsr_mode", this.mode); } catch (e) { /* stockage indisponible */ } this.runSearch(); }));
+    if (!items.length) { this.results.innerHTML = `<div class="gsr-filtres">${this.barreExact()}</div><p class="gsr-empty">Aucun résultat pour « ${escapeHtml(mots.join(" + "))} » (${escapeHtml((this.MODES.find(m => m[0] === this.mode) || [])[1] || "")}).${this.mode === "un" ? "" : " Essaie un mode plus large ci-dessus."}</p>`; this.results.classList.add("open"); brancherExact(); return; }
     const nb = {}; items.forEach(it => { nb[it.type] = (nb[it.type] || 0) + 1; });
     if (this.filtre !== "tout" && !nb[this.filtre]) this.filtre = "tout";
     const tout = this.filtre === "tout", max = tout ? 5 : 80;

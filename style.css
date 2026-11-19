@@ -1678,7 +1678,7 @@ mark.gsr-fluo { scroll-margin-top: 8rem; }
 .consult-strat { width: 100%; box-sizing: border-box; min-height: 4rem; resize: vertical; font: inherit; font-size: 0.9rem; }
 .consult-strat-aide { margin: 0.25rem 0 0; font-size: 0.78rem; }
 .reseau-arch-strat { display: block; font-size: 0.78rem; }
-#global-search-results .gsr-exact { margin-left: auto; }
+#global-search-results .gsr-modes { margin-left: auto; display: inline-flex; flex-wrap: wrap; gap: 0.25rem; }
 /* Points > oreille : protocole NADA */
 .nada-layout { display: flex; flex-wrap: wrap; gap: 1.2rem; align-items: flex-start; margin-top: 0.6rem; }
 .nada-fig { margin: 0; max-width: 440px; flex: 0 1 440px; }
