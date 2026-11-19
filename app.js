@@ -4078,6 +4078,27 @@ const Croisement = {
   // nomenclature d'un point : en pastille à la couleur de son mouvement quand c'est un point de transport (et seulement eux)
   cd(code) { const a = this.attrs(code); return a.mov ? `<span class="cd" style="${this.mvVars(a.mov)}" title="${escapeHtml(this.SHU_NOM[a.shu] + " · " + this.MV_FR[a.mov])}">${escapeHtml(code)}</span>` : escapeHtml(code); },
   icones(code) { const a = this.attrs(code), l = ["key", "luo", "xi", "yuan"].filter(k => a[k]).slice(0, 3); return l.length ? `<span class="ics">${l.map(k => this.svg(k)).join("")}</span>` : ""; },
+  // clic sur un point : petit menu pour ouvrir sa fiche, le mettre au comparateur ou l'ajouter à la consultation
+  fermerMenu() { const m = document.getElementById("croise-menu"); if (m) m.remove(); },
+  menuPoint(el, code) {
+    this.fermerMenu();
+    const e = (Points.entries || []).find(x => String(x.id).replace(/\s+/g, "") === String(code).replace(/\s+/g, ""));
+    const m = document.createElement("div");
+    m.id = "croise-menu"; m.setAttribute("role", "menu");
+    m.innerHTML = `<div class="croise-menu-titre"><strong>${escapeHtml(code)}</strong>${e && e.data.pinyin ? ` <span class="muted">${escapeHtml(e.data.pinyin)}</span>` : ""}</div>` +
+      `<button type="button" data-a="fiche">Ouvrir la fiche</button><button type="button" data-a="cmp">⇄ Mettre au comparateur</button><button type="button" data-a="consult">＋ Ajouter à la consultation</button>`;
+    document.body.appendChild(m);
+    const r = el.getBoundingClientRect();
+    m.style.left = Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, r.left)) + "px";
+    m.style.top = Math.max(8, Math.min(window.innerHeight - m.offsetHeight - 8, r.bottom + 4)) + "px";
+    m.addEventListener("click", ev => {
+      const b = ev.target.closest("[data-a]"); if (!b) return;
+      this.fermerMenu();
+      if (b.dataset.a === "fiche") Onglets.ouvrirPoint(code);
+      else if (b.dataset.a === "cmp") Comparateur.ajouterPoint(e ? e.id : code);
+      else if (typeof Reseau !== "undefined") Reseau.ajouter({ point: String(code).replace(/\s+/g, ""), source: "tableau des croisements" });
+    });
+  },
   legende() {
     return `<div class="croise-legende"><span><span class="croise-pt">P 1</span> recoupement confirmé</span><span><span class="croise-pt maybe">P 1</span> recoupement secondaire (gris dans la source, à vérifier)</span><span><i class="croise-dot"></i> canal propre du point</span></div>` +
       `<div class="croise-legende">${["key", "luo", "xi", "yuan"].map(k => `<span>${this.svg(k)} ${this.ICONES[k][1]}</span>`).join("")}</div>` +
@@ -4093,8 +4114,10 @@ const Croisement = {
     if (colName === point.canal_principal) return `<td class="croise-c${c1}" title="Canal propre du point"><i class="croise-dot"></i></td>`;
     if (!found) return `<td class="croise-c${c1}"></td>`;
     const sec = found.type !== "confirme", a = this.attrs(point.point);
+    // les symboles des catégories du point sont aussi dans la case (la clé seulement dans la colonne du vaisseau qu'elle ouvre)
     const ouvre = this.OUVRE[String(point.point).replace(/\s+/g, " ")] === colName ? this.svg("key") : "";
-    return `<td class="croise-c${c1}" title="${escapeHtml(colName)} — ${sec ? "recoupement secondaire (à vérifier)" : "recoupement confirmé"}"><span class="croise-pt${sec ? " maybe" : ""}${a.mov ? " mvt" : ""}"${a.mov ? ` style="${this.mvVars(a.mov)}"` : ""}>${ouvre}${escapeHtml(point.point)}</span></td>`;
+    const ics = ["luo", "xi", "yuan"].filter(k => a[k]).map(k => this.svg(k)).join("");
+    return `<td class="croise-c${c1}" title="${escapeHtml(colName)} — ${sec ? "recoupement secondaire (à vérifier)" : "recoupement confirmé"}"><span class="croise-pt${sec ? " maybe" : ""}${a.mov ? " mvt" : ""}" data-croise-pt="${escapeHtml(point.point)}"${a.mov ? ` style="${this.mvVars(a.mov)}"` : ""}>${escapeHtml(point.point)}${ouvre}${ics}</span></td>`;
   },
 
   // ----- sélection de plusieurs canaux : le tableau ne garde que leurs colonnes et leurs points d'intersection, rangés sous une rubrique par canal
@@ -4132,7 +4155,7 @@ const Croisement = {
     let last = null, rows = "", zi = 0;
     pts.forEach(p => {
       if (n && p.canal_principal !== last) { rows += `<tr class="croise-rubrique"><th colspan="${allCols.length + 1}">${escapeHtml(this.nom(p.canal_principal))}</th></tr>`; last = p.canal_principal; }
-      rows += `<tr${zi++ % 2 ? ' class="z1"' : ""}><th class="croise-point-label">${this.cd(p.point)}${this.icones(p.point)}</th>${allCols.map((c, j) => this.cellFor(p, c, j)).join("")}</tr>`;
+      rows += `<tr${zi++ % 2 ? ' class="z1"' : ""}><th class="croise-point-label" data-croise-pt="${escapeHtml(p.point)}" title="Clique pour ouvrir la fiche, comparer ou ajouter à la consultation">${this.cd(p.point)}${this.icones(p.point)}</th>${allCols.map((c, j) => this.cellFor(p, c, j)).join("")}</tr>`;
     });
     const info = !n ? `${pts.length} point(s) de croisement affiché(s). Clique sur des canaux (au-dessus, ou sur leur en-tête de colonne) pour ne voir que leurs croisements.`
       : n === 1 ? `<b>${escapeHtml(this.nom(choisis[0]))}</b> : ${pts.length} point${pts.length > 1 ? "s" : ""} d'intersection. Ajoute un autre canal pour ne voir que leurs croisements.`
@@ -4157,10 +4180,13 @@ const Croisement = {
 document.getElementById("croise-search").addEventListener("input", (e) => {
   if (Croisement.data) Croisement.render(Croisement.search(e.target.value));
 });
+document.addEventListener("click", (e) => { if (!e.target.closest("#croise-menu") && !e.target.closest("[data-croise-pt]")) Croisement.fermerMenu(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") Croisement.fermerMenu(); });
 document.getElementById("pts-view-croisements-panel").addEventListener("click", (e) => {
   if (!Croisement.data) return;
-  const col = e.target.closest("[data-croise-col]"), mode = e.target.closest("[data-croise-mode]"), eff = e.target.closest("[data-croise-effacer]");
-  if (col) Croisement.basculer(col.dataset.croiseCol);
+  const col = e.target.closest("[data-croise-col]"), mode = e.target.closest("[data-croise-mode]"), eff = e.target.closest("[data-croise-effacer]"), pt = e.target.closest("[data-croise-pt]");
+  if (pt && !col) Croisement.menuPoint(pt, pt.dataset.croisePt);
+  else if (col) Croisement.basculer(col.dataset.croiseCol);
   else if (mode) { Croisement.mode = mode.dataset.croiseMode; Croisement.rerendre(); }
   else if (eff) { Croisement.sel = new Set(); Croisement.rerendre(); }
 });
@@ -4363,16 +4389,18 @@ const Comparateur = {
   synd: [],                     // clés "domaine/chemin"
   form: [],                     // identifiants de formules
   circ: [],                     // identifiants de circuits
+  pts: [],                      // points (« P 7 »)
   _norm: null,
 
   init() {
     try {
       const sauve = JSON.parse(localStorage.getItem("mtc_comparer") || "null");
-      if (sauve) { this.synd = (sauve.synd || []).slice(0, this.MAX); this.form = (sauve.form || []).slice(0, this.MAX); this.circ = (sauve.circ || []).slice(0, this.MAX); this.mode = ["form", "fam"].includes(sauve.mode) ? sauve.mode : "synd"; }
+      if (sauve) { this.synd = (sauve.synd || []).slice(0, this.MAX); this.form = (sauve.form || []).slice(0, this.MAX); this.circ = (sauve.circ || []).slice(0, this.MAX); this.pts = (sauve.pts || []).slice(0, this.MAX); this.mode = ["form", "fam", "pts"].includes(sauve.mode) ? sauve.mode : "synd"; }
     } catch (e) { /* pas de sélection mémorisée */ }
     document.getElementById("cmp-mode-synd").addEventListener("click", () => this.setMode("synd"));
     document.getElementById("cmp-mode-form").addEventListener("click", () => this.setMode("form"));
     document.getElementById("cmp-mode-fam").addEventListener("click", () => this.setMode("fam"));
+    document.getElementById("cmp-mode-pts").addEventListener("click", () => this.setMode("pts"));
     document.getElementById("cmp-search").addEventListener("input", e => { this.suggerer(e.target.value); this.trouverPlusTard(e.target.value); });
     document.getElementById("cmp-diff").addEventListener("change", e => document.getElementById("cmp-resultat").classList.toggle("cmp-sans-commun", e.target.checked));
     document.querySelector('.tab-btn[data-tab="comparer"]').addEventListener("click", () => this.ouvert());
@@ -4380,15 +4408,16 @@ const Comparateur = {
   },
 
   memoriser() {
-    try { localStorage.setItem("mtc_comparer", JSON.stringify({ synd: this.synd, form: this.form, circ: this.circ, mode: this.mode })); } catch (e) { /* ignoré */ }
+    try { localStorage.setItem("mtc_comparer", JSON.stringify({ synd: this.synd, form: this.form, circ: this.circ, pts: this.pts, mode: this.mode })); } catch (e) { /* ignoré */ }
   },
 
-  liste() { return this.mode === "form" ? this.form : this.synd; },
+  liste() { return this.mode === "form" ? this.form : this.mode === "pts" ? this.pts : this.synd; },
 
   setMode(m) {
     this.mode = m;
     document.getElementById("cmp-mode-synd").classList.toggle("active", m === "synd");
     document.getElementById("cmp-mode-form").classList.toggle("active", m === "form");
+    document.getElementById("cmp-mode-pts").classList.toggle("active", m === "pts");
     document.getElementById("cmp-mode-fam").classList.toggle("active", m === "fam");
     // le mode « tableaux par famille » a ses propres commandes ; les autres partagent la zone de recherche et le tableau
     const fam = m === "fam", tabsyn = m === "tabsyn", arbre = m === "arbre", special = fam || tabsyn || arbre;
@@ -4404,7 +4433,7 @@ const Comparateur = {
     if (arbre) { this.ouvrirArbre(); this.mode = "arbre"; return; }
     if (tabsyn) { this.ouvrirTabSyn(); this.mode = "tabsyn"; return; }
     if (fam) { FormuleTableaux.ensureLoaded(); this.memoriser(); return; }
-    document.getElementById("cmp-search").placeholder = m === "synd" ? "Ajouter un syndrome à comparer (nom, organe, vaisseau…)" : "Ajouter une formule à comparer (pinyin, indication…)";
+    document.getElementById("cmp-search").placeholder = m === "synd" ? "Ajouter un syndrome à comparer (nom, organe, vaisseau…)" : m === "pts" ? "Ajouter un point à comparer (P 7, Rt 4, pinyin…)" : "Ajouter une formule à comparer (pinyin, indication…)";
     document.getElementById("cmp-search").value = "";
     document.getElementById("cmp-suggestions").innerHTML = "";
     document.getElementById("cmp-trouves").innerHTML = "";
@@ -4421,6 +4450,7 @@ const Comparateur = {
   },
   ajouterFormule(id) { this.ajouter("form", id); },
   ajouterCircuit(id) { this.ajouter("circ", id); },
+  ajouterPoint(id) { this.ajouter("pts", String(id)); },
 
   ajouter(type, cle) {
     const l = this[type];
@@ -4447,7 +4477,7 @@ const Comparateur = {
   },
 
   // pastille flottante « Comparer (n) » : visible partout dès qu'au moins un élément est choisi ; un clic ouvre le plateau
-  total() { return this.synd.length + this.form.length + this.circ.length; },
+  total() { return this.synd.length + this.form.length + this.circ.length + this.pts.length; },
   pastille() {
     this.barre();
     let p = document.getElementById("cmp-pastille");
@@ -4475,22 +4505,23 @@ const Comparateur = {
     }
     const n = this.total();
     b.innerHTML = `<strong class="cmp-b-titre">⇄ Plateau de comparaison</strong>` + (n
-      ? ["synd", "form", "circ"].filter(t => this[t].length).map(t => `<span class="cmp-b-grp"><span class="cmp-b-type">${this.NOMS[t]}</span>` +
+      ? ["synd", "form", "circ", "pts"].filter(t => this[t].length).map(t => `<span class="cmp-b-grp"><span class="cmp-b-type">${this.NOMS[t]}</span>` +
           this[t].map(k => `<span class="chosen-item">${escapeHtml(sansChinois(this.libelle(t, k)))}<button type="button" data-t="${t}" data-x="${escapeHtml(k)}" aria-label="Retirer">✕</button></span>`).join("") +
           `<button type="button" class="edit-toggle-btn" data-go="${t}"${this[t].length < 2 ? ` disabled title="Ajoutes-en au moins deux"` : ""}>Comparer (${this[t].length})</button></span>`).join("") +
         `<button type="button" class="cmp-pl-vider">Tout vider</button>`
-      : `<span class="muted">vide — le bouton ⇄ d'une fiche ou d'un résultat de recherche met de côté un syndrome, une formule ou un circuit.</span>`);
-    const v = b.querySelector(".cmp-pl-vider"); if (v) v.addEventListener("click", () => { this.synd = []; this.form = []; this.circ = []; this.apresRetrait(); });
+      : `<span class="muted">vide — le bouton ⇄ d'une fiche ou d'un résultat de recherche met de côté un syndrome, une formule, un circuit ou un point.</span>`);
+    const v = b.querySelector(".cmp-pl-vider"); if (v) v.addEventListener("click", () => { this.synd = []; this.form = []; this.circ = []; this.pts = []; this.apresRetrait(); });
     b.querySelectorAll("[data-x]").forEach(x => x.addEventListener("click", () => { const l = this[x.dataset.t], i = l.indexOf(x.dataset.x); if (i >= 0) l.splice(i, 1); this.apresRetrait(); }));
     b.querySelectorAll("[data-go]").forEach(x => x.addEventListener("click", () => this.lancer(x.dataset.go)));
     setTimeout(() => { if (b.offsetHeight) document.body.style.setProperty("--h-plateau", b.offsetHeight + "px"); }, 0);   // la page garde la place de la bande, quelle que soit sa hauteur
   },
 
   // plateau de comparaison : syndromes, formules et circuits mis de côté, par type ; « Comparer » ouvre la vue qui convient
-  NOMS: { synd: "Syndromes", form: "Formules", circ: "Circuits" },
+  NOMS: { synd: "Syndromes", form: "Formules", circ: "Circuits", pts: "Points" },
   libelle(type, cle) {
     if (type === "synd") { const e = Syndromes.entries.find(x => `${x.domaine}/${x.chemin}` === cle); return e ? e.nom : cle; }
     if (type === "form") { const f = (Formules.index || []).find(x => x.id === cle); return f ? (f.pinyin || f.id) : cle; }
+    if (type === "pts") return cle;
     const c = typeof Circuits !== "undefined" && (Circuits.liste || []).length ? Circuits.parId(cle) : null;
     return c ? Circuits.nomCourt(c) : cle;
   },
@@ -4506,20 +4537,20 @@ const Comparateur = {
     z = document.createElement("div");
     z.id = "cmp-plateau"; z.setAttribute("role", "dialog"); z.setAttribute("aria-label", "Plateau de comparaison");
     z.innerHTML = `<div class="cmp-pl-tete"><strong>Plateau de comparaison</strong><button type="button" class="cmp-pl-fermer" aria-label="Fermer">✕</button></div>` +
-      ["synd", "form", "circ"].filter(t => this[t].length).map(t => `<section><div class="cmp-pl-titre"><h4>${this.NOMS[t]} <span class="muted">(${this[t].length}/${this.MAX})</span></h4>` +
+      ["synd", "form", "circ", "pts"].filter(t => this[t].length).map(t => `<section><div class="cmp-pl-titre"><h4>${this.NOMS[t]} <span class="muted">(${this[t].length}/${this.MAX})</span></h4>` +
         `<button type="button" class="edit-toggle-btn" data-go="${t}"${this[t].length < 2 ? ` disabled title="Ajoutes-en au moins deux"` : ""}>Comparer</button></div>` +
         `<div class="cmp-pl-items">${this[t].map(k => `<span class="chosen-item">${escapeHtml(sansChinois(this.libelle(t, k)))}<button type="button" data-t="${t}" data-x="${escapeHtml(k)}" aria-label="Retirer">✕</button></span>`).join("")}</div></section>`).join("") +
       `<p class="cmp-pl-pied"><button type="button" class="cmp-pl-vider">Tout vider</button></p>`;
     z.addEventListener("click", ev => ev.stopPropagation());
     document.body.appendChild(z);
     z.querySelector(".cmp-pl-fermer").addEventListener("click", () => this.plateau(false));
-    z.querySelector(".cmp-pl-vider").addEventListener("click", () => { this.synd = []; this.form = []; this.circ = []; this.apresRetrait(); });
+    z.querySelector(".cmp-pl-vider").addEventListener("click", () => { this.synd = []; this.form = []; this.circ = []; this.pts = []; this.apresRetrait(); });
     z.querySelectorAll("[data-x]").forEach(b => b.addEventListener("click", () => { const l = this[b.dataset.t], i = l.indexOf(b.dataset.x); if (i >= 0) l.splice(i, 1); this.apresRetrait(); }));
     z.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => this.lancer(b.dataset.go)));
   },
   apresRetrait() {
     this.memoriser(); this.pastille();
-    if (document.getElementById("tab-comparer").classList.contains("active") && (this.mode === "synd" || this.mode === "form")) this.rendre();
+    if (document.getElementById("tab-comparer").classList.contains("active") && (this.mode === "synd" || this.mode === "form" || this.mode === "pts")) this.rendre();
   },
   lancer(type) {
     this.plateau(false);
@@ -4542,7 +4573,11 @@ const Comparateur = {
     const nq = dsNorm((q || "").trim());
     if (!nq) { ul.innerHTML = ""; return; }
     let res = [];
-    if (this.mode === "synd") {
+    if (this.mode === "pts") {
+      const sans = nq.replace(/\s+/g, "");
+      res = (Points.entries || []).filter(e => String(e.id).toLowerCase().replace(/\s+/g, "").startsWith(sans) || dsNorm([e.data.pinyin, e.data.nom_fr].join(" ")).includes(nq))
+        .slice(0, 12).map(e => ({ cle: e.id, titre: e.id, sous: [e.data.pinyin, e.data.nom_fr].filter(Boolean).join(" — ") }));
+    } else if (this.mode === "synd") {
       res = Syndromes.entries.filter(e => dsNorm(e.nom).includes(nq) || dsNorm(e.sousLabel).includes(nq))
         .slice(0, 12).map(e => ({ cle: `${e.domaine}/${e.chemin}`, titre: e.nom, sous: (Syndromes.domaineLabels[e.domaine] || "") + (e.sousLabel ? " · " + e.sousLabel : "") }));
     } else {
@@ -4561,7 +4596,7 @@ const Comparateur = {
   trouverPlusTard(q) {
     clearTimeout(this._tq);
     const zone = document.getElementById("cmp-trouves");
-    if (dsNorm((q || "").trim()).length < 3) { this._qTrouve = null; zone.innerHTML = ""; return; }
+    if (this.mode === "pts" || dsNorm((q || "").trim()).length < 3) { this._qTrouve = null; zone.innerHTML = ""; return; }
     this._tq = setTimeout(() => this.trouver(q), 250);
   },
 
@@ -4688,7 +4723,7 @@ const Comparateur = {
     }
     res.innerHTML = `<p class="muted">Chargement…</p>`;
     try {
-      res.innerHTML = this.mode === "synd" ? await this.tableauSyndromes(l) : await this.tableauFormules(l);
+      res.innerHTML = this.mode === "synd" ? await this.tableauSyndromes(l) : this.mode === "pts" ? this.tableauPoints(l) : await this.tableauFormules(l);
     } catch (e) { res.innerHTML = `<p class="muted">Impossible de construire le tableau (${escapeHtml(e.message)}).</p>`; return; }
     res.querySelectorAll("[data-fiche]").forEach(b => b.addEventListener("click", () => this.ouvrirFiche(b.dataset.fiche)));
     res.querySelectorAll("[data-r]").forEach(b => b.addEventListener("click", () => this.retirer(b.dataset.r)));
@@ -4696,11 +4731,13 @@ const Comparateur = {
   },
 
   nomDe(cle) {
+    if (this.mode === "pts") return cle;
     if (this.mode === "synd") { const e = Syndromes.entries.find(x => `${x.domaine}/${x.chemin}` === cle); return e ? e.nom : cle; }
     const f = (Formules.index || []).find(x => x.id === cle); return f ? (f.pinyin || f.id) : cle;
   },
 
   ouvrirFiche(cle) {
+    if (this.mode === "pts") { Onglets.ouvrirPoint(cle); return; }
     if (this.mode === "synd") { const e = Syndromes.entries.find(x => `${x.domaine}/${x.chemin}` === cle); if (e) PostIt.open(e); }
     else { const f = (Formules.index || []).find(x => x.id === cle); if (f) { document.querySelector('.tab-btn[data-tab="formules"]').click(); Formules.showDetail(f); } }
   },
@@ -4738,6 +4775,37 @@ const Comparateur = {
     const nb = `<tr><th scope="row">Lignes du tableau</th>${sds.map((sd, i) => `<td class="muted">${(sd.rows || []).length} ligne(s), ${courts[i].size} signe(s) court(s)</td>`).join("")}</tr>`;
     return `<div class="cmp-resume"><strong>En commun à tous (${communs.length})</strong> ${communs.length ? communs.map(s => this.puce(s.label, true)).join(" ") : '<span class="muted">aucun signe court commun</span>'}</div>` +
       `<div class="cmp-defile"><table class="cmp-table"><thead><tr><th></th>${entete}</tr></thead><tbody>${nb}${lignes || `<tr><td colspan="${sds.length + 1}" class="muted">Aucun signe court reconnu dans ces syndromes.</td></tr>`}${phrases}</tbody></table></div>`;
+  },
+
+  // ---- points : catégories, correspondances, indications, actions, associations ; ce qui est commun à tous apparaît en pâle
+  tableauPoints(ids) {
+    const sp = t => String(t).replace(/\s+/g, "");
+    const fiches = ids.map(id => { const e = (Points.entries || []).find(x => sp(x.id) === sp(id)); return { id, e, d: e ? e.data : {} }; });
+    const cle = t => dsNorm(String(t || "")).replace(/[^a-z0-9]/g, "");
+    const net = t => String(t == null ? "" : t).replace(/^[^A-Za-zÀ-ÿ0-9(]+/, "").trim();
+    const tab = v => Array.isArray(v) ? v : (v ? String(v).split(/\n/) : []);
+    const CHAMPS = [
+      ["Catégories du point", d => tab(d.categories_point)],
+      ["Correspondances", d => tab(d.correspondances)],
+      ["Indications", d => (d.indications || []).map(i => i && typeof i === "object" ? i.indication : i)],
+      ["Indications contemporaines", d => tab(d.indications_contemporaines)],
+      ["Indications psycho-émotionnelles", d => (d.indications_psycho_emotionnelles || []).map(i => i && typeof i === "object" ? i.indication : i)],
+      ["Actions", d => tab(d.actions)],
+      ["Associations", d => tab(d.associations)]
+    ];
+    const entete = fiches.map(({ id, d, e }) => `<th scope="col" class="cmp-col" style="border-top-color:var(--accent)"><div class="cmp-nom">${escapeHtml(id)} <span class="hanzi">${escapeHtml(d.hanzi || "")}</span> ${typeof Croisement !== "undefined" ? Croisement.icones(id) : ""}</div>` +
+      `<div class="muted">${escapeHtml([d.pinyin, d.nom_fr].filter(Boolean).join(" — "))}</div><div class="muted">${escapeHtml(e ? e.canalNom : "")}</div>` +
+      `<div class="cmp-actions"><button type="button" class="edit-toggle-btn" data-fiche="${escapeHtml(id)}">Fiche</button> <button type="button" class="edit-toggle-btn" data-r="${escapeHtml(id)}" aria-label="Retirer">✕</button></div></th>`).join("");
+    const lignes = CHAMPS.map(([titre, fn]) => {
+      const sets = fiches.map(x => fn(x.d).map(net).filter(Boolean));
+      if (!sets.some(s => s.length)) return "";
+      const k = sets.map(s => new Set(s.map(cle)));
+      const cells = sets.map(s => s.map(t => this.puce(t, k.every(set => set.has(cle(t))))).join(" "));
+      const tousCommuns = sets.every(s => s.every(t => k.every(set => set.has(cle(t)))));
+      return `<tr${tousCommuns ? ' class="cmp-ligne-commune"' : ""}><th scope="row">${escapeHtml(titre)}</th>${cells.map(c => `<td>${c || '<span class="muted">—</span>'}</td>`).join("")}</tr>`;
+    }).join("");
+    const textes = (titre, champ) => fiches.some(x => x.d[champ]) ? `<tr><th scope="row">${escapeHtml(titre)}</th>${fiches.map(x => `<td style="white-space:pre-line">${escapeHtml(String(x.d[champ] || "")) || '<span class="muted">—</span>'}</td>`).join("")}</tr>` : "";
+    return `<div class="cmp-defile"><table class="cmp-table"><thead><tr><th></th>${entete}</tr></thead><tbody>${lignes}${textes("Localisation", "localisation")}${textes("Méthode de travail", "methode_travail")}</tbody></table></div>`;
   },
 
   // ---- formules : composition, actions, signes, contre-indications
