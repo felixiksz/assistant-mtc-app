@@ -2121,6 +2121,7 @@ const Syndromes = {
     document.querySelectorAll("#syn-list li").forEach(li => li.classList.remove("selected"));
     if (liEl) liEl.classList.add("selected");
     const detail = document.getElementById("syn-detail");
+    detail.style.setProperty("--ombre-teinte", DOM_COUL[entry.domaine] || "var(--accent)");
     detail.innerHTML = "<p class='muted'>Chargement...</p>";
     try {
       const d = await Store.readJSON(`syndromes/${entry.domaine}/${entry.chemin}`);

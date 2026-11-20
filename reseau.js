@@ -225,7 +225,7 @@ const Reseau = {
     b.textContent = "📋 Consultation" + [nd ? nd + " synd." : "", n ? n + " pt" + (n > 1 ? "s" : "") : "", nf ? nf + " form." : ""].filter(Boolean).map(x => " · " + x).join("") + (this.etat.verrou ? " 🔒" : "");
     b.title = "Consultation en cours : " + nd + " syndrome(s), " + n + " point(s), " + nf + " formule(s)" + (na ? " ; " + na + " consultation(s) enregistrée(s)" : "");
   },
-  large() { return window.matchMedia("(min-width: 1100px)").matches; },
+  large() { return window.matchMedia("(min-width: 760px)").matches; },   // à partir de là, la consultation est une colonne fixe à droite ; en dessous (téléphone), elle reste une fenêtre flottante
   ouvrir() { this.fenetre.ouvert = true; this.ecrire(this.CLE_FENETRE, this.fenetre); this.rendre(); },
   fermer() { this.fenetre.ouvert = false; this.ecrire(this.CLE_FENETRE, this.fenetre); this.rendre(); },
   reduire() { this.fenetre.reduit = !this.fenetre.reduit; this.ecrire(this.CLE_FENETRE, this.fenetre); this.rendre(); },
@@ -300,8 +300,8 @@ const Reseau = {
     this.creer();
     const f = document.getElementById("reseau-fenetre");
     f.hidden = !this.fenetre.ouvert;
-    // sur grand écran, la consultation peut rester ancrée à droite, sur toute la hauteur : le reste de la page se resserre à côté
-    const large = this.large(), ancree = large && !!this.fenetre.ancre && this.fenetre.ouvert;
+    // la consultation reste ancrée à droite, sur toute la hauteur : le reste de la page se resserre à côté
+    const large = this.large(), ancree = large && this.fenetre.ouvert;   // colonne fixe à droite sur grand écran ; fenêtre flottante sur téléphone
     this._large = large;
     document.body.classList.toggle("consult-ancree", ancree);
     f.classList.toggle("ancree", ancree);
@@ -367,7 +367,7 @@ const Reseau = {
     const corpsArchives = `<ul class="reseau-archives-liste">${arch || `<li class="muted reseau-vide">Aucune consultation enregistrée. Le bouton 💾 de l'onglet « En cours » la garde, et « Nouveau » la garde aussi avant de repartir à zéro.</li>`}</ul>`;
     f.innerHTML = `
       <div class="reseau-tete" id="reseau-tete"><strong>📋 Consultation${e.patiente ? " — " + escapeHtml(e.patiente) : ""}${verrou ? " 🔒" : ""}</strong>
-        <span>${large ? `<button type="button" class="reseau-ic" id="reseau-ancrer" title="${ancree ? "Détacher : fenêtre flottante, déplaçable" : "Ancrer à droite, sur toute la hauteur"}" aria-label="${ancree ? "Détacher la consultation" : "Ancrer la consultation à droite"}" aria-pressed="${ancree}">${ancree ? "⇱" : "⇥"}</button>` : ""}<button type="button" class="reseau-ic" id="reseau-reduire"${ancree ? " hidden" : ""} title="${this.fenetre.reduit ? "Agrandir" : "Réduire"}" aria-label="${this.fenetre.reduit ? "Agrandir" : "Réduire"}">${this.fenetre.reduit ? "▢" : "—"}</button><button type="button" class="reseau-ic" id="reseau-fermer" title="Fermer (la consultation est conservée)" aria-label="Fermer">✕</button></span></div>
+        <span><button type="button" class="reseau-ic" id="reseau-reduire"${ancree ? " hidden" : ""} title="${this.fenetre.reduit ? "Agrandir" : "Réduire"}" aria-label="${this.fenetre.reduit ? "Agrandir" : "Réduire"}">${this.fenetre.reduit ? "▢" : "—"}</button><button type="button" class="reseau-ic" id="reseau-fermer" title="Fermer (la consultation est conservée)" aria-label="Fermer">✕</button></span></div>
       <div class="reseau-onglets" role="tablist">
         <button type="button" role="tab" class="reseau-onglet${this.vue === "reseau" ? " actif" : ""}" data-vue="reseau">En cours <span class="reseau-n">${nbP}</span></button>
         <button type="button" role="tab" class="reseau-onglet${this.vue === "archives" ? " actif" : ""}" data-vue="archives">Enregistrés <span class="reseau-n">${nbA}</span></button>

@@ -23,10 +23,7 @@
   --font-body: "Archivo", system-ui, sans-serif;
   --font-title: "Young Serif", "Noto Serif", "PinyinLocal", "Archivo", Georgia, serif;
   font-family: var(--font-body);
-  /* Ombres portées : trois niveaux d'élévation pour distinguer les écrans (cartes de contenu), les menus et les fenêtres flottantes. */
-  --ombre-ecran: 0 1px 2px rgba(0,0,0,.10), 0 5px 14px rgba(0,0,0,.14);
-  --ombre-menu: 0 2px 4px rgba(0,0,0,.18), 0 10px 24px rgba(0,0,0,.30);
-  --ombre-fenetre: 0 3px 6px rgba(0,0,0,.22), 0 18px 42px rgba(0,0,0,.38);
+  --ombre-teinte: var(--accent);   /* couleur des ombres : celle de l'accent, ou celle du domaine (voir Syndromes) */
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -44,6 +41,13 @@
 }
 
 * { box-sizing: border-box; border-radius: 0 !important; }
+/* Ombres portées colorées, trois niveaux d'élévation (écrans, menus, fenêtres flottantes).
+   Définies sur « * » pour que chaque élément les calcule avec sa propre --ombre-teinte (héritée). */
+* {
+  --ombre-ecran: 0 8px 18px -4px color-mix(in srgb, var(--ombre-teinte) 42%, transparent), 0 2px 4px rgba(0,0,0,.10);
+  --ombre-menu: 0 12px 26px -4px color-mix(in srgb, var(--ombre-teinte) 55%, transparent), 0 3px 6px rgba(0,0,0,.16);
+  --ombre-fenetre: 0 20px 44px -6px color-mix(in srgb, var(--ombre-teinte) 62%, transparent), 0 4px 10px rgba(0,0,0,.20);
+}
 body { margin: 0; background: var(--bg); color: var(--ink); overflow-x: hidden; }
 .muted { color: var(--muted); font-size: 0.9em; }
 
@@ -1613,12 +1617,15 @@ body:has(#tab-comparer.active) #cmp-pastille { display: inline-block; }
   .reseau-lanceur { bottom: calc(var(--h-plateau, 2.6rem) + 0.8rem); }
   .reseau-fenetre:not(.ancree) { bottom: calc(var(--h-plateau, 2.6rem) + 3.8rem); }
 }
-@media (min-width: 1100px) {
-  body.consult-ancree { padding-right: 27rem; }
-  .reseau-fenetre.ancree { top: 0 !important; right: 0 !important; bottom: 0 !important; left: auto !important; width: 27rem !important; height: auto !important; max-width: none; max-height: none; border: 0; border-left: 2px solid var(--ink); border-radius: 0 !important; box-shadow: none; resize: none; }
+/* consultation : colonne fixe à droite dès 760 px (plus étroite sous 1100 px) ; en dessous (téléphone), elle reste une fenêtre flottante. */
+:root { --l-consult: 27rem; }
+@media (max-width: 1099px) { :root { --l-consult: 22rem; } }
+@media (min-width: 760px) {
+  body.consult-ancree { padding-right: var(--l-consult); }
+  .reseau-fenetre.ancree { top: 0 !important; right: 0 !important; bottom: 0 !important; left: auto !important; width: var(--l-consult) !important; height: auto !important; max-width: none; max-height: none; border: 0; border-left: 2px solid var(--ink); border-radius: 0 !important; box-shadow: -12px 0 28px -8px color-mix(in srgb, var(--ombre-teinte) 55%, transparent); resize: none; }
   .reseau-fenetre.ancree .reseau-tete { border-radius: 0 !important; cursor: default; }
   body.consult-ancree .reseau-lanceur { display: none; }
-  body.consult-ancree #cmp-barre { right: 27rem; }
+  body.consult-ancree #cmp-barre { right: var(--l-consult); }
 }
 @media print { #cmp-barre { display: none !important; } body.consult-ancree { padding-right: 0; } }
 /* résultats de la recherche : sur toute la largeur de l'en-tête, un bloc par type côte à côte */
@@ -1729,4 +1736,4 @@ table.croise-table th.croise-point-label, .croise-pt[data-croise-pt] { cursor: p
 #croise-menu button:hover, #croise-menu button:focus-visible { background: var(--accent-soft); outline: none; }
 
 /* Ombres portées : pas à l'impression */
-@media print { :root { --ombre-ecran: none; --ombre-menu: none; --ombre-fenetre: none; } }
+@media print { * { --ombre-ecran: none; --ombre-menu: none; --ombre-fenetre: none; } }
