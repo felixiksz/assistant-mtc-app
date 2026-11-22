@@ -2664,9 +2664,17 @@ const DiagSignes = {
   resultats() {
     return this.syndromesFiltres().filter(sd => !this.exclus.has(this.cleSynd(sd))).map(sd => {
       const m = this.clesActives(sd);
-      return { sd, matchedKeys: [...m], pct: Math.round((m.size / sd.signKeys.size) * 100) };
+      return { sd, matchedKeys: [...m], pct: Math.round((m.size / sd.signKeys.size) * 100), ...this.explique(sd) };
     }).filter(x => x.matchedKeys.length > 0)
-      .sort((a, b) => b.pct - a.pct || b.matchedKeys.length - a.matchedKeys.length);
+      .sort((a, b) => b.expl - a.expl || b.pct - a.pct || b.matchedKeys.length - a.matchedKeys.length);
+  },
+
+  // combien des signes cochés (phrases et signes courts) ce syndrome contient-il ?  { expl, total }
+  explique(sd) {
+    let expl = 0;
+    this.selected.forEach(k => { if (sd.signKeys.has(k)) expl++; });
+    this.selectedCourts.forEach(c => { if ([...sd.courtsParCle.values()].some(ids => ids.has(c))) expl++; });
+    return { expl, total: this.selected.size + this.selectedCourts.size };
   },
 
   renderSelected() {
@@ -2768,20 +2776,37 @@ const DiagSignes = {
     if (!this.aSelection()) { el.innerHTML = `<p class="muted">Sélectionne au moins un signe pour voir les syndromes correspondants.</p>`; return; }
     const scored = this.resultats();
     if (!scored.length) { el.innerHTML = `<p class="muted">Aucun syndrome ${this.portee.size ? "de ce type" : "de la base"} ne recoupe les signes sélectionnés.</p>`; return; }
-    el.innerHTML = scored.slice(0, 40).map(({ sd, matchedKeys, pct }) => `
-      <div class="ds-result" data-cle="${escapeHtml(this.cleSynd(sd))}">
+    const MAX_GRIS = 5;
+    el.innerHTML = scored.slice(0, 40).map(({ sd, matchedKeys, pct, expl, total }) => {
+      const m = new Set(matchedKeys);
+      const texte = k => ((sd.rows || []).find(r => r.key === k) || {}).text || this.signIndex.get(k) || k;
+      const pastille = (k, on) => {
+        const t = texte(k);
+        return on ? `<span class="ds-p on" title="${escapeHtml(t)}">✔ ${escapeHtml(dsCut(t, 40))}</span>`
+          : `<button type="button" class="ds-p off" data-ajoute="${escapeHtml(k)}" title="${escapeHtml(t)} — clic : ajouter à tes signes">○ ${escapeHtml(dsCut(t, 40))}</button>`;
+      };
+      const gris = [...sd.signKeys].filter(k => !m.has(k));
+      const grisHtml = gris.length
+        ? `<div class="ds-p-bloc"><span class="ds-p-titre">À vérifier chez la patiente</span>${gris.slice(0, MAX_GRIS).map(k => pastille(k, false)).join("")}` +
+          (gris.length > MAX_GRIS ? `<details class="ds-p-plus"><summary>+ ${gris.length - MAX_GRIS} autres signes</summary>${gris.slice(MAX_GRIS).map(k => pastille(k, false)).join("")}</details>` : "") + `</div>` : "";
+      const tout = total > 0 && expl === total;
+      return `
+      <div class="ds-result${tout ? " ds-result-tout" : ""}" data-cle="${escapeHtml(this.cleSynd(sd))}">
         <div class="ds-result-top">
           <span class="ds-result-name">${escapeHtml(sd.entry.nom)}</span>
-          <span class="ds-result-pct">${pct}%</span>
+          <span class="ds-result-expl" title="Nombre de tes signes cochés que ce syndrome contient">${tout ? "★ " : ""}${expl}/${total} de tes signes</span>
           <button type="button" class="cmp-add cmp-mini" data-comparer="${escapeHtml(this.cleSynd(sd))}" title="Ajouter au comparateur" aria-label="Comparer">⇄</button>
           <button type="button" class="ds-exclure" data-exclure="${escapeHtml(this.cleSynd(sd))}" title="Écarter ce syndrome des résultats" aria-label="Écarter ce syndrome">✕</button>
         </div>
         <p class="muted">${escapeHtml(Syndromes.domaineLabels[sd.entry.domaine] || "")}${sd.entry.sousLabel ? " · " + escapeHtml(sd.entry.sousLabel) : ""}</p>
         ${sd.entry.domaine === "canaux" && ZonesCorps.couvertes(sd.entry.id).length ? `<p class="ds-result-matched">Trajet : ${escapeHtml(ZonesCorps.couvertes(sd.entry.id).join(", "))}</p>` : ""}
-        <div class="ds-result-bar-wrap"><div class="ds-result-bar" style="width:${pct}%;"></div></div>
-        <p class="ds-result-matched">${matchedKeys.length} / ${sd.signKeys.size} signe(s) documenté(s) correspondent</p>
-      </div>
-    `).join("");
+        <div class="ds-p-bloc">${[...m].map(k => pastille(k, true)).join("")}</div>
+        ${grisHtml}
+        <div class="ds-result-bar-wrap" title="Part du tableau du syndrome couverte par tes signes"><div class="ds-result-bar" style="width:${pct}%;"></div></div>
+        <p class="ds-result-matched">Tableau couvert à ${pct} % (${matchedKeys.length} / ${sd.signKeys.size} lignes)</p>
+      </div>`;
+    }).join("");
+    el.querySelectorAll("[data-ajoute]").forEach(b => b.addEventListener("click", ev => { ev.stopPropagation(); this.toggle(b.dataset.ajoute); }));
     el.querySelectorAll(".ds-exclure").forEach(b => b.addEventListener("click", ev => { ev.stopPropagation(); this.basculerExclu(b.dataset.exclure); }));
     el.querySelectorAll("[data-comparer]").forEach(b => b.addEventListener("click", ev => {
       ev.stopPropagation();

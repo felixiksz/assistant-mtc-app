@@ -1742,3 +1742,18 @@ table.croise-table th.croise-point-label, .croise-pt[data-croise-pt] { cursor: p
 .comp-defile { overflow-x: auto; max-width: 100%; margin: 0.8rem 0 1.2rem; }
 .comp-defile > table { margin: 0; min-width: 34rem; }
 .comp-defile > table th:nth-child(2), .comp-defile > table td:nth-child(2) { min-width: 9rem; }
+
+/* Résultats par syndrome : carte avec les signes en pastilles (cochés en plein, à vérifier en pointillé) */
+.ds-result-expl { font-weight: 700; font-size: 0.85rem; white-space: nowrap; padding: 0.1rem 0.5rem; border: 1.5px solid var(--ink); background: var(--bg); }
+.ds-result-tout { border-left: 6px solid var(--accent); }
+.ds-result-tout .ds-result-expl { background: var(--accent); color: var(--on-accent); border-color: var(--ink); }
+.ds-p-bloc { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; margin: 0.4rem 0; }
+.ds-p-titre { flex: 0 0 100%; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; color: var(--muted); }
+.ds-p { font: inherit; font-size: 0.78rem; line-height: 1.25; padding: 0.15rem 0.5rem; border: 1.5px solid var(--ink); background: var(--bg); color: var(--ink); max-width: 100%; text-align: left; }
+.ds-p.on { background: var(--accent-soft); border-color: var(--accent); font-weight: 700; }
+.ds-p.off { border-style: dashed; border-color: var(--muted); color: var(--muted); background: none; cursor: pointer; }
+.ds-p.off:hover { border-style: solid; border-color: var(--ink); color: var(--ink); background: var(--bg); }
+.ds-p-plus { flex: 0 0 100%; }
+.ds-p-plus summary { cursor: pointer; font-size: 0.78rem; color: var(--muted); margin-bottom: 0.3rem; }
+.ds-p-plus[open] > summary { margin-bottom: 0.4rem; }
+.ds-p-plus > .ds-p { margin: 0 0.3rem 0.3rem 0; }
