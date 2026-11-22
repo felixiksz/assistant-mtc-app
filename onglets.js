@@ -412,7 +412,7 @@ const Onglets = {
     return this.ouvrir("pt:" + norm(entry.id), entry.id + (entry.data.pinyin ? " " + entry.data.pinyin : ""), "📍", async (zone, recharger) => {
       zone.innerHTML = Points.htmlDetail(entry);
       Store.hydrateImages(zone);
-      addEditControls(zone, "reference/points_canaux/" + entry.canal + ".json", entry.data, { arrayItem: true, matchField: "point", matchValue: entry.id, editorFn: openPointEditor, onSaved: async () => { await recharger(); } });
+      addEditControls(zone, "reference/points_canaux/" + entry.canal + ".json", entry.data, { arrayItem: true, matchField: "point", matchValue: entry.id, champsPossibles: Points.champsPossibles, editorFn: openPointEditor, onSaved: async () => { await recharger(); } });
     }, { kind: "pt", fenetre: opt.fenetre, id: entry.id }, opt.differe);
   },
 

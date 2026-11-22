@@ -4037,13 +4037,16 @@ const Points = {
     `;
   },
 
+  // champs d'une fiche de point que beaucoup de points n'ont pas encore dans le fichier : proposés quand même dans le menu du crayon
+  champsPossibles: { associations: [], indications_contemporaines: [], note: "" },
+
   showDetail(entry, liEl) {
     this.lastShown = entry;
     const d = entry.data;
     document.querySelectorAll("#pts-list li").forEach(li => li.classList.remove("selected"));
     if (liEl) liEl.classList.add("selected");
     document.getElementById("pts-detail").innerHTML = this.htmlDetail(entry);
-    addEditControls(document.getElementById("pts-detail"), "reference/points_canaux/" + entry.canal + ".json", d, { arrayItem: true, matchField: "point", matchValue: entry.id, editorFn: openPointEditor });
+    addEditControls(document.getElementById("pts-detail"), "reference/points_canaux/" + entry.canal + ".json", d, { arrayItem: true, matchField: "point", matchValue: entry.id, champsPossibles: Points.champsPossibles, editorFn: openPointEditor });
   }
 };
 
@@ -5657,7 +5660,13 @@ function addEditControls(container, relPath, obj, opts) {
   bar.appendChild(btn);
   container.prepend(bar);
   const editorFn = opts.editorFn || openGenericFormEditor;
-  const ouvrir = champ => (champ ? openGenericFormEditor(container, relPath, obj, { ...opts, champ }) : editorFn(container, relPath, obj, opts));
+  // champs que la fiche n'a pas encore (clé absente du fichier) mais qu'on doit pouvoir remplir : opts.champsPossibles = { clé: valeur vide }
+  const possibles = opts.champsPossibles || {};
+  const ouvrir = champ => {
+    if (!champ) return editorFn(container, relPath, obj, opts);
+    const cible = (champ in obj || !(champ in possibles)) ? obj : { ...obj, [champ]: possibles[champ] };
+    return openGenericFormEditor(container, relPath, cible, { ...opts, champ });
+  };
   // menu : toute la fiche, ou un seul champ (les autres ne sont pas touchés)
   btn.addEventListener("click", ev => {
     ev.stopPropagation();
@@ -5666,7 +5675,7 @@ function addEditControls(container, relPath, obj, opts) {
     const menu = document.createElement("div");
     menu.className = "edit-champs-menu";
     menu.innerHTML = `<p class="muted">Modifier…</p><button type="button" class="edit-toggle-btn" data-champ="">La fiche entière</button><hr>` +
-      Object.keys(obj).filter(k => k !== "id").map(k => `<button type="button" class="edit-champ-item" data-champ="${escapeHtml(k)}">${escapeHtml(prettifyKey(k))}</button>`).join("");
+      [...Object.keys(obj), ...Object.keys(possibles).filter(k => !(k in obj))].filter(k => k !== "id").map(k => `<button type="button" class="edit-champ-item" data-champ="${escapeHtml(k)}">${escapeHtml(prettifyKey(k))}</button>`).join("");
     bar.appendChild(menu);
     menu.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { menu.remove(); ouvrir(b.dataset.champ); }));
     const fermer = e2 => { if (!menu.contains(e2.target)) { menu.remove(); document.removeEventListener("click", fermer); } };
