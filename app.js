@@ -787,7 +787,7 @@ const Formules = {
 
   renderFormule(f) {
     const comp = (f.composition || []).map(c =>
-      `<tr${Animaux.trouver(c.substance_pinyin) ? ' class="an-ligne"' : ""}><td>${Animaux.marque(c.substance_pinyin)}${escapeHtml(c.substance_pinyin || "")}</td><td>${escapeHtml(c.hanzi || "")}${c.hanzi_alt ? ` / ${escapeHtml(c.hanzi_alt)}` : ""}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td><td>${SubstanceNature.pastille(c)}</td><td>${SubstanceNature.celluleDose(c)}</td><td>${Sinolux.cellule(c)}</td><td>${CarteMentale.celluleFonction(f.id, c)}</td></tr>`
+      `<tr${Animaux.trouver(c.substance_pinyin) ? ' class="an-ligne"' : ""}><td>${Animaux.marque(c.substance_pinyin)}${escapeHtml(c.substance_pinyin || "")}</td><td>${CarteMentale.celluleFonction(f.id, c)}</td><td>${escapeHtml(c.dose || "")}</td><td>${escapeHtml(c.role_hierarchique || "")}</td><td>${SubstanceNature.pastille(c)}</td><td>${SubstanceNature.celluleDose(c)}</td><td>${Sinolux.cellule(c)}</td></tr>`
     ).join("");
     const verif = (f.a_verifier && f.a_verifier.length)
       ? `<section><h3>À vérifier contre la source</h3>${f.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("")}</section>`
@@ -802,7 +802,7 @@ const Formules = {
       ${(i => Sinolux.entete(i && i.codes, i && i.statut === "plusieurs_codes"))(Sinolux.infoFormule(f.id))}
       ${Sinolux.blocFormule(f.id)}
       ${Animaux.bloc(Animaux.depuisFiche(f))}
-      ${comp ? `<section><h3>Composition</h3><table><thead><tr><th>Substance</th><th>Hanzi</th><th>Dose</th><th>Rôle</th><th>Nature</th><th>Dose de référence</th><th>Code SINOLUX</th><th>Fonction dans la formule</th></tr></thead><tbody>${comp}</tbody></table><p class="muted poso-legende">⚠ à côté d'un code = l'équivalence avec le catalogue SINOLUX n'est pas stricte (survole le signe). Dose de référence : jeu Connections MTC. ▲ ▼ ≈ = la dose de la fiche sort (ou déborde) de cette fourchette : pas forcément une erreur (dose classique, pilules, valeur propre à la formule). * = précisions dans l'info-bulle.</p></section>` : ""}
+      ${comp ? `<section><h3>Composition</h3><div class="comp-defile"><table><thead><tr><th>Substance</th><th>Fonction dans la formule</th><th>Dose</th><th>Rôle</th><th>Nature</th><th>Dose de référence</th><th>Code SINOLUX</th></tr></thead><tbody>${comp}</tbody></table></div><p class="muted poso-legende">⚠ à côté d'un code = l'équivalence avec le catalogue SINOLUX n'est pas stricte (survole le signe). Dose de référence : jeu Connections MTC. ▲ ▼ ≈ = la dose de la fiche sort (ou déborde) de cette fourchette : pas forcément une erreur (dose classique, pilules, valeur propre à la formule). * = précisions dans l'info-bulle.</p></section>` : ""}
       ${this.renderSchemaImage(f.schema_image, f.categorie_id)}
       ${section("Préparation / posologie", f.mode_de_preparation_posologie, CarteMentale.plus(f.id, ["preparation"]))}
       ${section("Actions thérapeutiques", f.actions_therapeutiques, CarteMentale.plus(f.id, ["action"]))}
@@ -3068,9 +3068,20 @@ const GrapheSignes = {
         if (!deplace && Math.hypot(p[0] - glisse.debut[0], p[1] - glisse.debut[1]) <= 4) return;
         if (!glisse.capture) { glisse.capture = true; try { svg.setPointerCapture(e.pointerId); } catch (err) { /* ignoré */ } }
         deplace = true;
-        glisse.n.x += (p[0] - dernier[0]) / this.vue.k;
-        glisse.n.y += (p[1] - dernier[1]) / this.vue.k;
+        const ddx = (p[0] - dernier[0]) / this.vue.k, ddy = (p[1] - dernier[1]) / this.vue.k;
+        glisse.n.x += ddx;
+        glisse.n.y += ddy;
         dernier = p;
+        // un syndrome entraîne ses lignes (sous-nœuds) : celles qu'il est seul à contenir le suivent entièrement,
+        // celles qu'il partage avec d'autres syndromes le suivent en proportion (1/nombre de syndromes qui les contiennent)
+        if (glisse.n.type === "syn") {
+          this.liens.forEach(l => {
+            if (l.type !== "row" || l.b !== glisse.n) return;
+            const part = 1 / Math.max(1, l.a.syns.length);
+            l.a.x += ddx * part; l.a.y += ddy * part;
+            this.majPos(l.a);
+          });
+        }
         this.majPos(glisse.n);
         if (this.etiq) this.appliquer();
       } else if (ptrs.size === 1 && dernier) {

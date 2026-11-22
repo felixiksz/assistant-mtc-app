@@ -1737,3 +1737,8 @@ table.croise-table th.croise-point-label, .croise-pt[data-croise-pt] { cursor: p
 
 /* Ombres portées : pas à l'impression */
 @media print { * { --ombre-ecran: none; --ombre-menu: none; --ombre-fenetre: none; } }
+
+/* Composition d'une formule : le tableau défile à l'intérieur de son cadre au lieu de déborder de la fenêtre (téléphone) */
+.comp-defile { overflow-x: auto; max-width: 100%; margin: 0.8rem 0 1.2rem; }
+.comp-defile > table { margin: 0; min-width: 34rem; }
+.comp-defile > table th:nth-child(2), .comp-defile > table td:nth-child(2) { min-width: 9rem; }
