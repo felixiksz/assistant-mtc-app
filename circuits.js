@@ -1693,20 +1693,41 @@ const CircuitsProposition = {
     return prov;
   },
 
+  // canaux manquants que les « ajouts possibles » du circuit permettent d'atteindre : le plus petit ensemble d'ajouts qui en couvre le plus
+  // (un ajout « ensemble » apporte tous ses canaux d'un coup)
+  ajoutsPour(c, manque) {
+    const ent = (c.ajouts || []).filter(a => (a.canaux || []).length);
+    let meilleur = { utiles: [], couverts: [], supp: 0 };
+    if (!manque.length || !ent.length) return meilleur;
+    for (let m = 1; m < (1 << Math.min(ent.length, 10)); m++) {
+      const utiles = ent.filter((_, i) => m & (1 << i));
+      const apportes = new Set(utiles.flatMap(a => a.canaux));
+      const couverts = manque.filter(k => apportes.has(k));
+      const supp = [...apportes].filter(k => !manque.includes(k)).length;       // canaux apportés en plus, non demandés
+      const mieux = couverts.length > meilleur.couverts.length || (couverts.length === meilleur.couverts.length && couverts.length &&
+        (utiles.length < meilleur.utiles.length || (utiles.length === meilleur.utiles.length && supp < meilleur.supp)));
+      if (mieux) meilleur = { utiles, couverts, supp };
+    }
+    return meilleur;
+  },
+
   classer(choix, prov) {
     const mots = Proposer.jetons((Proposer.diag || []).map(c => Proposer.nomDiag(c)).join(" "));
     const res = [];
     Circuits.liste.forEach(c => {
       const inter = c.grille.filter(k => choix.has(k));
       if (!inter.length) return;
+      const aj = this.ajoutsPour(c, [...choix].filter(k => !c.grille.includes(k)));     // canaux atteints par des ajouts possibles
+      const total = inter.length + aj.couverts.length, complet = total === choix.size;
       const extras = c.grille.filter(k => !choix.has(k));
       const lien = (c.syndromes_lies || []).some(k => (Proposer.diag || []).some(d => String(d).split("#")[0] === k));
       const jt = Proposer.jetons([...c.indications, ...c.actions].join(" "));
       const commun = [...mots].filter(t => jt.has(t));
       const texte = mots.size ? commun.length / mots.size : 0;
       const astuces = (Circuits.base.astuces || []).filter(a => a.paires.some(p => p.every(k => c.grille.includes(k)) && p.some(k => choix.has(k))));
-      const score = 100 * inter.length / choix.size + 5 * inter.length - 2 * extras.length + (lien ? 60 : 0) + 20 * texte + 4 * astuces.length;
-      res.push({ c, inter, extras, lien, commun, astuces, score });
+      // un circuit qui couvre TOUS les canaux (si besoin avec des ajouts possibles) passe avant ; à couverture égale, moins d'ajouts et moins de canaux en trop
+      const score = 100 * total / choix.size + 5 * inter.length + 3 * aj.couverts.length - 2 * extras.length - 4 * aj.utiles.length - aj.supp + (complet ? 1000 : 0) + (lien ? 60 : 0) + 20 * texte + 4 * astuces.length;
+      res.push({ c, inter, aj, total, complet, extras, lien, commun, astuces, score });
     });
     res.sort((a, b) => b.score - a.score);
     return res.slice(0, 8);
@@ -1737,14 +1758,17 @@ const CircuitsProposition = {
 
   carte(r, choix, prov) {
     const c = r.c, n = choix.size;
-    const raisons = [`<span class="prop-raison">couvre ${r.inter.length} / ${n} canal(aux) impliqué(s) : ${r.inter.map(k => escapeHtml(k)).join(", ")}</span>`];
-    if (n >= 2 && r.inter.length < 2) raisons.push(`<span class="prop-raison">couvre un seul des canaux impliqués : couverture partielle</span>`);
+    const aj = r.aj || { utiles: [], couverts: [] };
+    const enAjout = aj.couverts.length ? ` + ${aj.couverts.map(k => escapeHtml(k)).join(", ")} en ajout possible` : "";
+    const raisons = [`<span class="prop-raison${r.complet && n >= 2 ? " prop-complet" : ""}">${r.complet && n >= 2 ? "couvre tous les canaux impliqués" : `couvre ${r.total} / ${n} canal(aux) impliqué(s)`} : ${r.inter.map(k => escapeHtml(k)).join(", ")}${enAjout}</span>`];
+    if (n >= 2 && r.total < 2) raisons.push(`<span class="prop-raison">couvre un seul des canaux impliqués : couverture partielle</span>`);
+    aj.utiles.forEach(a => raisons.push(`<span class="prop-raison">ajout possible : ${a.canaux.map(k => escapeHtml(k)).join(" + ")}${a.canaux.length > 1 ? " (ensemble)" : ""}${a.action ? " — " + escapeHtml(sansHanzi(a.action)) : ""}</span>`));
     if (r.extras.length) raisons.push(`<span class="prop-raison">ajoute pour fermer la boucle : ${r.extras.map(k => escapeHtml(k)).join(", ")}</span>`);
     if (r.lien) raisons.push(`<span class="prop-raison">rattaché à ce syndrome dans ta base</span>`);
     if (r.commun.length) raisons.push(`<span class="prop-raison">indications proches : ${escapeHtml(r.commun.slice(0, 6).join(", "))}</span>`);
-    const synd = r.inter.map(k => `${k} ← ${[...new Set(prov.get(k) || [])].join(", ") || "canal ajouté"}`).join(" · ");
+    const synd = [...r.inter, ...aj.couverts].map(k => `${k} ← ${[...new Set(prov.get(k) || [])].join(", ") || "canal ajouté"}${aj.couverts.includes(k) ? " (ajout possible)" : ""}`).join(" · ");
     return `<article class="prop-carte circ-prop">
-      <div class="circ-prop-dessin">${Circuits.dessin(c, { taille: 120, etiquettes: true, surligne: choix })}</div>
+      <div class="circ-prop-dessin">${Circuits.dessin({ ...c, ajouts: aj.utiles }, { taille: 120, etiquettes: true, surligne: choix, ajouts: aj.utiles.length > 0 })}</div>
       <div class="circ-prop-corps">
         <header><strong class="prop-nom">${escapeHtml(Circuits.nomCourt(c))}</strong> <span class="muted">${c.grille.join(" · ")}</span></header>
         <div class="prop-raisons">${raisons.join("")}</div>

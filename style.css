@@ -1757,3 +1757,6 @@ table.croise-table th.croise-point-label, .croise-pt[data-croise-pt] { cursor: p
 .ds-p-plus summary { cursor: pointer; font-size: 0.78rem; color: var(--muted); margin-bottom: 0.3rem; }
 .ds-p-plus[open] > summary { margin-bottom: 0.4rem; }
 .ds-p-plus > .ds-p { margin: 0 0.3rem 0.3rem 0; }
+
+/* Circuit proposé qui couvre tous les canaux impliqués */
+.prop-raison.prop-complet { background: var(--accent); color: var(--on-accent); border-color: var(--ink); font-weight: 700; }
