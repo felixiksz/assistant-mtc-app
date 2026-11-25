@@ -368,7 +368,8 @@ const Circuits = {
         (astuces ? this.section("Astuces du Dr Tán Té Fū (cours, p. 41)", `<ul class="tcm-list">${astuces}</ul>`) : ""))}
       ${this.onglet(1, `<section><h3>Points des canaux</h3><div id="circ-pts" class="circ-pts"></div></section>
         <section><h3>Ajouts possibles</h3>${ajouts ? `<ul class="tcm-list">${ajouts}</ul>` : ""}${this.candidatsAjout(c).length ? `<div class="circ-barre"><button type="button" class="edit-toggle-btn" id="circ-aj-prop">💡 Proposer des canaux à ajouter</button></div>` : ""}<div id="circ-aj-zone"></div></section>
-        <section><h3>Points Tung compatibles</h3><div id="circ-tung" class="circ-tung"><p class="muted">Chargement…</p></div></section>`)}
+        <section><h3>Points Tung compatibles</h3><div id="circ-tung" class="circ-tung"><p class="muted">Chargement…</p></div></section>
+        <section><h3>Points hors méridien compatibles</h3><div id="circ-extra" class="circ-tung"><p class="muted">Chargement…</p></div></section>`)}
       ${this.onglet(2, `<div class="circ-t2 vue-${this.vueAssoc}"><div class="circ-t2-g"><div class="circ-grand" id="circ-dessin">${this.dessin(c, { taille: 190, etiquettes: true, legende: true, ajouts: true })}</div></div><div class="circ-t2-d">` +
         `<div class="circ-vues" role="tablist" aria-label="Vue des associations">${[["liste", "Liste"], ["schemas", "Schémas"], ["grille", "Grille"]].map(([k, n]) => `<button type="button" role="tab" class="circ-vue-btn${this.vueAssoc === k ? " actif" : ""}" data-vue-assoc="${k}">${n}</button>`).join("")}</div>` +
         `<div class="sec-assoc">${this.section("Associations de points", this.assocTableHtml(c) + this.wjyChipsHtml(c) + `<div id="circ-assoc-detail" class="circ-assoc-detail"></div>`)}</div>` +
@@ -427,6 +428,7 @@ const Circuits = {
     if (this.ongletFiche === 2) this.tracerGraphe();
     this.brancherNotes(zone);
     this.pointsTung(c);
+    this.pointsHorsMeridien(c);
     this.rendrePoints(c);
     if (!this._mouvPret) this.chargerInter().then(() => { if (this.actif === c.id && document.getElementById("circ-dessin")) this.majAssoc(c); });
     if (!(Onglets.actif || "").startsWith("circ:")) Fenetre.boutonOnglet(zone, () => Onglets.ouvrirCircuit(c.id));
@@ -1107,6 +1109,25 @@ const Circuits = {
     el.innerHTML = (r.ok.length ? `<p class="muted">Leurs canaux sont déjà dans le circuit : ils s'y ajoutent sans le déséquilibrer. Survole un nom pour voir la localisation.</p><ul class="circ-tung-liste">${r.ok.map(bt).join("")}</ul>` : `<p class="muted">Aucun point Tung dont le canal soit dans ce circuit pour l'instant (les canaux se renseignent dans l'onglet Points Tung).</p>`) +
       (r.avec.length ? `<p class="muted">Avec un des ajouts possibles du circuit :</p><ul class="circ-tung-liste">${r.avec.map(bt).join("")}</ul>` : "") +
       (r.collectifs.length ? `<p class="muted">Points qui agissent sur un ensemble de canaux à la fois (ici, les six fu) : à juger selon l'équilibre voulu, car ils touchent aussi les canaux absents du circuit.</p><div class="circ-synd-liste">${r.collectifs.map(f => `<button type="button" class="edit-toggle-btn" data-tung-fiche="${escapeHtml(f.id)}" title="${escapeHtml(Tung.localisation(f) || "Voir la fiche et le schéma")}">${escapeHtml(f.nom)}${(f.numeros || []).length ? " " + escapeHtml(f.numeros.join("/")) : ""}</button>`).join(" ")}</div>` : "");
+  },
+
+  // points hors méridien (fiches « EXTRA », avec le canal que le cours leur donne) : ceux dont les canaux sont dans le circuit s'y ajoutent sans le déséquilibrer
+  async pointsHorsMeridien(c) {
+    const el = document.getElementById("circ-extra");
+    if (!el) return;
+    try { await Points.pret; } catch (e) { el.innerHTML = `<p class="muted">Points hors méridien indisponibles (${escapeHtml(e.message)}).</p>`; return; }
+    const grille = new Set(c.grille || []);
+    const codes = s => String(s || "").split(/[\/,+]/).map(x => x.trim()).filter(Boolean);
+    const tous = (Points.entries || []).filter(e => e.canal === "EXTRA").map(e => ({ e, cs: codes(e.data.canal_indicatif) })).filter(x => x.cs.length);
+    const ok = tous.filter(x => x.cs.every(k => grille.has(k)));
+    const partiels = tous.filter(x => !ok.includes(x) && x.cs.some(k => grille.has(k)));
+    const action = d => sansHanzi(String((d.actions || [])[0] || (d.indications_contemporaines || [])[0] || "")).replace(/^[➢•\-\s]+/, "");
+    const bt = ({ e, cs }) => {
+      const d = e.data, act = action(d);
+      return `<li class="circ-tung-ligne"><button type="button" class="edit-toggle-btn" data-pt-fiche="${escapeHtml(e.id)}" title="${escapeHtml(d.localisation || "Localisation non précisée")}">${escapeHtml(d.pinyin || e.id)}${d.nom_fr ? ` <span class="muted">(${escapeHtml(d.nom_fr)})</span>` : ""} <span class="muted">${escapeHtml(cs.join("+"))}</span></button> <span class="circ-tung-action">${escapeHtml(act)}</span> <button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: e.id, canal: cs[0] || "", raison: [d.pinyin, act].filter(Boolean).join(" : "), source: "point hors méridien" }))}" title="Choisir ce point pour le réseau de la patiente">✓</button></li>`;
+    };
+    el.innerHTML = (ok.length ? `<p class="muted">Le cours leur donne des canaux qui sont tous dans le circuit : ils s'y ajoutent sans le déséquilibrer. Survole un nom pour voir la localisation.</p><ul class="circ-tung-liste">${ok.map(bt).join("")}</ul>` : `<p class="muted">Aucun point hors méridien dont tous les canaux soient dans ce circuit.</p>`) +
+      (partiels.length ? `<details class="circ-extra-plus"><summary>${partiels.length} point(s) qui touchent aussi des canaux hors du circuit</summary><p class="muted">À juger selon l'équilibre voulu : leurs autres canaux ne sont pas dans le circuit.</p><ul class="circ-tung-liste">${partiels.map(bt).join("")}</ul></details>` : "");
   },
 
   // graphe de comparaison (même principe que l'arbre des modifications d'une formule) : à gauche les tableaux et les ajouts,
