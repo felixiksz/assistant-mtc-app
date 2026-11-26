@@ -180,6 +180,24 @@ const Store = {
     if (data.content && data.content.sha) this._shaCache.set(relPath, data.content.sha);
   },
 
+  // le fichier existe-t-il dans les données ? true / false ; null si on ne peut pas le savoir (réseau, jeton absent ou refusé) : sans certitude, rien n'est retiré.
+  // En mode GitHub, on lit la liste du dossier parent (petite) au lieu de télécharger le fichier.
+  async existe(relPath) {
+    try {
+      if (this.mode !== "github") {
+        const res = await fetch("data/" + relPath, { method: "HEAD", cache: "no-store" });
+        return res.ok ? true : res.status === 404 ? false : null;
+      }
+      if (!this.gh.token) return null;
+      const i = relPath.lastIndexOf("/"), dossier = i < 0 ? "" : relPath.slice(0, i), nom = relPath.slice(i + 1);
+      const res = await fetch(this._ghUrl(dossier) + "?ref=" + encodeURIComponent(this.gh.branch), { headers: this._ghHeaders() });
+      if (res.status === 404) return false;                      // le dossier n'existe pas dans le dépôt
+      if (!res.ok) return null;
+      const liste = await res.json();
+      return Array.isArray(liste) ? liste.some(x => x.name === nom) : null;
+    } catch (e) { return null; }
+  },
+
   async testConnection() {
     await this._ghGet("formules/index.json");
     return true;
@@ -190,13 +208,12 @@ Store.init();
 /* Copie partagée avec un testeur : son dépôt de données ne contient que la base (pas tes notes, cas cliniques, extraits de livres ni points Tung).
    Les onglets dont les données sont absentes (introuvables dans le dépôt) sont retirés, au lieu d'afficher des erreurs. Une erreur autre qu'« introuvable »
    (réseau, jeton refusé) ne retire rien. */
-(async () => {
+window.addEventListener("load", async () => {          // après l'exécution de tous les scripts (tung.js attend le bouton de l'onglet Tung)
   const sondes = { "cas-pratique": "cas_pratique/index.json", "tableaux-psy": "tdah_transversal.json", "psy": "psycho_emotionnel/index.json", "tung": "tung/tung.json" };
   for (const [onglet, chemin] of Object.entries(sondes)) {
-    try { await Store.readJSON(chemin); }
-    catch (e) { if (/introuvable|\(404\)/.test(String(e && e.message))) document.querySelectorAll(`.tab-btn[data-tab="${onglet}"]`).forEach(b => b.remove()); }
+    if (await Store.existe(chemin) === false) document.querySelectorAll(`.tab-btn[data-tab="${onglet}"]`).forEach(b => b.remove());
   }
-})();
+});
 
 /* ============================= Édition en place (toutes les fiches) =============================
    Chaque fiche affichée peut être modifiée directement : bouton "Modifier cette fiche" -> zone de
@@ -3975,7 +3992,7 @@ const Points = {
     // commentaires des cours (explication du nom, historique, notes) : facultatifs, absents d'une copie partagée ; leur texte est aussi cherché par la recherche
     try {
       this.cours = (await Store.readJSON("cours_zhong_li/commentaires_points.json")).points || {};
-      this.entries.forEach(e => { const c = this.cours[e.id]; if (c) e._searchText += " " + [c.explication_nom, c.historique, c.autres_noms, c.note, c.indications_classiques, c.observations_modernes, c.indications_universitaires, c.associations].filter(Boolean).join(" "); });
+      this.entries.forEach(e => { const c = this.cours[e.id]; if (c) e._searchText += " " + [c.explication_nom, c.historique, c.autres_noms, c.note, c.indications_classiques, c.observations_modernes, c.indications_universitaires, c.actions_universitaires, c.associations].filter(Boolean).join(" ").replace(/⟦\d+⟧/g, ""); });
     } catch (e) { this.cours = {}; }
     // associations de points tirées de tes notes de cours (visio) : facultatives
     try { this.assocCours = (await Store.readJSON("cours_zhong_li/associations_visio.json")).associations || []; } catch (e) { this.assocCours = []; }
@@ -3991,8 +4008,14 @@ const Points = {
     const av = (this.assocCours || []).filter(a => a.points.includes(id) || (a.facultatifs || []).includes(id));
     if (!Object.keys(c).length && !av.length) return "";
     const notes = c.notes_bas_de_page || {};
-    const texte = t => tcmHighlightInline(escapeHtml(t || "")).replace(/(?<=[^\s\d>])(\d{1,3})(?=[\s.,;:)»\]]|$)/g, (m, n) => notes[n] ? `<sup class="cours-ref">[${n}]</sup>` : m);
-    const bloc = (titre, t) => t ? `<p class="cours-bloc"><strong>${titre}</strong> ${texte(t)}</p>` : "";
+    // texte du cours : un renvoi de note est écrit ⟦n⟧ ; les lignes commençant par « - » ou « ➢ » deviennent une liste
+    const ligne = t => tcmHighlightInline(escapeHtml(t)).split(/⟦(\d+)⟧/).map((p, k) => k % 2 ? (notes[p] ? `<sup class="cours-ref">[${p}]</sup>` : "") : p).join("");
+    const bloc = (titre, t) => {
+      if (!t) return "";
+      const L = String(t).split(/\n/).filter(Boolean), puces = L.filter(x => /^(- |➢|•)/.test(x)).length;
+      if (L.length > 1 && puces >= L.length - 1) return `<div class="cours-bloc"><strong>${titre}</strong><ul class="tcm-list">${L.map(x => `<li>${ligne(x.replace(/^(- |➢ ?|• ?)/, ""))}</li>`).join("")}</ul></div>`;
+      return `<p class="cours-bloc"><strong>${titre}</strong> ${L.map(ligne).join("<br>")}</p>`;
+    };
     const refs = Object.entries(notes).sort((a, b) => a[0] - b[0]);
     return `<section class="cours-notes"><h3>Commentaires du cours</h3>` +
       bloc("Explication du nom", c.explication_nom) + bloc("Autres noms", c.autres_noms) + bloc("Historique", c.historique) + bloc("Note du cours", c.note) +
@@ -4000,7 +4023,7 @@ const Points = {
         const lien = p => p === id ? `<strong>${escapeHtml(p)}</strong>` : `<a href="#" class="circ-ptlien" data-pt-fiche="${escapeHtml(p)}">${escapeHtml(p)}</a>`;
         return `<li>${a.points.map(lien).join(" + ")}${(a.facultatifs || []).length ? ` <span class="muted">(+ ${a.facultatifs.map(lien).join(", ")} en option)</span>` : ""} : ${tcmHighlightInline(escapeHtml(a.texte))}</li>`;
       }).join("")}</ul>` : "") +
-      bloc("Indications classiques", c.indications_classiques) + bloc("Indications selon l'acupuncture universitaire", c.indications_universitaires) + bloc("Observations cliniques modernes", c.observations_modernes) + bloc("Associations du cours", c.associations) +
+      bloc("Actions selon l'acupuncture universitaire contemporaine", c.actions_universitaires) + bloc("Indications selon l'acupuncture universitaire contemporaine", c.indications_universitaires) + bloc("Indications classiques", c.indications_classiques) + bloc("Observations cliniques modernes", c.observations_modernes) + bloc("Associations du cours", c.associations) +
       (refs.length ? `<details class="cours-refs"><summary>Références du cours (${refs.length})</summary><ul class="tcm-list">${refs.map(([n, t]) => `<li><span class="cours-ref">[${n}]</span> ${tcmHighlightInline(escapeHtml(t))}</li>`).join("")}</ul></details>` : "") +
       (c.source ? `<p class="muted">Source : ${escapeHtml(c.source)}</p>` : `<p class="muted">Source : notes de visio du cours (École Zhōng Lì)</p>`) + `</section>`;
   },
@@ -5732,8 +5755,8 @@ function addEditControls(container, relPath, obj, opts) {
   const possibles = opts.champsPossibles || {};
   const ouvrir = champ => {
     if (!champ) return editorFn(container, relPath, obj, opts);
-    const cible = (champ in obj || !(champ in possibles)) ? obj : { ...obj, [champ]: possibles[champ] };
-    return openGenericFormEditor(container, relPath, cible, { ...opts, champ });
+    if (!(champ in obj) && champ in possibles) obj[champ] = possibles[champ];       // le champ rejoint l'objet réel (et pas une copie) : l'enregistrement le met à jour
+    return openGenericFormEditor(container, relPath, obj, { ...opts, champ });
   };
   // menu : toute la fiche, ou un seul champ (les autres ne sont pas touchés)
   btn.addEventListener("click", ev => {
