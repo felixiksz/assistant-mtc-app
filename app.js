@@ -3977,24 +3977,32 @@ const Points = {
       this.cours = (await Store.readJSON("cours_zhong_li/commentaires_points.json")).points || {};
       this.entries.forEach(e => { const c = this.cours[e.id]; if (c) e._searchText += " " + [c.explication_nom, c.historique, c.autres_noms, c.note, c.indications_classiques, c.observations_modernes, c.indications_universitaires, c.associations].filter(Boolean).join(" "); });
     } catch (e) { this.cours = {}; }
+    // associations de points tirées de tes notes de cours (visio) : facultatives
+    try { this.assocCours = (await Store.readJSON("cours_zhong_li/associations_visio.json")).associations || []; } catch (e) { this.assocCours = []; }
     this.renderGroups();
     this.renderList(this.entries);
   },
 
   cours: {},
+  assocCours: [],
   // commentaires du cours sur un point : explication du nom, historique, autres noms, note, et références (notes de bas de page : classiques cités)
   coursHtml(id) {
-    const c = (this.cours || {})[id];
-    if (!c) return "";
+    const c = (this.cours || {})[id] || {};
+    const av = (this.assocCours || []).filter(a => a.points.includes(id) || (a.facultatifs || []).includes(id));
+    if (!Object.keys(c).length && !av.length) return "";
     const notes = c.notes_bas_de_page || {};
     const texte = t => tcmHighlightInline(escapeHtml(t || "")).replace(/(?<=[^\s\d>])(\d{1,3})(?=[\s.,;:)»\]]|$)/g, (m, n) => notes[n] ? `<sup class="cours-ref">[${n}]</sup>` : m);
     const bloc = (titre, t) => t ? `<p class="cours-bloc"><strong>${titre}</strong> ${texte(t)}</p>` : "";
     const refs = Object.entries(notes).sort((a, b) => a[0] - b[0]);
     return `<section class="cours-notes"><h3>Commentaires du cours</h3>` +
       bloc("Explication du nom", c.explication_nom) + bloc("Autres noms", c.autres_noms) + bloc("Historique", c.historique) + bloc("Note du cours", c.note) +
+      (av.length ? `<p class="cours-bloc"><strong>Associations de tes notes de cours</strong></p><ul class="tcm-list">${av.map(a => {
+        const lien = p => p === id ? `<strong>${escapeHtml(p)}</strong>` : `<a href="#" class="circ-ptlien" data-pt-fiche="${escapeHtml(p)}">${escapeHtml(p)}</a>`;
+        return `<li>${a.points.map(lien).join(" + ")}${(a.facultatifs || []).length ? ` <span class="muted">(+ ${a.facultatifs.map(lien).join(", ")} en option)</span>` : ""} : ${tcmHighlightInline(escapeHtml(a.texte))}</li>`;
+      }).join("")}</ul>` : "") +
       bloc("Indications classiques", c.indications_classiques) + bloc("Indications selon l'acupuncture universitaire", c.indications_universitaires) + bloc("Observations cliniques modernes", c.observations_modernes) + bloc("Associations du cours", c.associations) +
       (refs.length ? `<details class="cours-refs"><summary>Références du cours (${refs.length})</summary><ul class="tcm-list">${refs.map(([n, t]) => `<li><span class="cours-ref">[${n}]</span> ${tcmHighlightInline(escapeHtml(t))}</li>`).join("")}</ul></details>` : "") +
-      `<p class="muted">Source : ${escapeHtml(c.source || "cours")}</p></section>`;
+      (c.source ? `<p class="muted">Source : ${escapeHtml(c.source)}</p>` : `<p class="muted">Source : notes de visio du cours (École Zhōng Lì)</p>`) + `</section>`;
   },
 
   renderGroups() {
