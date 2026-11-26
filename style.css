@@ -1760,3 +1760,13 @@ table.croise-table th.croise-point-label, .croise-pt[data-croise-pt] { cursor: p
 
 /* Circuit proposé qui couvre tous les canaux impliqués */
 .prop-raison.prop-complet { background: var(--accent); color: var(--on-accent); border-color: var(--ink); font-weight: 700; }
+
+/* Résultats de la recherche : une colonne par catégorie, chacune défile et liste tous ses résultats */
+#global-search-results.open { display: flex; flex-direction: column; overflow: hidden; }
+#global-search-results .gsr-filtres { flex: none; }
+#global-search-results .gsr-grille, #global-search-results .gsr-grille.seul { display: flex; flex: 1 1 auto; min-height: 0; overflow-x: auto; overflow-y: hidden; align-items: stretch; scroll-snap-type: x proximity; }
+#global-search-results .gsr-groupe { flex: 1 0 18rem; display: flex; flex-direction: column; min-height: 0; max-width: 40rem; scroll-snap-align: start; }
+#global-search-results .gsr-grille.seul .gsr-groupe { max-width: none; }
+#global-search-results .gsr-groupe > ul { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+#global-search-results .gsr-group-label { flex: none; }
+@media (max-width: 700px) { #global-search-results .gsr-groupe { flex-basis: 86vw; } }

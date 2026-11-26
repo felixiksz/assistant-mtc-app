@@ -6547,7 +6547,7 @@ const GlobalSearch = {
     if (!items.length) { this.results.innerHTML = `<div class="gsr-filtres">${this.barreExact()}</div><p class="gsr-empty">Aucun résultat pour « ${escapeHtml(mots.join(" + "))} » (${escapeHtml((this.MODES.find(m => m[0] === this.mode) || [])[1] || "")}).${this.mode === "un" ? "" : " Essaie un mode plus large ci-dessus."}</p>`; this.results.classList.add("open"); brancherExact(); return; }
     const nb = {}; items.forEach(it => { nb[it.type] = (nb[it.type] || 0) + 1; });
     if (this.filtre !== "tout" && !nb[this.filtre]) this.filtre = "tout";
-    const tout = this.filtre === "tout", max = tout ? 5 : 80;
+    const tout = this.filtre === "tout", PAS = 40;
     const chips = `<div class="gsr-filtres">` + this.TYPES.filter(([k]) => k === "tout" || nb[k]).map(([k, lib]) =>
       `<button type="button" class="cat-chip${k === this.filtre ? " active" : ""}" data-f="${k}">${lib} <span class="gsr-nb">${k === "tout" ? items.length : nb[k]}</span></button>`).join("") + this.barreExact() + `</div>`;
     const groups = new Map();
@@ -6555,17 +6555,18 @@ const GlobalSearch = {
     const ordre = ["Syndromes", "Formules", "Circuits", "Points", "Points Tung"];
     const cles = [...groups.keys()].sort((x, y) => (ordre.indexOf(x) < 0 ? 99 : ordre.indexOf(x)) - (ordre.indexOf(y) < 0 ? 99 : ordre.indexOf(y)));
     const flat = [];
+    // une colonne par catégorie de résultat, qui défile ; tous les résultats y sont listés (par paquets de 40, la suite se charge en descendant)
+    const liHtml = it => {
+      const i = flat.push(it) - 1;
+      const ctx = it.champs ? dsExtrait(it.champs(), mots, 60, 130, it.title) : "";
+      return `<li data-i="${i}"><span class="gsr-txt"><span class="gsr-title">${dsMarqueMots(it.title, mots)}</span>${it.sub ? `<span class="gsr-sub">${dsMarqueMots(it.sub, mots)}</span>` : ""}${ctx ? `<span class="gsr-ctx">${dsMarqueMots(ctx, mots)}</span>` : ""}</span>` +
+        `<span class="gsr-actions">${it.comparer ? `<button type="button" data-act="comparer" title="Mettre sur le plateau de comparaison" aria-label="Mettre sur le plateau de comparaison">⇄</button>` : ""}${it.onglet ? `<button type="button" data-act="onglet" title="Ouvrir dans un onglet de travail" aria-label="Ouvrir dans un onglet de travail">⧉</button>` : ""}${it.reseau ? `<button type="button" data-act="reseau" title="Ajouter à la consultation en cours" aria-label="Ajouter à la consultation en cours">＋</button>` : ""}</span></li>`;
+    };
     let html = chips + `<div class="gsr-grille${tout ? "" : " seul"}">`;
-    cles.forEach(group => {
+    cles.forEach((group, gi) => {
       const list = groups.get(group);
-      html += `<div class="gsr-groupe"><div class="gsr-group-label">${escapeHtml(group)} (${list.length})</div><ul>`;
-      list.slice(0, max).forEach(it => {
-        const i = flat.push(it) - 1;
-        const ctx = it.champs ? dsExtrait(it.champs(), mots, 60, 130, it.title) : "";
-        html += `<li data-i="${i}"><span class="gsr-txt"><span class="gsr-title">${dsMarqueMots(it.title, mots)}</span>${it.sub ? `<span class="gsr-sub">${dsMarqueMots(it.sub, mots)}</span>` : ""}${ctx ? `<span class="gsr-ctx">${dsMarqueMots(ctx, mots)}</span>` : ""}</span>` +
-          `<span class="gsr-actions">${it.comparer ? `<button type="button" data-act="comparer" title="Mettre sur le plateau de comparaison" aria-label="Mettre sur le plateau de comparaison">⇄</button>` : ""}${it.onglet ? `<button type="button" data-act="onglet" title="Ouvrir dans un onglet de travail" aria-label="Ouvrir dans un onglet de travail">⧉</button>` : ""}${it.reseau ? `<button type="button" data-act="reseau" title="Ajouter à la consultation en cours" aria-label="Ajouter à la consultation en cours">＋</button>` : ""}</span></li>`;
-      });
-      if (list.length > max) html += `<li class="gsr-plus" data-f="${list[0].type}">Voir les ${list.length} résultats…</li>`;
+      html += `<div class="gsr-groupe"><div class="gsr-group-label">${escapeHtml(group)} (${list.length})</div><ul data-g="${gi}">`;
+      list.slice(0, PAS).forEach(it => { html += liHtml(it); });
       html += `</ul></div>`;
     });
     html += `</div>`;
@@ -6573,7 +6574,7 @@ const GlobalSearch = {
     this.results.classList.add("open");
     brancherExact();
     this.results.querySelectorAll("[data-f]").forEach(x => x.addEventListener("click", ev => { ev.stopPropagation(); this.filtre = x.dataset.f; this.results.scrollTop = 0; this.runSearch(); }));
-    this.results.querySelectorAll("li[data-i]").forEach(li => li.addEventListener("click", ev => {
+    const brancherLi = li => li.addEventListener("click", ev => {
       const it = flat[+li.dataset.i], act = ev.target.closest("[data-act]");
       if (act && act.dataset.act === "comparer") { ev.stopPropagation(); it.comparer(); return; }
       if (act && act.dataset.act === "reseau") { ev.stopPropagation(); it.reseau(); return; }      // la liste reste ouverte : on peut en ajouter plusieurs
@@ -6581,7 +6582,20 @@ const GlobalSearch = {
       this.close();
       this.input.value = "";
       setTimeout(() => dsSurlignerOuvert(mots), 450);
-    }));
+    });
+    this.results.querySelectorAll("li[data-i]").forEach(brancherLi);
+    this.results.querySelectorAll("ul[data-g]").forEach(ul => {
+      const list = groups.get(cles[+ul.dataset.g]); let pos = PAS;
+      const suite = () => {
+        while (pos < list.length && ul.scrollHeight - ul.scrollTop - ul.clientHeight < 300) {
+          const fin = Math.min(list.length, pos + PAS), debut = ul.children.length;
+          ul.insertAdjacentHTML("beforeend", list.slice(pos, fin).map(liHtml).join(""));
+          [...ul.children].slice(debut).forEach(brancherLi);
+          pos = fin;
+        }
+      };
+      ul.addEventListener("scroll", suite, { passive: true });
+    });
   }
 };
 GlobalSearch.init();
