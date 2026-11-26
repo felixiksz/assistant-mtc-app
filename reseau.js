@@ -377,7 +377,7 @@ const Reseau = {
       <div class="reseau-tete" id="reseau-tete"><strong>📋 Consultation${e.patiente ? " — " + escapeHtml(e.patiente) : ""}${verrou ? " 🔒" : ""}</strong>
         <span><button type="button" class="reseau-ic" id="reseau-reduire"${ancree ? " hidden" : ""} title="${this.fenetre.reduit ? "Agrandir" : "Réduire"}" aria-label="${this.fenetre.reduit ? "Agrandir" : "Réduire"}">${this.fenetre.reduit ? "▢" : "—"}</button><button type="button" class="reseau-ic" id="reseau-fermer" title="Fermer (la consultation est conservée)" aria-label="Fermer">✕</button></span></div>
       <div class="reseau-onglets" role="tablist">
-        <button type="button" role="tab" class="reseau-onglet${this.vue === "reseau" ? " actif" : ""}" data-vue="reseau">En cours <span class="reseau-n">${nbP}</span></button>
+        <button type="button" role="tab" class="reseau-onglet${this.vue === "reseau" ? " actif" : ""}" data-vue="reseau">En cours${nbP ? ` <span class="reseau-n" title="${nbP} point${nbP > 1 ? "s" : ""} dans la consultation en cours">${nbP} pt${nbP > 1 ? "s" : ""}</span>` : ""}</button>
         <button type="button" role="tab" class="reseau-onglet${this.vue === "archives" ? " actif" : ""}" data-vue="archives">Enregistrés <span class="reseau-n">${nbA}</span></button>
       </div>
       <div class="reseau-corps">
