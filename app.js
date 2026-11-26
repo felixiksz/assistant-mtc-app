@@ -3975,7 +3975,7 @@ const Points = {
     // commentaires des cours (explication du nom, historique, notes) : facultatifs, absents d'une copie partagée ; leur texte est aussi cherché par la recherche
     try {
       this.cours = (await Store.readJSON("cours_zhong_li/commentaires_points.json")).points || {};
-      this.entries.forEach(e => { const c = this.cours[e.id]; if (c) e._searchText += " " + [c.explication_nom, c.historique, c.autres_noms, c.note].filter(Boolean).join(" "); });
+      this.entries.forEach(e => { const c = this.cours[e.id]; if (c) e._searchText += " " + [c.explication_nom, c.historique, c.autres_noms, c.note, c.indications_classiques, c.observations_modernes, c.indications_universitaires, c.associations].filter(Boolean).join(" "); });
     } catch (e) { this.cours = {}; }
     this.renderGroups();
     this.renderList(this.entries);
@@ -3992,6 +3992,7 @@ const Points = {
     const refs = Object.entries(notes).sort((a, b) => a[0] - b[0]);
     return `<section class="cours-notes"><h3>Commentaires du cours</h3>` +
       bloc("Explication du nom", c.explication_nom) + bloc("Autres noms", c.autres_noms) + bloc("Historique", c.historique) + bloc("Note du cours", c.note) +
+      bloc("Indications classiques", c.indications_classiques) + bloc("Indications selon l'acupuncture universitaire", c.indications_universitaires) + bloc("Observations cliniques modernes", c.observations_modernes) + bloc("Associations du cours", c.associations) +
       (refs.length ? `<details class="cours-refs"><summary>Références du cours (${refs.length})</summary><ul class="tcm-list">${refs.map(([n, t]) => `<li><span class="cours-ref">[${n}]</span> ${tcmHighlightInline(escapeHtml(t))}</li>`).join("")}</ul></details>` : "") +
       `<p class="muted">Source : ${escapeHtml(c.source || "cours")}</p></section>`;
   },
