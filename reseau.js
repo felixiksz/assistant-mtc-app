@@ -175,6 +175,14 @@ const Reseau = {
 
   // ---------- points Tung : reconnus par leur nom, un alias ou un numéro (Shui Jin, 77.08…)
   codePoint(t) { return /^[A-Za-z]{1,3}\s?\.?\s?\d{1,2}$/.test(String(t).trim()); },
+  // fiche d'un point de canal d'après un code tapé (« c7 », « HT 7 », « tf.5 ») ; les sigles anglais (HT, SP, LI…) sont acceptés
+  cleCode(t) { const m = this.cleP(t).match(/^([A-Z]+)(\d+)$/); return m ? (this.ALIAS[m[1]] || m[1]).toUpperCase() + m[2] : ""; },
+  entreePoint(t) { const cle = this.cleCode(t); return cle && typeof Points !== "undefined" ? (Points.entries || []).find(e => e.canal !== "EXTRA" && this.cleP(e.id) === cle) || null : null; },
+  // ajoute un point de canal avec sa fiche : nom normalisé (« C7 »), canal, première action comme raison
+  ajouterEntree(e, source) {
+    const d = e.data || {}, act = (d.actions || [])[0] ? String(d.actions[0]).replace(/^[➢•\-\s]+/, "") : "";
+    this.ajouter({ point: e.id.replace(/\s+/g, ""), canal: e.canal, raison: act, source: source || "saisi" });
+  },
   nomTung(f) { return f.nom + ((f.numeros || []).length ? " " + f.numeros.join("/") : ""); },
   async suggererTung(t) {
     if (typeof Tung === "undefined") return [];
@@ -513,7 +521,15 @@ const Reseau = {
       const dejaTung = f => this.etat.points.some(p => p.tung && this.cleP(p.point) === this.cleP(this.nomTung(f)));
       const montrer = async () => {
         const t = champ.value.trim();
-        if (!t || this.codePoint(t)) { sg.innerHTML = ""; return; }
+        if (!t) { sg.innerHTML = ""; return; }
+        if (this.codePoint(t)) {                                              // code de canal : propose les fiches de points qui commencent comme ça (« tf1 » -> TF 1, TF 10…)
+          try { await Points.pret; } catch (e) { /* base de points indisponible */ }
+          const cle = this.cleCode(t), deja = new Set(this.etat.points.map(p => this.cleP(p.point)));
+          const l = cle ? (Points.entries || []).filter(e => e.canal !== "EXTRA" && this.cleP(e.id).startsWith(cle) && !deja.has(this.cleP(e.id))).slice(0, 8) : [];
+          sg.innerHTML = l.map(e => `<li data-pt="${escapeHtml(e.id)}"><strong>${escapeHtml(e.id)}</strong> <span class="muted">${escapeHtml((e.data || {}).pinyin || "")}${(e.data || {}).nom_fr ? " — " + escapeHtml(e.data.nom_fr) : ""} · ${escapeHtml(e.canalNom || e.canal)}</span></li>`).join("");
+          sg.querySelectorAll("li[data-pt]").forEach(li => li.addEventListener("click", () => { const e = (Points.entries || []).find(x => x.id === li.dataset.pt); champ.value = ""; sg.innerHTML = ""; if (e) this.ajouterEntree(e); }));
+          return;
+        }
         const l = await this.suggererTung(t);
         sg.innerHTML = l.filter(f => !dejaTung(f)).map(f => `<li data-t="${escapeHtml(f.id)}"><strong>${escapeHtml(f.nom)}</strong> <span class="muted">${escapeHtml((f.numeros || []).join(" · "))}${((f.canaux || {}).codes || []).length ? " · " + f.canaux.codes.join("+") : ""} · point Tung</span></li>`).join("");
         sg.querySelectorAll("li[data-t]").forEach(li => li.addEventListener("click", () => { const f = Tung.parId(li.dataset.t); champ.value = ""; sg.innerHTML = ""; if (f) this.ajouterTung(f); }));
@@ -522,7 +538,13 @@ const Reseau = {
       form.addEventListener("submit", async ev => {
         ev.preventDefault();
         const v = champ.value.trim(); if (!v) return;
-        if (!this.codePoint(v)) {                                           // pas un code de canal : c'est peut-être un point Tung
+        if (this.codePoint(v)) {                                            // « c7 », « HT 7 »… : on cherche la fiche du point pour le nommer proprement
+          try { await Points.pret; } catch (e) { /* base de points indisponible */ }
+          const e = this.entreePoint(v);
+          champ.value = ""; sg.innerHTML = "";
+          if (e) { this.ajouterEntree(e); return; }
+          this.avertir(v + " : pas de fiche dans ta base de points (vérifie le numéro). Ajouté tel quel.");
+        } else {                                           // pas un code de canal : c'est peut-être un point Tung
           const l = await this.suggererTung(v), exact = l.find(f => this.nomTung(f) && this.cleP(f.nom) === this.cleP(v)) || (typeof Tung !== "undefined" && Tung.parNom ? Tung.parNom(v) : null);
           const f = exact || (l.length === 1 ? l[0] : null);
           if (f) { champ.value = ""; sg.innerHTML = ""; this.ajouterTung(f); return; }
