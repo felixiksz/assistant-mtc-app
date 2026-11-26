@@ -1103,7 +1103,10 @@ const Circuits = {
   async pointsTung(c) {
     const el = document.getElementById("circ-tung");
     if (!el) return;
-    try { await Tung.ensureLoaded(); } catch (e) { el.innerHTML = `<p class="muted">Points Tung indisponibles (${escapeHtml(e.message)}).</p>`; return; }
+    try { await Tung.ensureLoaded(); } catch (e) {
+      if (/introuvable|\(404\)/.test(String(e && e.message))) { const sec = el.closest("section"); if (sec) sec.remove(); return; }       // copie sans points Tung : la rubrique n'a pas lieu d'être
+      el.innerHTML = `<p class="muted">Points Tung indisponibles (${escapeHtml(e.message)}).</p>`; return;
+    }
     const r = Tung.compatibles(c.grille, (c.ajouts || []).map(a => a.canaux || []));
     const bt = f => `<li class="circ-tung-ligne"><button type="button" class="edit-toggle-btn" data-tung-fiche="${escapeHtml(f.id)}" title="${escapeHtml(Tung.localisation(f) || "Localisation non précisée dans les sources")}">${escapeHtml(f.nom)}${(f.numeros || []).length ? " " + escapeHtml(f.numeros.join("/")) : ""} <span class="muted">${f.canaux.codes.join("+")}</span></button> <span class="circ-tung-action">${escapeHtml(sansHanzi(Tung.action(f)))}</span> <button type="button" class="circ-pt-choisir" data-reseau="${escapeHtml(JSON.stringify({ point: f.nom + ((f.numeros || []).length ? " " + f.numeros.join("/") : ""), canal: (f.canaux.codes || [])[0] || "", raison: sansHanzi(Tung.action(f)), source: "point Tung", tung: true }))}" title="Choisir ce point pour le réseau de la patiente">✓</button></li>`;
     el.innerHTML = (r.ok.length ? `<p class="muted">Leurs canaux sont déjà dans le circuit : ils s'y ajoutent sans le déséquilibrer. Survole un nom pour voir la localisation.</p><ul class="circ-tung-liste">${r.ok.map(bt).join("")}</ul>` : `<p class="muted">Aucun point Tung dont le canal soit dans ce circuit pour l'instant (les canaux se renseignent dans l'onglet Points Tung).</p>`) +

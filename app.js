@@ -187,6 +187,17 @@ const Store = {
 };
 Store.init();
 
+/* Copie partagée avec un testeur : son dépôt de données ne contient que la base (pas tes notes, cas cliniques, extraits de livres ni points Tung).
+   Les onglets dont les données sont absentes (introuvables dans le dépôt) sont retirés, au lieu d'afficher des erreurs. Une erreur autre qu'« introuvable »
+   (réseau, jeton refusé) ne retire rien. */
+(async () => {
+  const sondes = { "cas-pratique": "cas_pratique/index.json", "tableaux-psy": "tdah_transversal.json", "psy": "psycho_emotionnel/index.json", "tung": "tung/tung.json" };
+  for (const [onglet, chemin] of Object.entries(sondes)) {
+    try { await Store.readJSON(chemin); }
+    catch (e) { if (/introuvable|\(404\)/.test(String(e && e.message))) document.querySelectorAll(`.tab-btn[data-tab="${onglet}"]`).forEach(b => b.remove()); }
+  }
+})();
+
 /* ============================= Édition en place (toutes les fiches) =============================
    Chaque fiche affichée peut être modifiée directement : bouton "Modifier cette fiche" -> zone de
    texte avec le JSON brut -> "Enregistrer" écrit le fichier soit sur le disque local (File System
