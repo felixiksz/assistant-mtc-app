@@ -3845,8 +3845,17 @@ const LocalImages = {
     });
   },
 
+  // image d'un point : chemin exact (« DM/DM4.jpg »), sinon tolérance sur le dossier choisi : « images/DM/DM4.jpg » (dossier parent choisi)
+  // ou « DM4.jpg » seul (le sélecteur du téléphone ne donne pas les sous-dossiers) ; les noms de fichiers sont uniques (DM4.jpg, AnMian.jpg…)
   urlFor(relPath) {
-    return this.map.get(relPath) || null;
+    if (this.map.has(relPath)) return this.map.get(relPath);
+    const suf = "/" + relPath;
+    for (const [k, u] of this.map) if (k.endsWith(suf)) return u;
+    if (!this._parNom) {
+      this._parNom = new Map();
+      for (const [k, u] of this.map) { const b = k.split("/").pop(); this._parNom.set(b, this._parNom.has(b) ? null : u); }       // null = nom en double : ambigu, on ne devine pas
+    }
+    return this._parNom.get(relPath.split("/").pop()) || null;
   },
 
   relPathFor(file) {
@@ -3860,6 +3869,7 @@ const LocalImages = {
   async loadFiles(fileList) {
     this.map.forEach(url => URL.revokeObjectURL(url));
     this.map.clear();
+    this._parNom = null;
     const db = await this.openDB();
     const tx = db.transaction("images", "readwrite");
     const store = tx.objectStore("images");
@@ -3892,6 +3902,7 @@ const LocalImages = {
     });
     this.map.forEach(url => URL.revokeObjectURL(url));
     this.map.clear();
+    this._parNom = null;
     keys.forEach((key, i) => this.map.set(key, URL.createObjectURL(values[i])));
     return keys.length;
   },
@@ -3903,6 +3914,7 @@ const LocalImages = {
     await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); });
     this.map.forEach(url => URL.revokeObjectURL(url));
     this.map.clear();
+    this._parNom = null;
   }
 };
 
@@ -3914,7 +3926,13 @@ document.getElementById("pts-local-images-input").addEventListener("change", asy
   status.style.display = "block";
   status.textContent = "Enregistrement des images en cours...";
   const count = await LocalImages.loadFiles(e.target.files);
-  status.textContent = `✅ ${count} image(s) chargée(s) et enregistrée(s) sur cet appareil — disponibles automatiquement aux prochaines ouvertures de l'app, sans repasser par le sélecteur de dossier.`;
+  // combien des images attendues par les fiches de points sont reconnues ?
+  try { await Points.pret; } catch (err) { /* base de points indisponible */ }
+  const attendues = new Set();
+  (Points.entries || []).forEach(en => (en.data.images || []).forEach(i => attendues.add(i)));
+  const reconnues = [...attendues].filter(i => LocalImages.urlFor(i)).length;
+  status.textContent = `✅ ${count} image(s) chargée(s) et enregistrée(s) sur cet appareil — ${reconnues} sur ${attendues.size} attendues par les fiches de points reconnues.` +
+    (count && !reconnues ? " ⚠ Aucune ne correspond : choisis le dossier « images » (celui qui contient les dossiers P, GI, E, Rt…)." : (count && reconnues < attendues.size ? " Il en manque dans le dossier choisi." : ""));
   if (Points.lastShown) Points.showDetail(Points.lastShown);
 });
 document.getElementById("pts-clear-local-images").addEventListener("click", async () => {
