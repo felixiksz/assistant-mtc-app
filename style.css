@@ -1770,3 +1770,13 @@ table.croise-table th.croise-point-label, .croise-pt[data-croise-pt] { cursor: p
 #global-search-results .gsr-groupe > ul { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 #global-search-results .gsr-group-label { flex: none; }
 @media (max-width: 700px) { #global-search-results .gsr-groupe { flex-basis: 86vw; } }
+
+/* Commentaires du cours sur un point (explication du nom, historique, notes, références) */
+.cours-notes { background: color-mix(in srgb, var(--accent) 5%, transparent); padding: 0.6rem 0.8rem !important; border-left: 4px solid var(--accent); }
+.cours-bloc { margin: 0.4rem 0; line-height: 1.5; }
+sup.cours-ref, span.cours-ref { font-size: 0.72rem; font-weight: 700; color: var(--accent); }
+.cours-refs summary { cursor: pointer; font-size: 0.85rem; color: var(--muted); }
+
+/* Commentaire du cours rattaché à une ligne d'un tableau de canal */
+.syn-comm { margin-top: 0.4rem; padding: 0.3rem 0.5rem; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); font-size: 0.85rem; line-height: 1.4; }
+.syn-comm-t { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-right: 0.3rem; }

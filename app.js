@@ -2015,6 +2015,8 @@ const Syndromes = {
       this.loadDomaine("merveilleux_vaisseaux", "syndromes/merveilleux_vaisseaux/index.json")
     ]);
     this.entries = [...organes, ...externes, ...qsl, ...canaux, ...mv];
+    // commentaires que tu rattaches à une ligne d'un tableau de canal (explication tirée des cours sur les points) : facultatifs
+    try { this._comm = await Store.readJSON("syndromes/canaux/commentaires_lignes.json"); } catch (e) { this._comm = {}; }
     if (this.entries.length === 0) {
       document.getElementById("syn-list").innerHTML = `<li class="muted">Base pas encore prête — l'extraction tourne peut-être encore en tâche de fond.</li>`;
       return;
@@ -2228,10 +2230,17 @@ const Syndromes = {
     return html + hl(reste);
   },
 
-  tableCanal(lignes) {
+  // commentaires rattachés à une ligne (fichier syndromes/canaux/commentaires_lignes.json) : { canal: [{ section, symptome (début de la ligne), commentaire, points, source }] }
+  commentairesDe(ctx, l) {
+    if (!ctx || !this._comm) return "";
+    return (this._comm[ctx.canal] || []).filter(c => c.section === ctx.section && String(l.symptome || "").startsWith(c.symptome)).map(c =>
+      `<div class="syn-comm"><span class="syn-comm-t">Cours</span> ${tcmHighlightInline(escapeHtml(c.commentaire))}${(c.points || []).map(p => ` <a href="#" class="circ-ptlien" data-pt-fiche="${escapeHtml(p)}" title="Ouvrir la fiche de ${escapeHtml(p)}">${escapeHtml(p)}</a>`).join("")}${c.source ? ` <span class="muted">(${escapeHtml(c.source)})</span>` : ""}</div>`).join("");
+  },
+
+  tableCanal(lignes, ctx) {
     if (!lignes || !lignes.length) return "";
     const corps = lignes.map(l => `<tr${l.generique ? ' class="syn-generique"' : ""}><td>${this.signeGras(l)}${l.generique ? ` <span class="tag-gen" title="Signe générique : il décrit le trajet du canal, pas un syndrome précis">trajet</span>` : ""}</td>` +
-      `<td>${tcmHighlightInline(escapeHtml(l.mecanisme || ""))}</td></tr>`).join("");
+      `<td>${tcmHighlightInline(escapeHtml(l.mecanisme || ""))}${this.commentairesDe(ctx, l)}</td></tr>`).join("");
     return `<table><thead><tr><th>Symptôme</th><th>Mécanisme pathologique</th></tr></thead><tbody>${corps}</tbody></table>`;
   },
 
@@ -2268,7 +2277,7 @@ const Syndromes = {
       const trajet = (sec.trajet && sec.trajet.length)
         ? `<details class="syn-trajet"><summary>${escapeHtml(sec.trajet_titre || "Trajet")}</summary><ul class="tcm-list">${sec.trajet.map(t => `<li>${tcmHighlightInline(escapeHtml(t))}</li>`).join("")}</ul></details>` : "";
       return `<section class="syn-canal-section" data-section="${k}"><h3>${noms[k]} <span class="muted">${escapeHtml((sec.titre || "").replace(/^[^(]*/, ""))}</span></h3>` +
-        `${trajet}${this.tableCanal(sec.lignes)}${this.renderShen(sec.shen)}${this.renderTraitementCanal(sec)}</section>`;
+        `${trajet}${this.tableCanal(sec.lignes, { canal: d.id, section: k })}${this.renderShen(sec.shen)}${this.renderTraitementCanal(sec)}</section>`;
     }).join("");
     const gen = (d.signes_de_trajet && d.signes_de_trajet.length)
       ? `<p class="muted">Signes génériques de trajet (non discriminants, exclus du diagnostic par signes) : ${d.signes_de_trajet.map(s => escapeHtml(s.symptome)).join(" ; ")}</p>` : "";
@@ -3945,8 +3954,28 @@ const Points = {
         pts.forEach(p => this.entries.push({ id: p.point, canal: c.id, canalNom: c.nom, data: p, _searchText: flattenDetailText(p) }));
       } catch (e) { /* skip */ }
     }));
+    // commentaires des cours (explication du nom, historique, notes) : facultatifs, absents d'une copie partagée ; leur texte est aussi cherché par la recherche
+    try {
+      this.cours = (await Store.readJSON("cours_zhong_li/commentaires_points.json")).points || {};
+      this.entries.forEach(e => { const c = this.cours[e.id]; if (c) e._searchText += " " + [c.explication_nom, c.historique, c.autres_noms, c.note].filter(Boolean).join(" "); });
+    } catch (e) { this.cours = {}; }
     this.renderGroups();
     this.renderList(this.entries);
+  },
+
+  cours: {},
+  // commentaires du cours sur un point : explication du nom, historique, autres noms, note, et références (notes de bas de page : classiques cités)
+  coursHtml(id) {
+    const c = (this.cours || {})[id];
+    if (!c) return "";
+    const notes = c.notes_bas_de_page || {};
+    const texte = t => tcmHighlightInline(escapeHtml(t || "")).replace(/(?<=[^\s\d>])(\d{1,3})(?=[\s.,;:)»\]]|$)/g, (m, n) => notes[n] ? `<sup class="cours-ref">[${n}]</sup>` : m);
+    const bloc = (titre, t) => t ? `<p class="cours-bloc"><strong>${titre}</strong> ${texte(t)}</p>` : "";
+    const refs = Object.entries(notes).sort((a, b) => a[0] - b[0]);
+    return `<section class="cours-notes"><h3>Commentaires du cours</h3>` +
+      bloc("Explication du nom", c.explication_nom) + bloc("Autres noms", c.autres_noms) + bloc("Historique", c.historique) + bloc("Note du cours", c.note) +
+      (refs.length ? `<details class="cours-refs"><summary>Références du cours (${refs.length})</summary><ul class="tcm-list">${refs.map(([n, t]) => `<li><span class="cours-ref">[${n}]</span> ${tcmHighlightInline(escapeHtml(t))}</li>`).join("")}</ul></details>` : "") +
+      `<p class="muted">Source : ${escapeHtml(c.source || "cours")}</p></section>`;
   },
 
   renderGroups() {
@@ -4044,6 +4073,7 @@ const Points = {
       ${actions ? `<section><h3>Actions</h3>${actions}</section>` : ""}
       ${associations ? `<section><h3>Associations</h3>${associations}</section>` : ""}
       ${d.note ? `<section><h3>Note</h3><div class="tcm-text">${formatTcmText(d.note)}</div></section>` : ""}
+      ${this.coursHtml(entry.id)}
       <p class="muted">Source : base Jeu (Points des canaux.xlsx) + images localisation.jpg (Bibliothèque MTC)</p>
     `;
   },
