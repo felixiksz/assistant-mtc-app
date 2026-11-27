@@ -2313,8 +2313,12 @@ const Syndromes = {
       if (k === "distinct" && !(sec.lignes || []).length) {
         return `<section class="syn-canal-section" data-section="distinct"><h3>${noms[k]} <span class="muted">(jīng bié)</span></h3><p class="muted">Pas encore de tableau pour ce canal distinct dans ton livret.</p></section>`;
       }
-      const trajet = (sec.trajet && sec.trajet.length)
-        ? `<details class="syn-trajet"><summary>${escapeHtml(sec.trajet_titre || "Trajet")}</summary><ul class="tcm-list">${sec.trajet.map(t => `<li>${tcmHighlightInline(escapeHtml(t))}</li>`).join("")}</ul></details>` : "";
+      // plan en texte du trajet (arbre : zones, points, croisements) ; à défaut, la description en texte
+      const trajet = (sec.plan && sec.plan.length)
+        ? `<details class="syn-trajet"${vue ? " open" : ""}><summary>Plan du trajet</summary><pre class="syn-plan">${escapeHtml(sec.plan.join("\n"))}</pre>` +
+          `<p class="muted syn-plan-leg">○ zone · ● point · ◉ point de croisement (↔ canaux) · ▲ yáng / ▼ yīn (vaisseaux extraordinaires) · * selon certain·es auteur·ices · [ ] organe interne</p></details>`
+        : (sec.trajet && sec.trajet.length)
+          ? `<details class="syn-trajet"><summary>${escapeHtml(sec.trajet_titre || "Trajet")}</summary><ul class="tcm-list">${sec.trajet.map(t => `<li>${tcmHighlightInline(escapeHtml(t))}</li>`).join("")}</ul></details>` : "";
       return `<section class="syn-canal-section" data-section="${k}"><h3>${noms[k]} <span class="muted">${escapeHtml((sec.titre || "").replace(/^[^(]*/, ""))}</span></h3>` +
         `${trajet}${this.tableCanal(sec.lignes, { canal: d.id, section: k })}${this.renderShen(sec.shen)}${this.renderTraitementCanal(sec)}</section>`;
     }).join("");
