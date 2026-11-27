@@ -775,7 +775,8 @@ body:has(#tab-comparer.active) #cmp-pastille { display: none; }
 .cmp-resume { padding: 0.6rem 0.8rem; margin: 0.4rem 0; border: 1px dashed var(--line); background: var(--panel); }
 .cmp-sans-commun .cmp-commun, .cmp-sans-commun .cmp-ligne-commune { display: none; }
 .cmp-sans-commun .cmp-commun-c { visibility: hidden; }
-#syn-groups { display: flex; gap: 0.4rem; margin-bottom: 0.8rem; }
+#syn-groups { display: flex; gap: 0.4rem; margin-bottom: 0.8rem; flex-wrap: wrap; overflow-x: visible; padding-bottom: 0; }
+#syn-groups .cat-chip { flex: 1 1 auto; text-align: center; }
 #cmp-search { width: 100%; padding: 0.6rem 0.8rem; font-family: inherit; font-size: 0.95rem; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); }
 #cmp-search:focus { outline: 1.5px solid var(--accent); outline-offset: -2px; }
 
