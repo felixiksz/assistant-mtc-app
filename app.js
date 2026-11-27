@@ -2108,15 +2108,33 @@ const Syndromes = {
     if (premier) premier.scrollIntoView({ block: "center", behavior: "smooth" });
   },
 
+  // un canal = plusieurs sous-catégories de syndromes : canal principal, vaisseau liaison (luo), canal distinct, canal tendineux (+ grand luo pour l'Estomac et la Rate)
+  SECTIONS_CANAL: [["regulier", "Canal principal"], ["luo", "Vaisseau liaison (luo)"], ["grand_luo", "Grand vaisseau liaison (grand luo)"], ["distinct", "Canal distinct"], ["tendineux", "Canal tendineux"]],
+  developperCanaux(list) {
+    const out = [];
+    list.forEach(e => {
+      if (e.domaine !== "canaux" || e._vue) { out.push(e); return; }
+      this.SECTIONS_CANAL.forEach(([k, nom]) => {
+        if (k === "grand_luo" && !["estomac", "rate"].includes(e.id)) return;
+        const v = Object.create(e);   // hérite de la fiche du canal (texte indexé, chemin…)
+        v.nom = nom; v._vue = k; v.parent = e;
+        out.push(v);
+      });
+    });
+    return out;
+  },
+
   renderList(list, query) {
     const ul = document.getElementById("syn-list");
     const q = (query || "").trim();
+    const nSyndromes = list.length;
+    list = this.developperCanaux(list);
     const parDomaine = new Map();
     list.forEach(e => { if (!parDomaine.has(e.domaine)) parDomaine.set(e.domaine, []); parDomaine.get(e.domaine).push(e); });
     const groupes = [...parDomaine.entries()].map(([dom, items]) => {
       const m = new Map();
       items.forEach(e => { const k = e.sousLabel || "—"; if (!m.has(k)) m.set(k, []); m.get(k).push(e); });
-      const g = { id: dom, nom: this.domaineLabels[dom] || dom, total: items.length, couleur: DOM_COUL[dom] };
+      const g = { id: dom, nom: this.domaineLabels[dom] || dom, total: new Set(items.map(e => (e.parent || e).id)).size, couleur: DOM_COUL[dom] };
       // un deuxième niveau (organe, vaisseau, niveau…) seulement s'il regroupe réellement plusieurs syndromes
       if ([...m.values()].some(v => v.length > 1) && m.size > 1) g.sous = [...m.entries()].map(([k, v]) => ({ id: k, nom: k, total: v.length, items: v }));
       else g.items = items;
@@ -2131,7 +2149,7 @@ const Syndromes = {
         li.addEventListener("click", () => this.showDetail(e, li));
       }
     });
-    document.getElementById("syn-count").textContent = list.length + " syndrome(s)";
+    document.getElementById("syn-count").textContent = nSyndromes + " syndrome(s)";
   },
 
   // après l'enregistrement d'un syndrome : met à jour l'index de recherche et les listes (appelé aussi depuis les onglets de travail)
@@ -2154,13 +2172,14 @@ const Syndromes = {
     detail.style.setProperty("--ombre-teinte", DOM_COUL[entry.domaine] || "var(--accent)");
     detail.innerHTML = "<p class='muted'>Chargement...</p>";
     try {
-      const d = await Store.readJSON(`syndromes/${entry.domaine}/${entry.chemin}`);
-      detail.innerHTML = this.renderSyndrome(d, entry.domaine);
-      detail.prepend(Comparateur.bouton("", () => Comparateur.ajouterSyndrome(entry)));
-      if (typeof Reseau !== "undefined") detail.prepend(Reseau.bouton(() => Reseau.ajouterDiagnostic(entry)));
+      const fiche = entry.parent || entry;   // une sous-catégorie de canal pointe vers la fiche du canal
+      const d = await Store.readJSON(`syndromes/${fiche.domaine}/${fiche.chemin}`);
+      detail.innerHTML = this.renderSyndrome(d, fiche.domaine, entry._vue);
+      detail.prepend(Comparateur.bouton("", () => Comparateur.ajouterSyndrome(fiche)));
+      if (typeof Reseau !== "undefined") detail.prepend(Reseau.bouton(() => Reseau.ajouterDiagnostic(fiche)));
       this.surligner(detail, document.getElementById("syn-search").value);
-      addEditControls(detail, "syndromes/" + entry.domaine + "/" + entry.chemin, d, {
-        onSaved: async (parsed) => { await this.apresSauvegarde(entry, parsed); await this.showDetail(entry, liEl); }
+      addEditControls(detail, "syndromes/" + fiche.domaine + "/" + fiche.chemin, d, {
+        onSaved: async (parsed) => { await this.apresSauvegarde(fiche, parsed); await this.showDetail(entry, liEl); }
       });
     } catch (e) {
       detail.innerHTML = `<p class="muted">Impossible de charger la fiche (${e.message}).</p>`;
@@ -2287,10 +2306,13 @@ const Syndromes = {
     }));
   },
 
-  renderCanal(d) {
-    const noms = { regulier: "Canal régulier", luo: "Vaisseau liaison (luo)", grand_luo: "Grand vaisseau liaison (grand luo)", tendineux: "Canal tendineux" };
-    const sections = ["regulier", "luo", "grand_luo", "tendineux"].filter(k => d[k] && (d[k].lignes || d[k].shen)).map(k => {
+  renderCanal(d, vue) {
+    const noms = { regulier: "Canal régulier", luo: "Vaisseau liaison (luo)", grand_luo: "Grand vaisseau liaison (grand luo)", distinct: "Canal distinct", tendineux: "Canal tendineux" };
+    const sections = ["regulier", "luo", "grand_luo", "distinct", "tendineux"].filter(k => (!vue || k === vue) && d[k] && (d[k].lignes || d[k].shen)).map(k => {
       const sec = d[k];
+      if (k === "distinct" && !(sec.lignes || []).length) {
+        return `<section class="syn-canal-section" data-section="distinct"><h3>${noms[k]} <span class="muted">(jīng bié)</span></h3><p class="muted">Pas encore de tableau pour ce canal distinct dans ton livret.</p></section>`;
+      }
       const trajet = (sec.trajet && sec.trajet.length)
         ? `<details class="syn-trajet"><summary>${escapeHtml(sec.trajet_titre || "Trajet")}</summary><ul class="tcm-list">${sec.trajet.map(t => `<li>${tcmHighlightInline(escapeHtml(t))}</li>`).join("")}</ul></details>` : "";
       return `<section class="syn-canal-section" data-section="${k}"><h3>${noms[k]} <span class="muted">${escapeHtml((sec.titre || "").replace(/^[^(]*/, ""))}</span></h3>` +
@@ -2318,11 +2340,11 @@ const Syndromes = {
       `<details class="syn-legende"><summary>Source et sigles des références</summary><p class="muted">${leg}</p></details>`;
   },
 
-  renderSyndrome(d, domaine) {
+  renderSyndrome(d, domaine, vue) {
     if (domaine === "merveilleux_vaisseaux") return this.renderMerveilleux(d);
     if (domaine === "canaux") {
       const v = (d.a_verifier && d.a_verifier.length) ? `<section><h3>À vérifier contre la source</h3>${d.a_verifier.map(x => `<span class="tag-verifier">⚠ ${escapeHtml(x)}</span>`).join("")}</section>` : "";
-      return this.renderCanal(d) + v + `<p class="muted">Source : ${escapeHtml((d.source && d.source.fichier) || "?")}</p>`;
+      return this.renderCanal(d, vue) + v + `<p class="muted">Source : ${escapeHtml((d.source && d.source.fichier) || "?")}</p>`;
     }
     const verif = (d.a_verifier && d.a_verifier.length)
       ? `<section><h3>À vérifier contre la source</h3>${d.a_verifier.map(v => `<span class="tag-verifier">⚠ ${escapeHtml(v)}</span>`).join("")}</section>`
