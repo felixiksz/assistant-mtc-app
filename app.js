@@ -2257,7 +2257,7 @@ const Syndromes = {
   tableCanal(lignes, ctx) {
     if (!lignes || !lignes.length) return "";
     const corps = lignes.map(l => `<tr${l.generique ? ' class="syn-generique"' : ""}><td>${this.signeGras(l)}${l.generique ? ` <span class="tag-gen" title="Signe générique : il décrit le trajet du canal, pas un syndrome précis">trajet</span>` : ""}</td>` +
-      `<td>${tcmHighlightInline(escapeHtml(l.mecanisme || ""))}${this.commentairesDe(ctx, l)}</td></tr>`).join("");
+      `<td>${tcmHighlightInline(escapeHtml(l.mecanisme || "")).replace(/\n/g, "<br>")}${this.commentairesDe(ctx, l)}</td></tr>`).join("");
     return `<table><thead><tr><th>Symptôme</th><th>Mécanisme pathologique</th></tr></thead><tbody>${corps}</tbody></table>`;
   },
 
